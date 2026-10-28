@@ -1,0 +1,244 @@
+/* Owned by worker B — proof console (web/hud/index.ts): a pill fixed bottom-right and a
+   non-modal panel above it. */
+@layer islands {
+  /* The pill never hides what the visitor needs: the page ends above it, and focused elements
+     scroll clear of it (WCAG 2.2 SC 2.4.11). */
+  body:has(> .hud) {
+    padding-block-end: calc(var(--tap) + 2 * var(--s-4));
+  }
+
+  html:has(> body > .hud) {
+    scroll-padding-block-end: calc(var(--tap) + 2 * var(--s-4));
+  }
+
+  .hud {
+    --hud-bottom: max(var(--s-4), env(safe-area-inset-bottom));
+    position: fixed;
+    right: max(var(--s-4), env(safe-area-inset-right));
+    bottom: var(--hud-bottom);
+    z-index: var(--z-hud);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
+  .hud-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-2);
+    min-height: var(--tap);
+    padding: 0 var(--s-4);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-pill);
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    font-feature-settings: "zero" 1, "tnum" 1;
+    white-space: nowrap;
+    transition: border-color var(--t-micro) var(--ease-enter);
+  }
+
+  .hud-pill:hover,
+  .hud-pill[aria-expanded="true"] {
+    border-color: var(--mintaka);
+  }
+
+  .hud-dot {
+    flex: none;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--mintaka);
+    animation: badge-pulse 2s var(--ease-enter) 3;
+  }
+
+  /* 1 px rules between the parts, in the construction-drawing language */
+  .hud-part {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3em;
+  }
+
+  .hud-part:not([hidden]) ~ .hud-part {
+    padding-inline-start: var(--s-2);
+    border-inline-start: 1px solid var(--border-strong);
+  }
+
+  .hud-tick {
+    width: 0.85rem;
+    height: 0.85rem;
+    fill: none;
+    stroke: var(--success);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .hud-panel {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + var(--s-2));
+    width: min(26rem, 100vw - 2 * var(--s-4));
+    /* Anchored above the pill and clear of the sticky header: it fits between them and scrolls
+       inside (only a very short viewport lets it reach under the header). */
+    max-height: max(12rem, 100dvh - var(--header-h) - var(--hud-bottom) - var(--tap) - 2 * var(--s-2));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-card);
+    background: var(--surface);
+    color: var(--text);
+  }
+
+  .hud-panel:focus-visible {
+    outline-offset: -2px;
+  }
+
+  .hud-bar {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: var(--s-3);
+    min-height: var(--tap);
+    padding: var(--s-1) var(--s-2) var(--s-1) var(--s-4);
+    border-block-end: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .hud-id {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--text-2);
+  }
+
+  .hud-title {
+    font-size: var(--fs-sm);
+    font-weight: 500;
+    letter-spacing: 0;
+  }
+
+  .hud-close {
+    margin-inline-start: auto;
+  }
+
+  .hud-rows {
+    padding-inline: var(--s-4);
+  }
+
+  .hud-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: baseline;
+    gap: var(--s-1) var(--s-4);
+    padding-block: var(--s-3);
+    border-block-end: 1px solid var(--border);
+  }
+
+  .hud-row > dt {
+    font-size: var(--fs-sm);
+    color: var(--text);
+  }
+
+  .hud-v {
+    font-size: var(--fs-sm);
+    color: var(--text-2);
+    text-align: end;
+  }
+
+  .hud-row > .source {
+    grid-column: 1 / -1;
+  }
+
+  .hud-row--wide > .hud-v {
+    grid-column: 1 / -1;
+    text-align: start;
+    overflow-wrap: anywhere;
+  }
+
+  .hud-sub {
+    display: block;
+    font-size: var(--fs-xs);
+  }
+
+  .hud-v .mono {
+    color: var(--text);
+  }
+
+  .hud-bad.num {
+    color: var(--danger);
+  }
+
+  .hud-list {
+    display: grid;
+    gap: var(--s-1);
+    margin: var(--s-1) 0 0;
+    padding: 0;
+    font-size: var(--fs-xs);
+  }
+
+  .hud-list > li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s-2);
+  }
+
+  .hud-miss {
+    padding-inline-start: calc(0.85rem + var(--s-2));
+  }
+
+  .hud-foot {
+    display: grid;
+    gap: var(--s-2);
+    padding: var(--s-2) var(--s-4) var(--s-4);
+  }
+
+  .hud-foot > .btn {
+    justify-self: start;
+    margin-inline-start: calc(-1 * var(--s-3));
+  }
+
+  .hud-raw {
+    max-height: 16rem;
+    overflow: auto;
+    padding: var(--s-3);
+    border: 1px solid var(--border);
+    border-radius: var(--r-control);
+    background: var(--void);
+    color: var(--text-2);
+    font-size: var(--fs-xs);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  /* Narrow screens: a compact pill (time and transport only), a full-width panel */
+  @media (max-width: 40rem) {
+    .hud-pill {
+      padding: 0 var(--s-3);
+    }
+
+    .hud-part--weight {
+      display: none !important;
+    }
+
+    .hud-panel {
+      width: calc(100vw - 2 * var(--s-3));
+    }
+  }
+
+  @media print {
+    .hud {
+      display: none;
+    }
+
+    body:has(> .hud) {
+      padding-block-end: 0;
+    }
+  }
+}

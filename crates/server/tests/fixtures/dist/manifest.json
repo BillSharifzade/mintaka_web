@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "build": "2026-10-27.f1x7ure0",
+  "origin": "https://mintaka.tj",
+  "default_lang": "en",
+  "langs": ["en", "ru"],
+  "csp": { "style_src": ["sha256-/JAwdS2Ay4BBCVsmUSOxyUXBSkoA6pEX6rohFxAr0A8="], "script_src": [] },
+  "routes": [
+    { "path": "/en/", "file": "en/index.html", "content_type": "text/html; charset=utf-8", "cache": "document", "encodings": ["br", "gzip"], "lang": "en", "kind": "page" },
+    { "path": "/ru/", "file": "ru/index.html", "content_type": "text/html; charset=utf-8", "cache": "document", "encodings": ["gzip"], "lang": "ru", "kind": "page" },
+    { "path": "/en/sent/", "file": "en/sent/index.html", "content_type": "text/html; charset=utf-8", "cache": "document", "lang": "en", "kind": "page" },
+    { "path": "/assets/main.3F2A1B9C.js", "file": "assets/main.3F2A1B9C.js", "content_type": "text/javascript; charset=utf-8", "cache": "immutable", "encodings": ["br", "gzip"], "kind": "asset" },
+    { "path": "/favicon.svg", "file": "favicon.svg", "content_type": "image/svg+xml", "cache": "short", "kind": "file" },
+    { "path": "/robots.txt", "file": "robots.txt", "content_type": "text/plain; charset=utf-8", "cache": "short", "kind": "file" },
+    { "path": "/.well-known/security.txt", "file": ".well-known/security.txt", "content_type": "text/plain; charset=utf-8", "cache": "short", "kind": "file" }
+  ],
+  "not_found": { "en": "en/404.html", "ru": "ru/404.html" },
+  "text": {
+    "en": { "/": "text/en/index.ansi", "/pillars": "text/en/pillars.ansi", "/contact": "text/en/contact.ansi" },
+    "ru": { "/": "text/ru/index.ansi" }
+  }
+}

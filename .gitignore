@@ -1,0 +1,8 @@
+/target
+/dist
+/node_modules
+/web/wasm
+/data/*
+!/data/.gitkeep
+*.age
+.env

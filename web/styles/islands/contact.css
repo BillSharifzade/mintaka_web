@@ -1,0 +1,46 @@
+/* Owned by worker C — S13 "Start a project", the states web/instruments/contact.ts adds to the
+   form. The form itself (.contact, .contact__group, .chips, .contact__row, .contact__trap,
+   .contact__status, .contact__send, .field*, .input) is page CSS in sections/home.css: it has to
+   look right without JavaScript, and this file only loads once an island mounts. */
+@layer islands {
+  /* Sending: the button stays focusable (aria-disabled) and says it's working */
+  .contact__send[aria-disabled="true"] {
+    cursor: progress;
+  }
+
+  /* "Add an email or a Telegram handle" belongs to the row above it */
+  .contact > .field__error {
+    margin-block-start: calc(var(--s-2) - var(--s-5));
+  }
+
+  /* The measured proof-of-work line, under the button */
+  .contact-pow {
+    margin-block-start: calc(var(--s-2) - var(--s-5));
+  }
+
+  /* Sent: the confirmation takes the fields' place inside the form card */
+  .contact-done {
+    display: grid;
+    gap: var(--s-2);
+    padding-block: var(--s-4);
+  }
+
+  .contact-done:focus {
+    outline: none;
+  }
+
+  .contact-done:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: var(--s-2);
+  }
+
+  .contact-done__title {
+    font-size: var(--fs-xl);
+    font-weight: 500;
+    line-height: var(--lh-heading);
+  }
+
+  .contact-done__title + p {
+    color: var(--text-2);
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "core": {
+    "void": {
+      "hex": "#0A0B0D",
+      "use": "Backgrounds, primary dark"
+    },
+    "mintaka": {
+      "hex": "#3D7BFF",
+      "use": "Brand blue, links, focus"
+    },
+    "betelgeuse": {
+      "hex": "#E2552D",
+      "use": "Accent, calls to action"
+    },
+    "starlight": {
+      "hex": "#F4F5F7",
+      "use": "Light backgrounds, text on dark"
+    }
+  },
+  "neutrals": {
+    "ink": {
+      "hex": "#14161A",
+      "use": "Raised dark surfaces"
+    },
+    "graphite": {
+      "hex": "#23262D",
+      "use": "Borders on dark"
+    },
+    "slate": {
+      "hex": "#3A3F49",
+      "use": "Secondary text on light"
+    },
+    "steel": {
+      "hex": "#6E7686",
+      "use": "Muted text on dark"
+    },
+    "mist": {
+      "hex": "#C9CED8",
+      "use": "Borders on light, text on dark"
+    }
+  },
+  "tints": {
+    "deep-blue": {
+      "hex": "#1E4FD6",
+      "use": "Pressed blue"
+    },
+    "sky": {
+      "hex": "#8FB3FF",
+      "use": "Hover blue on dark"
+    },
+    "ember": {
+      "hex": "#B23A17",
+      "use": "Pressed rust"
+    },
+    "glow": {
+      "hex": "#F29A7E",
+      "use": "Soft rust highlight"
+    }
+  },
+  "semantic": {
+    "success": {
+      "hex": "#2FBF71",
+      "use": "Positive states"
+    },
+    "warning": {
+      "hex": "#F2B33D",
+      "use": "Caution states"
+    },
+    "danger": {
+      "hex": "#E5484D",
+      "use": "Errors, destructive actions"
+    }
+  }
+}

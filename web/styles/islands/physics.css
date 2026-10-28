@@ -1,0 +1,142 @@
+/* Owned by worker B — S2 edge of physics (web/instruments/physics.ts). */
+@layer islands {
+  .phys {
+    display: grid;
+    gap: var(--s-5);
+  }
+
+  .phys-intro {
+    max-width: var(--measure);
+    font-size: var(--fs-lg);
+    color: var(--text-2);
+  }
+
+  .phys-act {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s-3) var(--s-5);
+  }
+
+  .phys-hint {
+    max-width: 46ch;
+    font-size: var(--fs-sm);
+    color: var(--text-2);
+  }
+
+  /* Three large measured numbers */
+  .phys-figs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+    gap: var(--s-5);
+    padding-block: var(--s-5);
+    border-block: 1px solid var(--border);
+  }
+
+  .phys-figs > div {
+    display: grid;
+    align-content: start;
+    gap: var(--s-2);
+  }
+
+  .phys-k {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--text-2);
+  }
+
+  .phys-v {
+    font-size: clamp(var(--fs-2xl), 1.5rem + 2vw, var(--fs-4xl));
+    line-height: 1.05;
+  }
+
+  .phys-say {
+    display: grid;
+    gap: var(--s-3);
+    max-width: var(--measure);
+  }
+
+  .phys-say:empty {
+    display: none;
+  }
+
+  .phys-say > p:first-child {
+    font-size: var(--fs-lg);
+    line-height: 1.45;
+  }
+
+  /* [physics floor][network detours][our server] */
+  .phys-break {
+    display: grid;
+    gap: var(--s-3);
+    margin: 0;
+  }
+
+  .phys-bar {
+    display: flex;
+    gap: 2px;
+    block-size: var(--s-4);
+    transform-origin: left center;
+    animation: phys-grow var(--t-reveal) var(--ease-enter);
+  }
+
+  .phys-seg {
+    flex: var(--phys-w, 0) 1 0;
+    min-inline-size: 3px;
+  }
+
+  .phys-seg--floor {
+    background: var(--mist);
+  }
+
+  .phys-seg--net,
+  .phys-seg--rtt {
+    background: var(--steel);
+  }
+
+  .phys-seg--srv {
+    background: var(--mintaka);
+  }
+
+  .phys-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-2) var(--s-5);
+    margin: 0;
+    padding: 0;
+    font-size: var(--fs-sm);
+    color: var(--text-2);
+  }
+
+  .phys-legend > li {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-2);
+  }
+
+  .phys-sw {
+    flex: none;
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+  }
+
+  .phys-foot {
+    max-width: var(--measure);
+  }
+
+  @keyframes phys-grow {
+    from {
+      transform: scaleX(0);
+    }
+  }
+
+  @media (forced-colors: active) {
+    .phys-seg,
+    .phys-sw {
+      forced-color-adjust: none;
+      border: 1px solid CanvasText;
+    }
+  }
+}

@@ -1,0 +1,176 @@
+/* Owned by worker B — S5 this page's armour (web/instruments/armour.ts). */
+@layer islands {
+  .arm {
+    display: grid;
+    gap: var(--s-4);
+  }
+
+  .arm-sum {
+    max-width: var(--measure);
+    font-size: var(--fs-lg);
+  }
+
+  .arm-sum .num {
+    font-size: 1.15em;
+  }
+
+  .arm-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--fs-sm);
+  }
+
+  .arm-table th,
+  .arm-table td {
+    padding: var(--s-3) var(--s-3) var(--s-3) 0;
+    border-block-end: 1px solid var(--border);
+    text-align: start;
+    vertical-align: top;
+  }
+
+  .arm-table thead th {
+    padding-block: var(--s-2);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    font-weight: 400;
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--text-2);
+  }
+
+  .arm-table tbody th {
+    font-weight: 400;
+  }
+
+  .arm-name {
+    display: block;
+    font-size: var(--fs-sm);
+    font-weight: 500;
+    color: var(--text);
+    overflow-wrap: anywhere;
+  }
+
+  .arm-why {
+    display: block;
+    margin-block-start: var(--s-1);
+    max-width: 52ch;
+    color: var(--text-2);
+  }
+
+  .arm-val {
+    font-size: var(--fs-xs);
+    color: var(--text-2);
+    overflow-wrap: anywhere;
+  }
+
+  .arm-more > summary {
+    min-height: var(--tap);
+    cursor: pointer;
+  }
+
+  .arm-more > summary:hover .arm-val {
+    color: var(--text);
+  }
+
+  .arm-full {
+    display: block;
+    margin-block-start: var(--s-2);
+    padding: var(--s-2) var(--s-3);
+    border: 1px solid var(--border);
+    border-radius: var(--r-control);
+    background: var(--void);
+    color: var(--text);
+  }
+
+  .arm-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+    gap: var(--s-4);
+    margin-block-start: var(--s-2);
+  }
+
+  .arm-card {
+    display: grid;
+    align-content: start;
+    gap: var(--s-3);
+    padding: var(--s-4);
+    border: 1px solid var(--border);
+    border-radius: var(--r-card);
+    background: var(--void);
+  }
+
+  .arm-card__title {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    font-weight: 500;
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--text-2);
+  }
+
+  .arm-card .kv dd,
+  .arm-pq .mono {
+    overflow-wrap: anywhere;
+  }
+
+  .arm-pq {
+    font-size: var(--fs-sm);
+  }
+
+  .arm-pq .badge {
+    margin-inline-end: var(--s-1);
+  }
+
+  .arm-iso {
+    display: grid;
+    gap: var(--s-3);
+  }
+
+  .arm-iso > div {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--s-1) var(--s-3);
+    padding-block-end: var(--s-3);
+    border-block-end: 1px solid var(--border);
+  }
+
+  .arm-iso dt {
+    font-size: var(--fs-sm);
+  }
+
+  .arm-iso .arm-line {
+    grid-column: 1 / -1;
+    font-size: var(--fs-sm);
+    color: var(--text-2);
+  }
+
+  /* Narrow screens: each header becomes a block (ARIA roles keep the table semantics). */
+  @media (max-width: 40rem) {
+    .arm-table thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+    }
+
+    .arm-table tr {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: var(--s-2) var(--s-3);
+      padding-block: var(--s-3);
+      border-block-end: 1px solid var(--border);
+    }
+
+    .arm-table th,
+    .arm-table td {
+      display: block;
+      padding: 0;
+      border: 0;
+    }
+
+    .arm-table td:last-child {
+      grid-column: 1 / -1;
+    }
+  }
+}

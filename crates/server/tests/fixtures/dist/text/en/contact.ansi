@@ -1,0 +1,2 @@
+  curl -d name=You -d email=you@example.com https://mintaka.tj/api/contact
+  {{tls}}

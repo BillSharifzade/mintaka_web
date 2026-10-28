@@ -1,0 +1,81 @@
+# mintaka.tj web server — hardened systemd unit.
+#
+# Install: binary at /opt/mintaka/bin/mintaka-server, site at /opt/mintaka/dist (world-readable),
+# secrets in /etc/mintaka/env (mode 0600, root):
+#
+#   MINTAKA_CONTACT_RECIPIENT=age1…            # the team's age public key
+#   MINTAKA_TELEGRAM_BOT_TOKEN=…               # optional
+#   MINTAKA_TELEGRAM_CHAT_ID=…                 # optional
+#
+# The certificate is handed over with LoadCredential (readable only by this service); restart the
+# unit after renewal (e.g. a certbot deploy hook: `systemctl restart mintaka`).
+# Check the sandbox with: systemd-analyze security mintaka.service
+
+[Unit]
+Description=mintaka.tj web server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+ExecStart=/opt/mintaka/bin/mintaka-server \
+    --dist /opt/mintaka/dist \
+    --data-dir ${STATE_DIRECTORY} \
+    --listen 127.0.0.1:8080 \
+    --tls-listen [::]:443 \
+    --tls-cert ${CREDENTIALS_DIRECTORY}/fullchain.pem \
+    --tls-key ${CREDENTIALS_DIRECTORY}/privkey.pem \
+    --redirect-http [::]:80 \
+    --region fra-1 \
+    --location "Frankfurt,DE,50.1109,8.6821"
+EnvironmentFile=-/etc/mintaka/env
+Environment=RUST_LOG=info
+LoadCredential=fullchain.pem:/etc/letsencrypt/live/mintaka.tj/fullchain.pem
+LoadCredential=privkey.pem:/etc/letsencrypt/live/mintaka.tj/privkey.pem
+
+# Graceful shutdown: SIGTERM, the server drains for up to 10 s.
+KillSignal=SIGTERM
+TimeoutStopSec=15
+Restart=on-failure
+RestartSec=2
+LimitNOFILE=65536
+
+# Identity and file system.
+DynamicUser=yes
+StateDirectory=mintaka
+StateDirectoryMode=0700
+UMask=0077
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectProc=invisible
+ProcSubset=pid
+
+# Privileges: only binding ports below 1024.
+NoNewPrivileges=yes
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+RemoveIPC=yes
+
+# Kernel surface.
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+# AF_UNIX/AF_NETLINK: the resolver (outbound HTTPS to the Telegram API only).
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+SystemCallErrorNumber=EPERM
+
+[Install]
+WantedBy=multi-user.target

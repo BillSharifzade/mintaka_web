@@ -1,0 +1,122 @@
+/* S4 · Route across Dushanbe. */
+@layer islands {
+  .rt-controls {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: var(--s-3);
+  }
+
+  .rt-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-2);
+  }
+
+  .rt-hint {
+    margin-block: var(--s-3) var(--s-5);
+    font-size: var(--fs-sm);
+    color: var(--text-2);
+  }
+
+  .rt-panels {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--s-4);
+  }
+
+  @media (max-width: 64rem) {
+    .rt-panels {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .rt-panel {
+    display: grid;
+    gap: var(--s-3);
+    margin: 0;
+    align-content: start;
+  }
+
+  .rt-head {
+    display: grid;
+    gap: var(--s-1);
+    min-height: 4.5rem;
+  }
+
+  .rt-name {
+    font-weight: 500;
+  }
+
+  .rt-what {
+    font-size: var(--fs-sm);
+    color: var(--text-2);
+  }
+
+  .rt-map {
+    position: relative;
+    border: 1px solid var(--border);
+    border-radius: var(--r-control);
+    background: var(--void);
+    overflow: hidden;
+  }
+
+  .rt-canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    cursor: crosshair;
+  }
+
+  .rt-osm {
+    position: absolute;
+    inset-block-end: var(--s-1);
+    inset-inline-end: var(--s-2);
+    font-size: 0.6875rem;
+    color: var(--text-2);
+    pointer-events: none;
+  }
+
+  .rt-stats {
+    display: grid;
+    margin: 0;
+  }
+
+  .rt-stats > div {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--s-3);
+    padding-block: var(--s-1);
+    border-block-end: 1px solid var(--border);
+    font-size: var(--fs-sm);
+  }
+
+  .rt-stats dt {
+    color: var(--text-2);
+  }
+
+  .rt-stats dd {
+    margin: 0;
+  }
+
+  .rt-summary {
+    margin-block-start: var(--s-5);
+    font-size: var(--fs-lg);
+    font-weight: 500;
+  }
+
+  .rt-summary:empty,
+  .rt-live:empty {
+    display: none;
+  }
+
+  .rt-live {
+    margin-block-start: var(--s-2);
+    color: var(--text-2);
+    font-size: var(--fs-sm);
+  }
+
+  .rt-graph {
+    margin-block-start: var(--s-4);
+  }
+}

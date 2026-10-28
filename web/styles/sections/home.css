@@ -1,0 +1,1013 @@
+/* S2–S13 and the small pages. */
+
+@layer sections {
+  /* ── S2 Edge of physics ─────────────────────────────────────────────── */
+  .physics__ray {
+    height: 1px;
+    margin-block: 0 var(--s-6);
+    background: linear-gradient(90deg, rgb(61 123 255 / 0), var(--mintaka) 18%, var(--sky) 50%, var(--mintaka) 82%, rgb(61 123 255 / 0));
+    opacity: 0.8;
+  }
+
+  .physics__static-lead {
+    margin-block-end: var(--s-4);
+    color: var(--text-2);
+  }
+
+  .physics__table {
+    max-width: 40rem;
+  }
+
+  /* ── S3 Constellation ───────────────────────────────────────────────── */
+  .constellation {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(15rem, 21rem) minmax(0, 1fr);
+    grid-template-areas:
+      "tl fig tr"
+      "bl fig br";
+    align-items: center;
+    gap: var(--s-6) var(--s-7);
+  }
+
+  .constellation__figure {
+    grid-area: fig;
+    margin: 0;
+  }
+
+  .orion {
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+
+  .orion-line {
+    stroke: var(--slate);
+    stroke-width: 1.2;
+  }
+
+  .orion-line--belt {
+    stroke-dasharray: 3 4;
+  }
+
+  .orion .star {
+    transform-box: fill-box;
+    transform-origin: center;
+    transition:
+      transform var(--t-ui) var(--ease-enter),
+      opacity var(--t-scene) var(--ease-enter);
+  }
+
+  /* When particles have formed the constellation, they replace the drawn stars. */
+  :root.engine-on .constellation__figure .star {
+    opacity: 0;
+  }
+
+  .pcard {
+    display: grid;
+    gap: var(--s-2);
+    padding: var(--s-5);
+    border: 1px solid var(--border);
+    border-radius: var(--r-card);
+    background: var(--surface);
+    color: var(--text);
+    text-decoration: none;
+    transition: border-color var(--t-micro) var(--ease-enter);
+  }
+
+  .pcard:hover,
+  .pcard:focus-visible {
+    border-color: var(--mist);
+    color: var(--text);
+  }
+
+  .pcard--tl {
+    grid-area: tl;
+  }
+
+  .pcard--tr {
+    grid-area: tr;
+  }
+
+  .pcard--bl {
+    grid-area: bl;
+  }
+
+  .pcard--br {
+    grid-area: br;
+  }
+
+  .pcard--tl,
+  .pcard--bl {
+    justify-items: end;
+    text-align: end;
+  }
+
+  .pcard__name {
+    font-size: var(--fs-xl);
+    font-weight: 500;
+    letter-spacing: var(--track-heading);
+    line-height: var(--lh-heading);
+  }
+
+  .pcard__line {
+    color: var(--text-2);
+  }
+
+  /* Hovering a card lights its star — no JavaScript needed. */
+  .constellation:has(.pcard[data-star="betelgeuse"]:is(:hover, :focus-visible)) .star[data-star="betelgeuse"],
+  .constellation:has(.pcard[data-star="meissa"]:is(:hover, :focus-visible)) .star[data-star="meissa"],
+  .constellation:has(.pcard[data-star="saiph"]:is(:hover, :focus-visible)) .star[data-star="saiph"],
+  .constellation:has(.pcard[data-star="rigel"]:is(:hover, :focus-visible)) .star[data-star="rigel"] {
+    opacity: 1;
+    transform: scale(1.6);
+  }
+
+  @media (max-width: 60rem) {
+    .constellation {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-areas:
+        "fig fig"
+        "tl tr"
+        "bl br";
+    }
+
+    .constellation__figure {
+      justify-self: center;
+      width: min(100%, 18rem);
+    }
+
+    .pcard--tl,
+    .pcard--bl {
+      justify-items: start;
+      text-align: start;
+    }
+  }
+
+  @media (max-width: 36rem) {
+    .constellation {
+      grid-template-columns: 1fr;
+      grid-template-areas: "fig" "tl" "tr" "bl" "br";
+    }
+  }
+
+  /* ── S4 Efficiency ──────────────────────────────────────────────────── */
+  .sec--pillar .cards {
+    margin-block-end: var(--s-7);
+  }
+
+  .code {
+    margin: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--r-card);
+    background: var(--void);
+    overflow: hidden;
+  }
+
+  .code__bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s-2) var(--s-4);
+    padding: var(--s-2) var(--s-4);
+    border-block-end: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .code__file {
+    font-size: var(--fs-xs);
+    color: var(--text-2);
+  }
+
+  .code__title {
+    font-size: var(--fs-sm);
+    font-weight: 500;
+  }
+
+  .code__pre {
+    padding: var(--s-5);
+    overflow-x: auto;
+    font-size: 0.9375rem;
+    line-height: 1.7;
+    color: var(--mist);
+    tab-size: 4;
+  }
+
+  .code__pre code {
+    font-size: inherit;
+  }
+
+  .tok-k,
+  .tok-o {
+    color: var(--starlight);
+    font-weight: 500;
+  }
+
+  .tok-t,
+  .tok-m {
+    color: var(--starlight);
+  }
+
+  .tok-c {
+    color: var(--sky);
+  }
+
+  .code__caption {
+    padding: var(--s-3) var(--s-4);
+    border-block-start: 1px solid var(--border);
+    font-size: var(--fs-sm);
+    color: var(--text-2);
+  }
+
+  /* ── S5 Security ────────────────────────────────────────────────────── */
+  .duel {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-block-end: var(--s-8);
+    border: 1px solid var(--border);
+    border-radius: var(--r-card);
+    overflow: hidden;
+  }
+
+  .duel__col {
+    padding: var(--s-5) var(--s-6) var(--s-4);
+  }
+
+  .duel__col--off {
+    border-inline-end: 1px solid var(--border);
+  }
+
+  .duel__title {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--s-3);
+    padding-block-end: var(--s-3);
+    border-block-end: 1px solid var(--border-strong);
+    font-size: var(--fs-lg);
+  }
+
+  .duel__note {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 400;
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--text-2);
+  }
+
+  .duel__list {
+    margin: 0;
+  }
+
+  /* Items mix text and <code>, so the marker is positioned, not a flex item. */
+  .duel__list li {
+    position: relative;
+    padding-block: var(--s-3);
+    padding-inline-start: var(--s-5);
+    border-block-end: 1px solid var(--border);
+    color: var(--text-2);
+  }
+
+  .duel__list li:last-child {
+    border-block-end: 0;
+  }
+
+  /* Offence: a blade. Defence: a block. */
+  .duel__list li::before {
+    content: "";
+    position: absolute;
+    inset-inline-start: 0;
+    inset-block-start: calc(var(--s-3) + 0.5em);
+    width: 0.625rem;
+    height: 0.625rem;
+  }
+
+  .duel__col--off li::before {
+    border-block-start: 1.5px solid var(--mist);
+    transform: rotate(-45deg) translate(-2px, 2px);
+  }
+
+  .duel__col--def li::before {
+    inset-block-start: calc(var(--s-3) + 0.35em);
+    border: 1.5px solid var(--sky);
+    border-radius: 2px;
+  }
+
+  @media (max-width: 48rem) {
+    .duel {
+      grid-template-columns: 1fr;
+    }
+
+    .duel__col--off {
+      border-inline-end: 0;
+      border-block-end: 1px solid var(--border);
+    }
+  }
+
+  .armour {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    align-items: start;
+    gap: var(--s-7);
+  }
+
+  .armour__title {
+    font-size: var(--fs-xl);
+  }
+
+  .armour__lead {
+    margin-block-start: var(--s-2);
+    color: var(--text-2);
+  }
+
+  .armour__list {
+    margin: var(--s-4) 0 0;
+  }
+
+  .claim {
+    display: grid;
+    grid-template-columns: 0.75rem minmax(0, 1fr);
+    align-items: baseline;
+    gap: var(--s-2) var(--s-3);
+    padding-block: var(--s-3);
+    border-block-end: 1px solid var(--border);
+  }
+
+  .claim__flag {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .claim::before {
+    content: "";
+    align-self: start;
+    margin-block-start: 0.4em;
+    width: 0.75rem;
+    height: 0.375rem;
+    border-inline-start: 1.5px solid var(--success);
+    border-block-end: 1.5px solid var(--success);
+    transform: rotate(-45deg) translateY(-2px);
+  }
+
+  .claim[data-verified="false"]::before {
+    height: 0.75rem;
+    border: 1.5px dashed var(--steel);
+    border-radius: 50%;
+    transform: none;
+  }
+
+  .claim[data-verified="false"] .claim__text {
+    color: var(--text-2);
+  }
+
+  @media (max-width: 60rem) {
+    .armour {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* ── S6 Highload ────────────────────────────────────────────────────── */
+  .layers {
+    margin-block-end: var(--s-7);
+    border: 1px solid var(--border);
+    border-radius: var(--r-card);
+  }
+
+  .layers__row {
+    display: grid;
+    grid-template-columns: 9rem minmax(0, 1fr);
+    align-items: baseline;
+    gap: var(--s-4);
+    padding: var(--s-4) var(--s-5);
+    border-block-end: 1px solid var(--border);
+  }
+
+  .layers__row:last-child {
+    border-block-end: 0;
+  }
+
+  .layers__name {
+    font-size: var(--fs-md);
+  }
+
+  .layers__items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-2);
+    margin: 0;
+  }
+
+  @media (max-width: 40rem) {
+    .layers__row {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .instruments-2 {
+    display: grid;
+    gap: var(--s-5);
+  }
+
+  .story {
+    display: grid;
+    grid-template-columns: 4rem minmax(0, 1fr);
+    gap: var(--s-5);
+    margin-block-start: var(--s-7);
+    padding: var(--s-6);
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--r-card);
+  }
+
+  .story .star-mark {
+    width: 4rem;
+    height: 4rem;
+  }
+
+  .story__title {
+    font-size: var(--fs-lg);
+  }
+
+  .story__text {
+    max-width: 62ch;
+    margin-block-start: var(--s-2);
+    color: var(--text-2);
+  }
+
+  .story__source {
+    margin-block-start: var(--s-3);
+  }
+
+  /* ── S7 Design ──────────────────────────────────────────────────────── */
+  .practice {
+    margin-block-end: var(--s-7);
+  }
+
+  .practice__title {
+    margin-block-end: var(--s-2);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    font-weight: 400;
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--text-2);
+  }
+
+  .practice__list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+    column-gap: var(--s-6);
+    margin: 0;
+  }
+
+  /* ── S8 The belt ────────────────────────────────────────────────────── */
+  .belt {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--s-6);
+    margin: 0 0 var(--s-9);
+    padding: 0;
+    list-style: none;
+  }
+
+  /* The belt itself: Mintaka's dashed blue line, from the construction board. */
+  .belt::before {
+    content: "";
+    position: absolute;
+    inset-block-start: 1.5rem;
+    inset-inline: 1.5rem calc(33.333% - 1.5rem);
+    border-block-start: 1.5px dashed var(--mintaka);
+    opacity: 0.7;
+  }
+
+  .belt__step {
+    position: relative;
+    display: grid;
+    align-content: start;
+    gap: var(--s-2);
+  }
+
+  .belt__step .star-mark {
+    width: 3rem;
+    height: 3rem;
+    margin-block-end: var(--s-3);
+    background: var(--bg);
+    border-radius: 50%;
+  }
+
+  .belt__meaning {
+    color: var(--text-2);
+    font-size: var(--fs-sm);
+  }
+
+  .belt__name {
+    font-size: var(--fs-2xl);
+    letter-spacing: var(--track-display);
+  }
+
+  .belt__text {
+    max-width: 36ch;
+    color: var(--text-2);
+  }
+
+  @media (max-width: 52rem) {
+    .belt {
+      grid-template-columns: 1fr;
+    }
+
+    .belt::before {
+      inset-block: 1.5rem 0;
+      inset-inline: 1.5rem auto;
+      border-block-start: 0;
+      border-inline-start: 1.5px dashed var(--mintaka);
+    }
+
+    .belt__step {
+      padding-inline-start: 0;
+    }
+  }
+
+  .pack {
+    padding-block-start: var(--s-7);
+    border-block-start: 1px solid var(--border);
+  }
+
+  .pack__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    justify-content: space-between;
+    gap: var(--s-3) var(--s-5);
+    margin-block-end: var(--s-5);
+  }
+
+  .pack__title {
+    font-size: var(--fs-2xl);
+    letter-spacing: var(--track-display);
+  }
+
+  .pack__lead {
+    color: var(--text-2);
+  }
+
+  .pack__card {
+    border-block-start: 2px solid var(--mintaka);
+  }
+
+  /* ── S10 Proof wall ─────────────────────────────────────────────────── */
+  .wall {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: center;
+    gap: var(--s-7);
+  }
+
+  .wall .sec__head {
+    margin-block-end: 0;
+  }
+
+  .case {
+    display: grid;
+    justify-items: start;
+    gap: var(--s-3);
+    padding: var(--s-6);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-card);
+    background: var(--surface);
+  }
+
+  .case__tag {
+    font-size: var(--fs-xs);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--sky);
+  }
+
+  .case__title {
+    font-size: var(--fs-2xl);
+    letter-spacing: var(--track-display);
+  }
+
+  .case__text {
+    margin-block-end: var(--s-3);
+    color: var(--text-2);
+  }
+
+  @media (max-width: 52rem) {
+    .wall {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* ── S11 The Lab ────────────────────────────────────────────────────── */
+  .lab {
+    margin: 0;
+    border-block-start: 1px solid var(--border);
+  }
+
+  .lab__post {
+    display: grid;
+    grid-template-columns: 11rem minmax(0, 1fr) auto;
+    align-items: baseline;
+    gap: var(--s-4);
+    padding-block: var(--s-4);
+    border-block-end: 1px solid var(--border);
+  }
+
+  .lab__pillar {
+    font-size: var(--fs-xs);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--text-2);
+  }
+
+  .lab__title {
+    font-size: var(--fs-lg);
+  }
+
+  @media (max-width: 40rem) {
+    .lab__post {
+      grid-template-columns: 1fr;
+      gap: var(--s-1);
+    }
+
+    .lab__state {
+      justify-self: start;
+    }
+  }
+
+  /* ── S12 Team ───────────────────────────────────────────────────────── */
+  .sec--team {
+    padding-block-end: 0;
+  }
+
+  .name-story,
+  .careers {
+    margin-inline-start: calc(25% + var(--s-6));
+  }
+
+  .name-story {
+    display: grid;
+    gap: var(--s-3);
+    max-width: 46rem;
+    color: var(--text-2);
+  }
+
+  .name-story__title {
+    font-size: var(--fs-lg);
+    color: var(--text);
+  }
+
+  /* On pages not written in Cyrillic, this one quoted Tajik word uses the system font, rather than
+     downloading 27 kB of Onest for seven letters. Russian and Tajik pages use Onest throughout. */
+  :root:not(:lang(ru), :lang(tg)) .name-story [lang="tg"] {
+    font-family: system-ui, sans-serif;
+  }
+
+  .name-story__end {
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .careers {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s-4) var(--s-5);
+    max-width: 46rem;
+    margin-block-start: var(--s-7);
+    padding-block-start: var(--s-5);
+    border-block-start: 1px solid var(--border);
+  }
+
+  @media (max-width: 52rem) {
+    .name-story,
+    .careers {
+      margin-inline-start: 0;
+    }
+  }
+
+  .horizon {
+    position: relative;
+    height: clamp(12rem, 24vw, 18rem);
+    margin-block-start: var(--s-8);
+    overflow: hidden;
+  }
+
+  .horizon .pamir {
+    position: absolute;
+    inset: auto 0 0;
+    width: 100%;
+    height: 72%;
+  }
+
+  .pamir__ridge {
+    fill: var(--ink);
+    stroke: var(--slate);
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .horizon__sky {
+    position: absolute;
+    inset-block-start: var(--s-4);
+    inset-inline-start: 50%;
+    width: clamp(6rem, 11vw, 9rem);
+    transform: translateX(-50%);
+  }
+
+  .horizon__caption {
+    position: absolute;
+    inset-block-end: var(--s-4);
+    inset-inline-end: var(--gutter);
+    max-width: 30rem;
+    font-size: var(--fs-xs);
+    color: var(--text-2);
+    text-align: end;
+  }
+
+  /* Orion rises over the Pamir as you scroll (where the browser supports scroll timelines). */
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .horizon__sky {
+        animation: orion-rise linear both;
+        animation-timeline: view();
+        animation-range: entry 10% cover 55%;
+      }
+
+      @keyframes orion-rise {
+        from {
+          opacity: 0.2;
+          transform: translate(-50%, 45%);
+        }
+        to {
+          opacity: 1;
+          transform: translate(-50%, 0);
+        }
+      }
+    }
+  }
+
+  /* ── S13 Contact ────────────────────────────────────────────────────── */
+  .contact-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    align-items: start;
+    gap: var(--s-8);
+  }
+
+  .contact-grid .sec__head {
+    margin-block-end: 0;
+  }
+
+  .direct {
+    margin-block-start: var(--s-5);
+  }
+
+  .direct__title {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--text-2);
+  }
+
+  .direct__list {
+    margin: var(--s-2) 0 0;
+  }
+
+  .direct__list a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--tap);
+    font-size: var(--fs-lg);
+  }
+
+  .contact__privacy {
+    max-width: 42ch;
+    font-size: var(--fs-sm);
+    color: var(--text-2);
+  }
+
+  .contact {
+    position: relative;
+    display: grid;
+    gap: var(--s-5);
+    padding: var(--s-6);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-card);
+    background: var(--surface);
+  }
+
+  .contact__group {
+    display: grid;
+    gap: var(--s-3);
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .contact__group legend {
+    padding: 0;
+    margin-block-end: var(--s-3);
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-2);
+  }
+
+  .contact__row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s-4);
+  }
+
+  .field__optional {
+    font-weight: 400;
+    color: var(--text-2);
+  }
+
+  .contact__rule {
+    margin-block-end: calc(-1 * var(--s-2));
+    font-size: var(--fs-sm);
+    color: var(--text-2);
+  }
+
+  .contact__trap {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  /* Out of the layout while empty, but still in the accessibility tree, so the first
+     announcement is never missed. */
+  .contact__status:empty {
+    position: absolute;
+  }
+
+  .contact__send {
+    justify-self: start;
+    min-width: 10rem;
+  }
+
+  @media (max-width: 60rem) {
+    .contact-grid {
+      grid-template-columns: 1fr;
+      gap: var(--s-6);
+    }
+  }
+
+  @media (max-width: 36rem) {
+    .contact {
+      padding: var(--s-5) var(--s-4);
+    }
+
+    .contact__row {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* ── Small pages: 404, sent, privacy ────────────────────────────────── */
+  .sec--small {
+    display: grid;
+    align-content: center;
+    min-height: calc(100svh - var(--header-h) - 12rem);
+  }
+
+  .lost .wrap,
+  .sent .wrap {
+    display: grid;
+    justify-items: start;
+    gap: var(--s-4);
+    max-width: 46rem;
+  }
+
+  .lost__sky {
+    width: 9rem;
+    margin-block-end: var(--s-4);
+    opacity: 0.7;
+  }
+
+  .lost__suggest a {
+    font-family: var(--font-mono);
+  }
+
+  .lost__suggest:not(:has(a)) {
+    display: none;
+  }
+
+  .sent__errors {
+    display: none;
+  }
+
+  .sent:has(.sent__error:target) .sent__ok {
+    display: none;
+  }
+
+  .sent:has(.sent__error:target) .sent__errors {
+    display: grid;
+    gap: var(--s-3);
+  }
+
+  .sent__error-title {
+    font-size: var(--fs-h2);
+    font-weight: 500;
+    letter-spacing: var(--track-display);
+    line-height: 1.06;
+  }
+
+  .sent__error {
+    display: none;
+    /* Scrolled to by the #e-… fragment: keep the heading above it in view. */
+    scroll-margin-top: 14rem;
+    padding: var(--s-4);
+    border: 1px solid rgb(229 72 77 / 0.55);
+    border-radius: var(--r-card);
+  }
+
+  .sent__error:target {
+    display: block;
+  }
+
+  .prose .wrap {
+    display: grid;
+    gap: var(--s-4);
+    max-width: 46rem;
+  }
+
+  .prose h2 {
+    margin-block-start: var(--s-5);
+    font-size: var(--fs-xl);
+  }
+
+  .prose p {
+    color: var(--text-2);
+  }
+
+  /* Print: a one-page capability statement on white (spec §7.8). */
+  @media print {
+    :root {
+      --bg: #fff;
+      --surface: #fff;
+      --text: var(--void);
+      --text-2: var(--slate);
+      --border: #d6d9df;
+      --border-strong: #b8bdc6;
+    }
+
+    html,
+    body {
+      background: #fff;
+      color: var(--void);
+    }
+
+    #hero-canvas,
+    .orion-nav,
+    .site-header,
+    .instrument,
+    .sec--physics,
+    .sec--lab,
+    .horizon,
+    .contact,
+    .menu,
+    .site-footer__tools,
+    .code {
+      display: none !important;
+    }
+
+    .sec {
+      padding-block: 1.25rem;
+      break-inside: avoid;
+    }
+
+    .hero {
+      min-height: 0;
+    }
+
+    .hero__figure {
+      width: 6rem;
+    }
+
+    :root.engine-on .hero__poster {
+      opacity: 1;
+    }
+
+    .sec--pillar,
+    .sec--process,
+    .sec--qualities,
+    .sec--wall,
+    .sec--team,
+    .sec--contact {
+      content-visibility: visible;
+    }
+
+    a {
+      color: var(--deep-blue);
+    }
+  }
+}

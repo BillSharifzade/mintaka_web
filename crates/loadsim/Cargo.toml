@@ -1,0 +1,15 @@
+[package]
+name = "loadsim"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+description = "S6 Overload lab: a seeded discrete-event simulation of two services under load, for WebAssembly."
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[package.metadata.mintaka]
+wasm = true
+
+[dependencies]
+wasm-bindgen = "=0.2.128"

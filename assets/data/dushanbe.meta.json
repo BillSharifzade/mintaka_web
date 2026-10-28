@@ -1,0 +1,13 @@
+{
+  "arcs": 18980,
+  "bytes": 1138156,
+  "nodes": 8393,
+  "osm_nodes": 43906,
+  "osm_timestamp": "2026-10-28T05:03:59Z",
+  "osm_ways": 5493,
+  "points": 56757,
+  "query": "[out:json][timeout:180];way[\"highway\"~\"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$\"](38.49,68.69,38.63,68.87);(._;>;);out body qt;",
+  "segments": 10975,
+  "shortcuts": 17605,
+  "source": "OpenStreetMap contributors, ODbL 1.0 (https://www.openstreetmap.org/copyright)"
+}

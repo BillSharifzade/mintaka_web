@@ -1,0 +1,12 @@
+/* The page stylesheet: bundled and minified by Lightning CSS at build time and inlined into
+   every page as one <style> block (allowed by its CSP hash). Island styles live in islands.css,
+   loaded by web/main.ts only when an island mounts. Cascade layers keep specificity flat: a later
+   layer always wins over an earlier one, whatever the selectors. */
+@layer tokens, fonts, base, components, sections, islands, utilities;
+
+@import "./tokens.css";
+@import "./base.css";
+@import "./components.css";
+@import "./sections/layout.css";
+@import "./sections/hero.css";
+@import "./sections/home.css";

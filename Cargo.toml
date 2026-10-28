@@ -1,0 +1,31 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "xtask"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+publish = false
+
+[workspace.dependencies]
+proof = { path = "crates/proof" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+
+# WebAssembly instruments (`cargo xtask build` compiles them with this profile, then wasm-opt).
+[profile.wasm]
+inherits = "release"
+opt-level = 3
+
+# The build tools run in release-like speed even in dev builds (image + font + CSS work).
+[profile.dev.package."*"]
+opt-level = 2

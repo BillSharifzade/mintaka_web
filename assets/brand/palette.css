@@ -1,0 +1,18 @@
+:root {
+  --mintaka-void: #0A0B0D;
+  --mintaka-mintaka: #3D7BFF;
+  --mintaka-betelgeuse: #E2552D;
+  --mintaka-starlight: #F4F5F7;
+  --mintaka-ink: #14161A;
+  --mintaka-graphite: #23262D;
+  --mintaka-slate: #3A3F49;
+  --mintaka-steel: #6E7686;
+  --mintaka-mist: #C9CED8;
+  --mintaka-deep-blue: #1E4FD6;
+  --mintaka-sky: #8FB3FF;
+  --mintaka-ember: #B23A17;
+  --mintaka-glow: #F29A7E;
+  --mintaka-success: #2FBF71;
+  --mintaka-warning: #F2B33D;
+  --mintaka-danger: #E5484D;
+}

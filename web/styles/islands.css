@@ -1,0 +1,15 @@
+/* Island styles, one file per island (owners: docs/CONTRACTS.md §1). Loaded once, on demand, by
+   web/main.ts before the first island mounts. Every rule sits in @layer islands. */
+@layer islands;
+
+@import "./islands/hud.css";
+@import "./islands/terminal.css";
+@import "./islands/physics.css";
+@import "./islands/armour.css";
+@import "./islands/contact.css";
+@import "./islands/trace.css";
+@import "./islands/live.css";
+@import "./islands/laws.css";
+@import "./islands/routing.css";
+@import "./islands/shield.css";
+@import "./islands/loadsim.css";

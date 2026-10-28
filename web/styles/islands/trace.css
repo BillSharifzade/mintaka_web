@@ -1,0 +1,148 @@
+/* Owned by worker C — S6 "Follow one request" (web/instruments/trace.ts). */
+@layer islands {
+  .trace {
+    display: grid;
+    gap: var(--s-4);
+  }
+
+  .trace-head,
+  .trace-act {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s-3) var(--s-4);
+  }
+
+  .trace-pick {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-2);
+  }
+
+  .trace-meta,
+  .trace-said {
+    font-size: var(--fs-sm);
+    color: var(--text-2);
+  }
+
+  /* Timeline: drawn at the plot's real width, so 1 SVG unit = 1 CSS pixel */
+  .trace-plot {
+    min-height: 92px;
+  }
+
+  .trace-svg {
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+
+  .trace-svg text {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: var(--track-label);
+    fill: var(--text-2);
+  }
+
+  .trace-svg .trace-v {
+    font-weight: 500;
+    letter-spacing: 0;
+    fill: var(--text);
+  }
+
+  .trace-track {
+    fill: var(--void);
+    stroke: var(--border);
+  }
+
+  .trace-seg {
+    fill: var(--slate);
+  }
+
+  .trace-seg--tcp,
+  .trace-seg--net,
+  .trace-seg--ttfb {
+    fill: var(--steel);
+  }
+
+  .trace-seg--app {
+    fill: var(--mintaka);
+  }
+
+  .trace-lead {
+    fill: none;
+    stroke: var(--border-strong);
+  }
+
+  .trace-dot {
+    fill: var(--mintaka);
+    opacity: 0;
+  }
+
+  .trace-dot.is-on {
+    opacity: 1;
+  }
+
+  /* The ordered list mirroring the timeline */
+  .trace-hops {
+    border-block-start: 1px solid var(--border);
+  }
+
+  .trace-hop {
+    border-block-end: 1px solid var(--border);
+  }
+
+  .trace-hop summary {
+    display: grid;
+    grid-template-columns: 2.25rem 1fr auto 1.5rem;
+    align-items: baseline;
+    gap: var(--s-1) var(--s-3);
+    min-height: var(--tap);
+    padding-block: var(--s-3);
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .trace-hop summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .trace-hop summary::after {
+    content: "+";
+    grid-area: 1 / 4;
+    justify-self: end;
+    font-family: var(--font-mono);
+    color: var(--text-2);
+  }
+
+  .trace-hop details[open] summary::after {
+    content: "\2212";
+  }
+
+  .trace-hop__n {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--text-2);
+  }
+
+  .trace-hop__x {
+    grid-column: 2 / 4;
+    font-size: var(--fs-xs);
+    color: var(--text-2);
+  }
+
+  .trace-hop__x .num {
+    font-weight: 400;
+    color: var(--text-2);
+  }
+
+  .trace-hop details > p {
+    max-width: var(--measure);
+    margin: 0 0 var(--s-3) calc(2.25rem + var(--s-3));
+    font-size: var(--fs-sm);
+    color: var(--text-2);
+  }
+
+  .trace-gap:empty {
+    display: none;
+  }
+}

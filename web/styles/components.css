@@ -1,0 +1,510 @@
+/* Shared components. Islands compose these and add their own rules in @layer islands with a
+   prefix (.hud-*, .term-*, .phys-*, .arm-*, .trace-*, .live-*, .laws-*, .contact-*).
+
+   Typographic rule of the whole site: MONO MEANS MEASURED. A number set in IBM Plex Mono
+   (.num) was measured live on this page view or is cited with its source. Claims and prose are
+   set in Space Grotesk. Never put an invented or example number in .num. */
+
+@layer components {
+  .wrap {
+    width: min(100% - 2 * var(--gutter), var(--max));
+    margin-inline: auto;
+  }
+
+  .visually-hidden:not(:focus):not(:active) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .skip-link {
+    position: fixed;
+    inset-block-start: var(--s-3);
+    inset-inline-start: var(--s-3);
+    z-index: var(--z-dialog);
+    padding: var(--s-3) var(--s-4);
+    border-radius: var(--r-control);
+    background: var(--starlight);
+    color: var(--void);
+    font-weight: 500;
+    transform: translateY(-200%);
+  }
+
+  .skip-link:focus-visible {
+    transform: none;
+  }
+
+  /* Eyebrow: the brand's wide-tracked blue capitals */
+  .eyebrow {
+    font-size: var(--fs-xs);
+    font-weight: 500;
+    letter-spacing: var(--track-eyebrow);
+    text-transform: uppercase;
+    color: var(--mintaka);
+  }
+
+  .lead {
+    font-size: var(--fs-lg);
+    line-height: 1.5;
+    color: var(--text-2);
+    max-width: 46ch;
+  }
+
+  .mono {
+    font-family: var(--font-mono);
+    font-feature-settings: "zero" 1;
+  }
+
+  /* A measured value: <span class="num">21<span class="num__unit">µs</span></span> */
+  /* One mono weight (400) ships; measured numbers stand out by colour, not weight. */
+  .num {
+    font-family: var(--font-mono);
+    font-feature-settings: "zero" 1, "tnum" 1;
+    font-weight: 400;
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  .num__unit {
+    margin-inline-start: 0.2em;
+    font-size: 0.78em;
+    font-weight: 400;
+    color: var(--text-2);
+  }
+
+  /* Small mono caption describing where a number comes from */
+  .source {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--text-2);
+  }
+
+  /* Buttons — 48 px tall, ≥ 44 px touch target */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--s-2);
+    min-height: 3rem;
+    padding: 0 var(--s-5);
+    border: 1px solid transparent;
+    border-radius: var(--r-control);
+    background: transparent;
+    color: var(--text);
+    font-size: var(--fs-md);
+    font-weight: 500;
+    line-height: 1;
+    text-decoration: none;
+    white-space: nowrap;
+    transition:
+      background-color var(--t-micro) var(--ease-enter),
+      border-color var(--t-micro) var(--ease-enter),
+      color var(--t-micro) var(--ease-enter);
+  }
+
+  .btn--primary {
+    background: var(--cta-bg);
+    color: var(--cta-text);
+  }
+
+  .btn--primary:hover {
+    background: var(--cta-hover);
+    color: var(--cta-text);
+  }
+
+  .btn--primary:active {
+    background: var(--cta-pressed);
+    color: var(--cta-pressed-text);
+  }
+
+  .btn--ghost {
+    border-color: var(--border-strong);
+  }
+
+  .btn--ghost:hover {
+    border-color: var(--mist);
+    color: var(--text);
+  }
+
+  .btn--quiet {
+    min-height: var(--tap);
+    padding: 0 var(--s-3);
+    color: var(--text-2);
+  }
+
+  .btn--quiet:hover {
+    color: var(--text);
+  }
+
+  .btn[disabled],
+  .btn[aria-disabled="true"] {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn--sm {
+    min-height: var(--tap);
+    padding: 0 var(--s-4);
+    font-size: var(--fs-sm);
+  }
+
+  /* Chips: toggles and presets. Use <button aria-pressed> or <label class="chip"><input …></label> */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-2);
+    min-height: var(--tap);
+    padding: 0 var(--s-4);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-pill);
+    background: transparent;
+    color: var(--text-2);
+    font-size: var(--fs-sm);
+    cursor: pointer;
+    user-select: none;
+    transition:
+      border-color var(--t-micro) var(--ease-enter),
+      color var(--t-micro) var(--ease-enter),
+      background-color var(--t-micro) var(--ease-enter);
+  }
+
+  .chip--mono {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+  }
+
+  .chip:hover {
+    border-color: var(--mist);
+    color: var(--text);
+  }
+
+  .chip[aria-pressed="true"],
+  .chip:has(input:checked) {
+    border-color: var(--mintaka);
+    background: rgb(61 123 255 / 0.12);
+    color: var(--text);
+  }
+
+  .chip:has(input:focus-visible) {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  /* Cards */
+  .card {
+    padding: var(--s-5);
+    border: 1px solid var(--border);
+    border-radius: var(--r-card);
+    background: var(--surface);
+  }
+
+  .card__title {
+    font-size: var(--fs-lg);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+
+  .card__body {
+    margin-block-start: var(--s-2);
+    color: var(--text-2);
+  }
+
+  /* Badges: tiny mono status labels */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45em;
+    padding: 0.2em 0.6em;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-pill);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    line-height: 1.4;
+    color: var(--text-2);
+    white-space: nowrap;
+  }
+
+  .badge::before {
+    content: "";
+    width: 0.5em;
+    height: 0.5em;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  .badge--plain::before {
+    display: none;
+  }
+
+  .badge--ok {
+    border-color: rgb(47 191 113 / 0.5);
+    color: var(--success);
+  }
+
+  .badge--warn {
+    border-color: rgb(242 179 61 / 0.5);
+    color: var(--warning);
+  }
+
+  .badge--bad {
+    border-color: rgb(229 72 77 / 0.5);
+    color: var(--danger);
+  }
+
+  .badge--info {
+    border-color: rgb(61 123 255 / 0.55);
+    color: var(--sky);
+  }
+
+  .badge--live::before {
+    background: var(--mintaka);
+    box-shadow: 0 0 0 0 rgb(61 123 255 / 0.6);
+    animation: badge-pulse 2s var(--ease-enter) infinite;
+  }
+
+  @keyframes badge-pulse {
+    0% {
+      box-shadow: 0 0 0 0 rgb(61 123 255 / 0.6);
+    }
+    70%,
+    100% {
+      box-shadow: 0 0 0 0.45em rgb(61 123 255 / 0);
+    }
+  }
+
+  /* Star callout, in the language of the construction board:
+     <p class="callout" data-star="rigel"><span class="callout__name">Rigel</span>
+     <span class="callout__xy">64, 90</span></p> */
+  .callout {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--s-3);
+    font-size: var(--fs-sm);
+  }
+
+  .callout::before {
+    content: "";
+    align-self: center;
+    width: 0.625rem;
+    height: 0.625rem;
+    border-radius: 50%;
+    background: var(--starlight);
+    box-shadow: 0 0 0 3px var(--bg), 0 0 0 4px var(--border-strong);
+  }
+
+  .callout[data-star="betelgeuse"]::before {
+    background: var(--betelgeuse);
+  }
+
+  .callout[data-star="mintaka"]::before {
+    background: var(--mintaka);
+  }
+
+  .callout__name {
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .callout__xy {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--text-2);
+  }
+
+  /* Key–value rows for instruments: <dl class="kv"><div><dt>…</dt><dd>…</dd></div></dl> */
+  .kv {
+    display: grid;
+  }
+
+  .kv > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--s-4);
+    padding-block: var(--s-2);
+    border-block-end: 1px solid var(--border);
+  }
+
+  .kv > div:last-child {
+    border-block-end: 0;
+  }
+
+  .kv dt {
+    color: var(--text-2);
+    font-size: var(--fs-sm);
+  }
+
+  .kv dd {
+    text-align: end;
+  }
+
+  /* Instrument frame — every live demo sits in one.
+     <div class="instrument" role="region" aria-labelledby="x-title">
+       <div class="instrument__bar"><span class="instrument__id">S2 · Physics</span>
+         <h3 class="instrument__title" id="x-title">…</h3>
+         <span class="instrument__status badge">static</span></div>
+       <div class="instrument__body">…fallback, replaced by the island…</div>
+       <p class="instrument__foot">How we measure this: …</p>
+     </div> */
+  .instrument {
+    position: relative;
+    border: 1px solid var(--border);
+    border-radius: var(--r-card);
+    background: var(--surface);
+    overflow: hidden;
+  }
+
+  .instrument__bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s-2) var(--s-4);
+    min-height: 2.75rem;
+    padding: var(--s-2) var(--s-4);
+    border-block-end: 1px solid var(--border);
+  }
+
+  .instrument__id {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--text-2);
+  }
+
+  .instrument__title {
+    font-size: var(--fs-sm);
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--text);
+  }
+
+  .instrument__status {
+    margin-inline-start: auto;
+  }
+
+  .instrument__body {
+    padding: var(--s-5);
+  }
+
+  /* The construction grid from brand board 10, for instrument canvases */
+  .grid-bg {
+    background-color: var(--void);
+    background-image:
+      linear-gradient(var(--grid-line-major) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line-major) 1px, transparent 1px),
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size:
+      160px 160px,
+      160px 160px,
+      40px 40px,
+      40px 40px;
+    background-position: -1px -1px;
+  }
+
+  .instrument__foot {
+    padding: var(--s-3) var(--s-4);
+    border-block-start: 1px solid var(--border);
+    font-size: var(--fs-xs);
+    color: var(--text-2);
+  }
+
+  .instrument__fallback {
+    color: var(--text-2);
+    max-width: var(--measure);
+  }
+
+  /* Overlays: <dialog class="sheet"> */
+  dialog.sheet {
+    width: min(100% - 2 * var(--gutter), 44rem);
+    max-height: min(80dvh, 44rem);
+    padding: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-card);
+    background: var(--surface);
+    color: var(--text);
+  }
+
+  dialog.sheet::backdrop {
+    background: rgb(10 11 13 / 0.72);
+    backdrop-filter: blur(2px);
+  }
+
+  /* Text fields */
+  .field {
+    display: grid;
+    gap: var(--s-2);
+  }
+
+  .field__label {
+    font-size: var(--fs-sm);
+    font-weight: 500;
+  }
+
+  .field__hint {
+    font-size: var(--fs-sm);
+    color: var(--text-2);
+  }
+
+  .field__error {
+    font-size: var(--fs-sm);
+    color: var(--danger);
+  }
+
+  .input {
+    width: 100%;
+    min-height: 3rem;
+    padding: var(--s-3) var(--s-4);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-control);
+    background: var(--void);
+    color: var(--text);
+    transition: border-color var(--t-micro) var(--ease-enter);
+  }
+
+  .input::placeholder {
+    color: var(--steel);
+  }
+
+  .input:hover {
+    border-color: var(--steel);
+  }
+
+  .input:focus-visible {
+    border-color: var(--mintaka);
+    outline-offset: 0;
+  }
+
+  .input[aria-invalid="true"] {
+    border-color: var(--danger);
+  }
+
+  textarea.input {
+    min-height: 8rem;
+    resize: vertical;
+    line-height: var(--lh-body);
+  }
+
+  @media (forced-colors: active) {
+    .btn,
+    .chip,
+    .badge,
+    .card,
+    .instrument {
+      border: 1px solid CanvasText;
+    }
+
+    .callout::before {
+      forced-color-adjust: none;
+    }
+  }
+}

@@ -1,0 +1,341 @@
+/* Owned by worker C — S7 "Laws you can feel" (web/instruments/laws/). */
+@layer islands {
+  .laws {
+    /* The pop-out colour. Rust on purpose: the experiment shows why the page uses it so rarely. */
+    --laws-odd: var(--betelgeuse);
+    display: grid;
+    gap: var(--s-5);
+    container-type: inline-size;
+  }
+
+  .laws-tabs,
+  .laws-opts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-2);
+  }
+
+  .laws-tab[aria-selected="true"] {
+    border-color: var(--mintaka);
+    background: color-mix(in srgb, var(--mintaka) 12%, transparent);
+    color: var(--text);
+  }
+
+  .laws-panel,
+  .laws-side,
+  .laws-row {
+    display: grid;
+    gap: var(--s-4);
+  }
+
+  .laws-panel > p,
+  .laws-note {
+    max-width: var(--measure);
+    color: var(--text-2);
+  }
+
+  .laws-note {
+    font-size: var(--fs-sm);
+  }
+
+  .laws-stage {
+    display: grid;
+    gap: var(--s-3);
+    justify-items: start;
+  }
+
+  @container (min-width: 44rem) {
+    .laws-row {
+      grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+      align-items: start;
+    }
+  }
+
+  /* Arenas: Fitts targets and the pop-out field */
+  .laws-arena {
+    position: relative;
+    width: 100%;
+    height: clamp(16rem, 50vh, 24rem);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--r-control);
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+    forced-color-adjust: none;
+  }
+
+  .laws-arena.is-run {
+    touch-action: none;
+    cursor: crosshair;
+  }
+
+  .laws-dot {
+    position: absolute;
+    left: var(--x, 50%);
+    top: var(--y, 50%);
+    width: var(--d);
+    height: var(--d);
+    translate: -50% -50%;
+    border: 1.5px solid var(--starlight);
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--starlight) 14%, transparent);
+  }
+
+  .laws-dot::after {
+    content: "";
+    position: absolute;
+    inset: calc(50% - 2px);
+    border-radius: 50%;
+    background: var(--starlight);
+  }
+
+  .laws-go {
+    position: absolute;
+    inset: calc(50% + 2.5rem) 0 auto;
+    text-align: center;
+    font-size: var(--fs-sm);
+    color: var(--text-2);
+    pointer-events: none;
+  }
+
+  .laws-count {
+    min-height: 1.5em;
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--text-2);
+  }
+
+  .laws-arena .laws-count {
+    position: absolute;
+    inset: var(--s-2) auto auto var(--s-3);
+    pointer-events: none;
+  }
+
+  .laws-field {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .laws-star {
+    fill: var(--starlight);
+  }
+
+  .laws-star.is-odd {
+    fill: var(--laws-odd);
+  }
+
+  .laws-guide {
+    fill: none;
+    stroke: var(--border);
+    stroke-dasharray: 3 4;
+  }
+
+  .laws-qn {
+    opacity: 0;
+  }
+
+  .laws-search:focus-visible .laws-qn {
+    opacity: 1;
+  }
+
+  .laws-quad {
+    fill: color-mix(in srgb, var(--mintaka) 10%, transparent);
+    stroke: var(--mintaka);
+  }
+
+  /* Hick–Hyman: the cue and the options (56 px targets) */
+  .laws-cue {
+    display: grid;
+    place-items: center;
+    width: 4.5rem;
+    height: 4.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--r-control);
+    background: var(--void);
+  }
+
+  .laws-cue .laws-glyph {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .laws-fix {
+    font-family: var(--font-mono);
+    font-size: var(--fs-lg);
+    color: var(--text-2);
+  }
+
+  .laws-field .laws-fix {
+    font-size: 20px;
+  }
+
+  .laws-opt {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 3.5rem;
+    height: 3.5rem;
+    padding: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-control);
+    background: var(--void);
+    color: var(--text);
+  }
+
+  .laws-opt:hover {
+    border-color: var(--mist);
+  }
+
+  .laws-glyph {
+    width: 1.75rem;
+    height: 1.75rem;
+    fill: currentColor;
+  }
+
+  .laws-key {
+    position: absolute;
+    inset: 2px auto auto 5px;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    color: var(--text-2);
+  }
+
+  .laws-opts.is-off .laws-glyph {
+    visibility: hidden;
+  }
+
+  /* Plots: fixed 300×190 boxes */
+  .laws-plot {
+    width: 100%;
+    max-width: 26rem;
+    height: auto;
+    forced-color-adjust: none;
+  }
+
+  .laws-plot text,
+  .laws-field text {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    fill: var(--text-2);
+  }
+
+  .laws-plot .laws-v {
+    font-weight: 500;
+    fill: var(--text);
+  }
+
+  .laws-axis {
+    fill: none;
+    stroke: var(--border-strong);
+  }
+
+  .laws-grid {
+    fill: none;
+    stroke: var(--border);
+    stroke-dasharray: 2 3;
+  }
+
+  .laws-pt {
+    fill: var(--starlight);
+  }
+
+  .laws-mean {
+    fill: var(--void);
+    stroke: var(--starlight);
+    stroke-width: 1.5;
+  }
+
+  .laws-fit {
+    stroke: var(--mintaka);
+    stroke-width: 1.5;
+  }
+
+  .laws-bar {
+    fill: var(--slate);
+  }
+
+  .laws-data summary {
+    padding-block: var(--s-2);
+    font-size: var(--fs-sm);
+    color: var(--text-2);
+    cursor: pointer;
+  }
+
+  .laws-data table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+  }
+
+  .laws-data th,
+  .laws-data td {
+    padding: var(--s-1) var(--s-2);
+    border-block-end: 1px solid var(--border);
+    text-align: end;
+  }
+
+  .laws-data th {
+    font-family: var(--font-sans);
+    font-weight: 500;
+    color: var(--text-2);
+  }
+
+  .laws-said {
+    font-size: var(--fs-sm);
+    color: var(--text-2);
+  }
+
+  /* Your numbers */
+  .laws-results {
+    display: grid;
+    gap: var(--s-4);
+    padding-block-start: var(--s-5);
+    border-block-start: 1px solid var(--border);
+  }
+
+  .laws-results__title {
+    font-size: var(--fs-md);
+  }
+
+  @container (min-width: 44rem) {
+    .laws-results {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .laws-results__title {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .laws-result {
+    display: grid;
+    gap: var(--s-2);
+    align-content: start;
+    font-size: var(--fs-sm);
+    color: var(--text-2);
+  }
+
+  .laws-result__name,
+  .laws-result__line {
+    color: var(--text);
+  }
+
+  .laws-result__name {
+    font-weight: 500;
+  }
+
+  .laws-nums > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--s-3);
+    padding-block: var(--s-1);
+    border-block-end: 1px solid var(--border);
+  }
+}
