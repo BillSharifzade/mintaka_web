@@ -7,6 +7,7 @@ import { fitts } from './fitts.ts';
 import { hick } from './hick.ts';
 import { L, num, type Api, type Experiment, type Report } from './kit.ts';
 import { popout } from './popout.ts';
+import { track } from '../../shared/rum.ts';
 
 const EXPERIMENTS: readonly (readonly [id: string, build: Experiment])[] = [
   ['fitts', fitts],
@@ -46,8 +47,11 @@ export function mount(root: HTMLElement): void {
   const stops: (((reason?: string) => void) | undefined)[] = [];
   let current = -1;
 
+  // Only that a run started and finished is counted (web/shared/rum.ts) — never what it measured.
   const api = (i: number): Api => ({
+    started: () => track('instrument_start', 'design'),
     report(r: Report) {
+      track('instrument_complete', 'design');
       const name = L(EXPERIMENTS[i]![0]);
       render(
         results[i]!,

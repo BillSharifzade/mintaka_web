@@ -12,6 +12,7 @@ trace-size = { $size } over the network
 trace-total = { $total } in total
 trace-again = Send another request
 trace-failed = The request didn't get through. Check your connection and try again.
+trace-offline = You're offline, so the request can't reach our server. Send it again once you're connected.
 trace-done = Request { $n }: { $total } in total, { $app } of it inside our server.
 trace-done-short = Request { $n }: { $total } in total.
 trace-gap = The other { $ms } went to your browser checking its cache and queueing the request.

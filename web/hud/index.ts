@@ -1,17 +1,20 @@
 // Proof console: a pill with this page's vital signs and a panel saying where each number comes
 // from. Also fills the footer's live line (#footer-stats). On mount it reads only what the browser
-// already measured, plus GET /_proof; the HEAD request for headers waits for the panel to open.
+// already measured, plus GET /_proof; the HEAD request for headers and GET /_rum (other visitors'
+// totals) wait for the panel to open.
 
 import { $, h, num, render, s, type Child } from '../shared/dom.ts';
 import { lang, pluralKey, t, tn, tp } from '../shared/i18n.ts';
 import { getProof, type Proof } from '../shared/proof.ts';
-import { pageWeight, serverTiming } from '../shared/timing.ts';
+import { offlineCopy, pageWeight, serverTiming } from '../shared/timing.ts';
 import { bytes, duration } from '../shared/format.ts';
 import { on } from '../shared/bus.ts';
+import { offline } from '../shared/env.ts';
+import { track } from '../shared/rum.ts';
 import { cls, clsText, cookies, httpVersion, slowest, tlsVersion, transport, type Shift } from './metrics.ts';
 
 const T = (key: string, vars?: Record<string, string | number>): string => t('hud-' + key, vars);
-const WIDE = ['third', 'tls', 'headers'];
+const WIDE = ['third', 'tls', 'headers', 'visitors'];
 
 let pill: HTMLButtonElement | undefined;
 let panel: HTMLElement;
@@ -72,7 +75,7 @@ export function mount(): void {
       h('h2', { class: 'hud-title', id: 'hud-title' }, T('title')),
       h('button', { type: 'button', class: 'btn btn--quiet btn--sm hud-close', onclick: () => toggle(false) }, T('close')),
     ),
-    h('dl', { class: 'hud-rows' }, ['server', 'weight', 'third', 'cookies', 'tls', 'headers', 'lcp', 'inp', 'cls', 'tier'].map(row)),
+    h('dl', { class: 'hud-rows' }, ['server', 'weight', 'third', 'cookies', 'tls', 'headers', 'lcp', 'inp', 'cls', 'tier', 'visitors'].map(row)),
     h('div', { class: 'hud-foot' }, rawButton, raw),
   );
   const onkeydown = (e: KeyboardEvent) => {
@@ -113,9 +116,12 @@ function toggle(show = panel.hidden): void {
   panel.hidden = !show;
   pill!.setAttribute('aria-expanded', String(show));
   if (!show) return pill!.focus();
+  track('proof_open');
   if (proof === null) getProof().then((p) => ((proof = p), local()), () => {}); // retry once per opening
   local();
   headers();
+  // Other visitors' totals change while the page is open: asked again on every opening.
+  import('./visitors.ts').then((m) => m.show(cells['visitors']!), () => set('visitors', T(offline() ? 'offline' : 'pending')));
   panel.focus();
 }
 
@@ -140,7 +146,7 @@ function local(): void {
   );
 
   // Blame the browser only when the API itself is missing; otherwise the server didn't report it.
-  set('server', app !== undefined ? ms(app) : T('PerformanceServerTiming' in globalThis ? 'not-reported' : 'na'));
+  set('server', app !== undefined ? ms(app) : T(offlineCopy() ? 'offline-copy' : 'PerformanceServerTiming' in globalThis ? 'not-reported' : 'na'));
   set(
     'weight',
     'transferSize' in PerformanceResourceTiming.prototype ? num(bytes(w.transferred, L)) : T('na'),
@@ -153,11 +159,13 @@ function local(): void {
     count(jar.count, jar.ours ? 'hud-bad' : ''),
     jar.count > 0 && jar.ours !== undefined && h('span', { class: 'hud-sub' }, T(jar.ours ? 'cookies-ours' : 'cookies-foreign')),
   );
-  if (proof === null) set('tls', T('err-proof'));
+  if (proof === null) set('tls', T(offline() ? 'offline' : 'err-proof'));
   else if (proof) {
     const http = httpVersion(proof.http.version);
     const tls = proof.tls;
-    set('tls', tls ? h('span', { class: 'mono' }, [tlsVersion(tls.version), tls.cipher, tls.group, http].join(' · ')) : T('plain', { http }));
+    // A fact the server did not report (null) is left out, never filled in.
+    const facts = tls && [tlsVersion(tls.version), tls.cipher, tls.group, http].filter((f) => f !== null);
+    set('tls', facts ? h('span', { class: 'mono' }, facts.join(' · ')) : T('plain', { http }));
   }
 
   const footer = $('#footer-stats');
@@ -220,6 +228,6 @@ function headers(): void {
     .then((m) => m.scan(cells['headers']!, cells['raw']!))
     .catch((err: unknown) => {
       headed = false; // try again next time the panel opens
-      set('headers', T('err-head', { reason: err instanceof Error ? err.message : String(err) }));
+      set('headers', offline() ? T('offline') : T('err-head', { reason: err instanceof Error ? err.message : String(err) }));
     });
 }

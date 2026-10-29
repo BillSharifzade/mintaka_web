@@ -151,6 +151,7 @@ export const popout: Experiment = (panel, api) => {
 
   async function run(): Promise<void> {
     const me = ++token;
+    api.started();
     const rts: Record<Cond, number[]> = { colour: [], shape: [], both: [] };
     let wrong = 0;
     start.hidden = true;

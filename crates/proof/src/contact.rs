@@ -50,6 +50,10 @@ pub struct ContactRequest {
     pub website: Option<String>,
     pub pow_challenge: Option<String>,
     pub pow_counter: Option<u64>,
+    /// The application form's pass: the run token of a finished console challenge (§8.3). A
+    /// valid one marks the brief as an application from someone who solved it; an invalid one is
+    /// ignored rather than refused.
+    pub ctf_pass: Option<String>,
 }
 
 /// `POST /api/contact` JSON response: `{"ok":true}` or `{"ok":false,"errors":[…]}`.
@@ -226,6 +230,9 @@ pub struct StoredBrief {
     pub company: Option<String>,
     /// Whether the submission came with a valid proof of work (JS path) or not (no-JS path).
     pub proof_of_work: bool,
+    /// Sent with a valid console-challenge pass: an application from someone who solved it.
+    #[serde(default)]
+    pub ctf_solved: bool,
 }
 
 #[cfg(test)]

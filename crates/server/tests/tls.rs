@@ -7,91 +7,29 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use bytes::Bytes;
-use common::{BROWSER, Client, TestServer, assert_security_headers, config, request};
+use common::{BROWSER, Client, TestServer, assert_security_headers, pinned_client, request, tls_config};
 use http::StatusCode;
-use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
-use rustls::crypto::{CryptoProvider, aws_lc_rs, verify_tls12_signature, verify_tls13_signature};
-use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
-use rustls::{ClientConfig, DigitallySignedStruct, NamedGroup, SignatureScheme, SupportedProtocolVersion};
-use server::{CertSource, TlsSettings};
+use rustls::crypto::{CryptoProvider, aws_lc_rs};
+use rustls::pki_types::ServerName;
+use rustls::{ClientConfig, NamedGroup, SupportedProtocolVersion};
 use tokio::net::TcpStream;
 use tokio_rustls::TlsConnector;
 use tokio_rustls::client::TlsStream;
 
-/// Trusts exactly one certificate (the server's self-signed one), with real signature checks.
-#[derive(Debug)]
-struct Pinned {
-    cert: CertificateDer<'static>,
-    provider: Arc<CryptoProvider>,
-}
-
-impl ServerCertVerifier for Pinned {
-    fn verify_server_cert(
-        &self,
-        end_entity: &CertificateDer<'_>,
-        _intermediates: &[CertificateDer<'_>],
-        _server_name: &ServerName<'_>,
-        _ocsp: &[u8],
-        _now: UnixTime,
-    ) -> Result<ServerCertVerified, rustls::Error> {
-        if end_entity.as_ref() == self.cert.as_ref() {
-            Ok(ServerCertVerified::assertion())
-        } else {
-            Err(rustls::Error::General("not the pinned certificate".into()))
-        }
-    }
-
-    fn verify_tls12_signature(
-        &self,
-        message: &[u8],
-        cert: &CertificateDer<'_>,
-        dss: &DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        verify_tls12_signature(message, cert, dss, &self.provider.signature_verification_algorithms)
-    }
-
-    fn verify_tls13_signature(
-        &self,
-        message: &[u8],
-        cert: &CertificateDer<'_>,
-        dss: &DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        verify_tls13_signature(message, cert, dss, &self.provider.signature_verification_algorithms)
-    }
-
-    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-        self.provider.signature_verification_algorithms.supported_schemes()
-    }
-}
-
 async fn tls_server(name: &str, allow_tls12: bool) -> TestServer {
-    let mut cfg = config(name);
-    cfg.tls = Some(TlsSettings {
-        listen: "127.0.0.1:0".parse().unwrap(),
-        source: CertSource::SelfSigned,
-        allow_tls12,
-    });
+    let mut cfg = tls_config(name, allow_tls12, false);
     cfg.redirect_http = Some("127.0.0.1:0".parse().unwrap());
     TestServer::start(cfg).await
 }
 
-/// A client with rustls' *default* aws-lc-rs provider (what any rustls client would use).
+/// A client with the given provider that trusts only the server's self-signed certificate.
 fn client_config(
     server: &TestServer,
     provider: CryptoProvider,
     versions: &[&'static SupportedProtocolVersion],
     alpn: &[&[u8]],
 ) -> ClientConfig {
-    let provider = Arc::new(provider);
-    let cert = server.self_signed.as_ref().unwrap().cert.clone();
-    let mut config = ClientConfig::builder_with_provider(Arc::clone(&provider))
-        .with_protocol_versions(versions)
-        .unwrap()
-        .dangerous()
-        .with_custom_certificate_verifier(Arc::new(Pinned { cert, provider }))
-        .with_no_client_auth();
-    config.alpn_protocols = alpn.iter().map(|p| p.to_vec()).collect();
-    config
+    pinned_client(&server.self_signed.as_ref().unwrap().cert, provider, versions, alpn)
 }
 
 async fn connect(addr: SocketAddr, config: ClientConfig) -> std::io::Result<TlsStream<TcpStream>> {
@@ -116,15 +54,16 @@ async fn default_rustls_client_negotiates_x25519mlkem768_and_proof_reports_it() 
     assert_security_headers(&first, true, "proof over TLS");
     let p: proof::Proof = first.json();
     let tls = p.tls.expect("tls facts over TLS");
-    assert_eq!(tls.group, "X25519MLKEM768");
+    assert_eq!(tls.group.as_deref(), Some("X25519MLKEM768"));
     assert!(tls.post_quantum);
     assert_eq!(tls.version, "TLSv1.3");
-    assert_eq!(tls.cipher, cipher, "the suite the client saw");
+    assert_eq!(tls.cipher, Some(cipher), "the suite the client saw");
     assert_eq!(tls.alpn.as_deref(), Some("h2"));
     assert!(tls.handshake_us.is_some_and(|us| us > 0));
     assert_eq!(p.http.version, "HTTP/2.0");
     assert_eq!(p.headers.last().map(String::as_str), Some("strict-transport-security"));
     assert_eq!(p.headers.len(), 8);
+    assert!(!first.headers.contains_key("alt-svc"), "no Alt-Svc without --http3");
     for name in &p.headers {
         assert!(first.headers.contains_key(name.as_str()), "{name}");
     }
@@ -165,7 +104,7 @@ async fn a_classical_client_is_reported_as_classical() {
     let stream = connect(server.https.unwrap(), config).await.unwrap();
     let mut client = Client::over(stream, true).await;
     let tls = client.get("/_proof", &[BROWSER]).await.json::<proof::Proof>().tls.unwrap();
-    assert_eq!(tls.group, "X25519");
+    assert_eq!(tls.group.as_deref(), Some("X25519"));
     assert!(!tls.post_quantum);
 }
 
@@ -181,7 +120,7 @@ async fn tls12_is_refused_unless_enabled() {
     let mut client = Client::over(stream, true).await;
     let tls = client.get("/_proof", &[BROWSER]).await.json::<proof::Proof>().tls.unwrap();
     assert_eq!(tls.version, "TLSv1.2");
-    assert_eq!(tls.group, "X25519", "hybrid groups are TLS 1.3 only");
+    assert_eq!(tls.group.as_deref(), Some("X25519"), "hybrid groups are TLS 1.3 only");
     assert!(!tls.post_quantum);
 }
 

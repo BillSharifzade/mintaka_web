@@ -5,10 +5,11 @@
 // `hops()` is pure and tested in trace.test.ts.
 
 import { $, h, render, s } from '../shared/dom.ts';
-import { reducedMotion } from '../shared/env.ts';
+import { offline, reducedMotion } from '../shared/env.ts';
 import { bytes, duration, type Formatted } from '../shared/format.ts';
 import { t, tn } from '../shared/i18n.ts';
-import { navEntry, serverTiming } from '../shared/timing.ts';
+import { navEntry, offlineCopy, serverTiming } from '../shared/timing.ts';
+import { track } from '../shared/rum.ts';
 
 export type HopId = 'dns' | 'tcp' | 'tls' | 'net' | 'app' | 'ttfb' | 'down';
 /** Why a hop took no time — shown, never hidden. */
@@ -248,7 +249,8 @@ export function mount(root: HTMLElement): void {
     return;
   }
   const secure = location.protocol === 'https:';
-  const cached = nav.transferSize === 0 && nav.decodedBodySize > 0;
+  // From the HTTP cache, or the service worker's offline copy: no request of ours to follow.
+  const cached = (nav.transferSize === 0 && nav.decodedBodySize > 0) || offlineCopy(nav);
   const views: (View | null)[] = [cached ? null : view(nav, secure)];
   let shown = 0;
   let sent = 1;
@@ -292,6 +294,7 @@ export function mount(root: HTMLElement): void {
     if (busy) return;
     busy = true;
     again.setAttribute('aria-disabled', 'true');
+    track('instrument_start', 'highload');
     try {
       const entry = await ping();
       if (!entry) throw new Error('no Resource Timing entry');
@@ -306,8 +309,9 @@ export function mount(root: HTMLElement): void {
           ? t('trace-done-short', { n: sent, total: text(v.trace.total) })
           : t('trace-done', { n: sent, total: text(v.trace.total), app: text(Math.min(app, v.trace.total)) });
       travel();
+      track('instrument_complete', 'highload');
     } catch {
-      said.textContent = t('trace-failed');
+      said.textContent = t(offline() ? 'trace-offline' : 'trace-failed');
     } finally {
       busy = false;
       again.removeAttribute('aria-disabled');

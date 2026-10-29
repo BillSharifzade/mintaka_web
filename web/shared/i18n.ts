@@ -1,9 +1,12 @@
 // Island strings. The site generator exports every message from `content/{lang}/islands/*.ftl`
 // into `<script type="application/json" id="mintaka-i18n">` on each page. Fluent variables
 // (`{ $ms }`) arrive as `{ms}` and are filled here. Island messages use plain variables only —
-// no selectors — so this stays a lookup.
+// no selectors — so this stays a lookup. Bundles in `islands/lazy/` are fetched with loadStrings().
+
+import { assetUrl } from './assets.ts';
 
 let dict: Record<string, string> | null = null;
+const bundles = new Map<string, Promise<boolean>>();
 
 function load(): Record<string, string> {
   if (dict) return dict;
@@ -66,6 +69,29 @@ export function pluralKey(key: string, n: number): string {
   const d = load();
   const category = new Intl.PluralRules(lang()).select(n);
   return [`${key}[${n}]`, `${key}[${category}]`].find((k) => k in d) ?? key;
+}
+
+/**
+ * Fetch a lazy bundle (`content/{lang}/islands/lazy/<name>.ftl`) into the dictionary. Resolves
+ * `false` if it couldn't be fetched (offline, say) — then its keys stay missing, so keep the line
+ * that reports the failure inline — and tries again on the next call.
+ */
+export function loadStrings(name: string): Promise<boolean> {
+  let job = bundles.get(name);
+  if (!job) {
+    job = fetch(assetUrl(`strings/${name}.${lang()}`))
+      .then((res) => (res.ok ? (res.json() as Promise<Record<string, string>>) : Promise.reject(new Error(String(res.status)))))
+      .then((strings) => {
+        Object.assign(load(), strings);
+        return true;
+      })
+      .catch(() => {
+        bundles.delete(name);
+        return false;
+      });
+    bundles.set(name, job);
+  }
+  return job;
 }
 
 /** For tests: install a dictionary without a DOM. */

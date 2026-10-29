@@ -625,6 +625,36 @@
     font-size: var(--fs-lg);
   }
 
+  a.lab__title {
+    color: var(--text);
+    text-decoration-color: var(--border-strong);
+  }
+
+  a.lab__title:hover {
+    color: var(--link-hover);
+    text-decoration-color: currentColor;
+  }
+
+  .lab__state {
+    font-size: var(--fs-sm);
+    color: var(--text-2);
+  }
+
+  .lab__more {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 var(--s-2);
+    margin-block-start: var(--s-5);
+    font-size: var(--fs-sm);
+    color: var(--text-2);
+  }
+
+  .lab__more a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--tap);
+  }
+
   @media (max-width: 40rem) {
     .lab__post {
       grid-template-columns: 1fr;
@@ -641,9 +671,74 @@
     padding-block-end: 0;
   }
 
+  .team-grid,
   .name-story,
   .careers {
     margin-inline-start: calc(25% + var(--s-6));
+  }
+
+  .team-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+    gap: var(--s-5);
+    max-width: 46rem;
+    margin-block: 0 var(--s-7);
+    padding: 0;
+    list-style: none;
+  }
+
+  .member {
+    display: grid;
+    align-content: start;
+    gap: var(--s-4);
+    padding: var(--s-5);
+    border: 1px solid var(--border);
+    border-radius: var(--r-card);
+    background: var(--surface);
+  }
+
+  .member__photo img {
+    display: block;
+    width: 6rem;
+    height: auto;
+    border-radius: 50%;
+    background: var(--void);
+  }
+
+  .member__text {
+    display: grid;
+    gap: var(--s-1);
+  }
+
+  .member__name {
+    font-size: var(--fs-lg);
+  }
+
+  .member__role {
+    font-size: var(--fs-xs);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--text-2);
+  }
+
+  .member__line {
+    margin-block-start: var(--s-2);
+    color: var(--text-2);
+  }
+
+  .member__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-1) var(--s-4);
+    margin: var(--s-2) 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--fs-sm);
+  }
+
+  .member__links a {
+    display: inline-block;
+    padding-block: var(--s-2);
   }
 
   .name-story {
@@ -680,12 +775,40 @@
     border-block-start: 1px solid var(--border);
   }
 
+  /* The console challenge's application form (web/console/ctf.ts), built into #careers. */
+  .careers-form {
+    display: grid;
+    flex-basis: 100%;
+    gap: var(--s-4);
+    max-width: 34rem;
+    margin-block-start: var(--s-3);
+  }
+
+  .careers-form__title {
+    font-size: var(--fs-lg);
+  }
+
+  .careers-form__lead,
+  .careers-form__status {
+    color: var(--text-2);
+  }
+
+  .careers-form__status:empty {
+    display: none;
+  }
+
+  .careers-form .btn {
+    justify-self: start;
+  }
+
   @media (max-width: 52rem) {
+    .team-grid,
     .name-story,
     .careers {
       margin-inline-start: 0;
     }
   }
+
 
   .horizon {
     position: relative;

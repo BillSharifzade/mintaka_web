@@ -7,7 +7,8 @@ import { emit, lastValue, on } from '../shared/bus.ts';
 import { getProof } from '../shared/proof.ts';
 import { connectionReused, navEntry, ping, serverTiming } from '../shared/timing.ts';
 import { duration, join } from '../shared/format.ts';
-import { reducedMotion } from '../shared/env.ts';
+import { offline, reducedMotion } from '../shared/env.ts';
+import { track } from '../shared/rum.ts';
 import { browser, complete, flatten, hops, parse, platform, stats, table } from './lib.ts';
 
 const T = (key: string, vars?: Record<string, string | number>): string => t('terminal-' + key, vars);
@@ -17,6 +18,8 @@ const PS1 = 'mintaka:~$';
 const L = lang();
 const fmt = (ms: number | undefined) => (ms === undefined ? '—' : join(duration(ms, L)).replace(/^0 µs$/, '0 ms'));
 const reason = (err: unknown) => (err instanceof Error ? err.message : String(err));
+/** A failed command: offline says so instead of the browser's network error. */
+const failed = (err: unknown) => (offline() ? T('offline') : T('error', { reason: reason(err) }));
 
 let dialog: HTMLDialogElement | undefined;
 let log: HTMLElement;
@@ -49,6 +52,7 @@ const COMMANDS: Record<string, (arg: string, out: Out) => unknown> = {
 export function open(): void {
   dialog ??= build();
   if (!dialog.open) {
+    track('terminal_open');
     opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     restore = true;
     dialog.showModal();
@@ -135,7 +139,7 @@ function submit(): void {
   const out: Out = (text) => print(text, box);
   Promise.resolve()
     .then(() => (run ? run(arg, out) : out(T('unknown', { cmd }))))
-    .catch((err: unknown) => out(T('error', { reason: reason(err) })));
+    .catch((err: unknown) => out(failed(err)));
 }
 
 async function whoami(_: string, out: Out): Promise<void> {
@@ -177,7 +181,7 @@ async function pings(_: string, out: Out): Promise<void> {
       failure = err;
     }
   }
-  if (!total.length) return out(T('error', { reason: reason(failure) }));
+  if (!total.length) return out(failed(failure));
   const s = stats(total);
   out(
     [
@@ -209,6 +213,7 @@ function language(arg: string, out: Out): void {
   if (code === L) return out(T('lang-same', { code }));
   if (code && all.includes(code)) {
     out(T('lang-go', { code }));
+    track('lang_switch');
     return location.assign(`/${code}/`);
   }
   out(T(code ? 'lang-unknown' : 'lang-list', { code, list: all.join(', ') || L }));

@@ -11,9 +11,17 @@ pub fn robots(cfg: &SiteConfig) -> String {
     )
 }
 
-pub fn humans(cfg: &SiteConfig, date: &str) -> String {
+/// `people`: one `(role, name, github, site)` per team member, in the default language.
+pub fn humans(cfg: &SiteConfig, date: &str, people: &[(String, String, String, String)]) -> String {
+    let mut team = String::new();
+    for (role, name, github, site) in people {
+        team += &format!("\n  {role}: {name}\n  GitHub: https://github.com/{github}\n");
+        if !site.is_empty() {
+            team += &format!("  Site: {site}\n");
+        }
+    }
     format!(
-        "/* TEAM */\n  Studio: {name}\n  Location: {city}, {country}\n  Contact: {email}\n  Careers: {careers}\n\n/* THANKS */\n  The IANA time zone database, OpenStreetMap contributors, the Rust project.\n\n/* SITE */\n  Last update: {date}\n  Language: {langs}\n  Standards: HTML, CSS, WCAG 2.2, RFC 9116\n  Components: Rust (axum, hyper, rustls, maud, fluent, lightningcss, resvg), TypeScript with no runtime dependencies\n  Fonts: Space Grotesk, Onest, IBM Plex Mono (SIL Open Font License 1.1)\n",
+        "/* TEAM */\n  Studio: {name}\n  Location: {city}, {country}\n  Contact: {email}\n  Careers: {careers}\n{team}\n/* THANKS */\n  The IANA time zone database, OpenStreetMap contributors, the Rust project.\n\n/* SITE */\n  Last update: {date}\n  Language: {langs}\n  Standards: HTML, CSS, WCAG 2.2, RFC 9116\n  Components: Rust (axum, hyper, rustls, maud, fluent, lightningcss, resvg), TypeScript with no runtime dependencies\n  Fonts: Space Grotesk, Onest, IBM Plex Mono (SIL Open Font License 1.1)\n",
         name = cfg.company.name,
         city = cfg.company.city,
         country = cfg.company.country,
@@ -23,8 +31,17 @@ pub fn humans(cfg: &SiteConfig, date: &str) -> String {
     )
 }
 
-/// `pages`: paths without language prefix, e.g. `/` and `/privacy/`.
-pub fn sitemap(cfg: &SiteConfig, pages: &[&str], date: &str) -> String {
+/// A page that exists in some languages only (the Lab): its path after `/{lang}`, the languages
+/// that have it, and the date its content last changed.
+pub struct SitemapUrl {
+    pub path: String,
+    pub langs: Vec<String>,
+    pub lastmod: String,
+}
+
+/// `pages`: paths without language prefix, e.g. `/` and `/privacy/`, in every language and dated
+/// by the build. `extra`: pages with their own languages and dates.
+pub fn sitemap(cfg: &SiteConfig, pages: &[&str], extra: &[SitemapUrl], date: &str) -> String {
     let mut out = String::from(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\" xmlns:xhtml=\"http://www.w3.org/1999/xhtml\">\n",
     );
@@ -36,6 +53,15 @@ pub fn sitemap(cfg: &SiteConfig, pages: &[&str], date: &str) -> String {
             }
             if *page == "/" {
                 out += &format!("    <xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"{}/\"/>\n", cfg.origin);
+            }
+            out += "  </url>\n";
+        }
+    }
+    for url in extra {
+        for lang in &url.langs {
+            out += &format!("  <url>\n    <loc>{}/{lang}{}</loc>\n    <lastmod>{}</lastmod>\n", cfg.origin, url.path, url.lastmod);
+            for alt in &url.langs {
+                out += &format!("    <xhtml:link rel=\"alternate\" hreflang=\"{alt}\" href=\"{}/{alt}{}\"/>\n", cfg.origin, url.path);
             }
             out += "  </url>\n";
         }

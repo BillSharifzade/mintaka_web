@@ -124,7 +124,9 @@ impl Fonts {
         let mut missing = BTreeSet::new();
         for (text, role) in text_runs(html) {
             for c in text.chars() {
-                if c.is_whitespace() || c.is_control() || c == '\u{FE0F}' {
+                // Not drawn: white space, controls, the emoji selector, and MathML's invisible
+                // operators (U+2061–2064: function application, invisible times, separator, plus).
+                if c.is_whitespace() || c.is_control() || c == '\u{FE0F}' || ('\u{2061}'..='\u{2064}').contains(&c) {
                     continue;
                 }
                 let cp = c as u32;

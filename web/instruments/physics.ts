@@ -10,7 +10,9 @@
 import { $, h, num, render } from '../shared/dom.ts';
 import { lang, t, tn, tp } from '../shared/i18n.ts';
 import { getProof } from '../shared/proof.ts';
-import { navEntry, ping, serverTiming } from '../shared/timing.ts';
+import { navEntry, offlineCopy, ping, serverTiming } from '../shared/timing.ts';
+import { offline } from '../shared/env.ts';
+import { track } from '../shared/rum.ts';
 import { duration, km, type Formatted } from '../shared/format.ts';
 import { locate, type Place } from './tz/tzdb.ts';
 
@@ -148,6 +150,7 @@ export function mount(root: HTMLElement): void {
 
   let measured = false;
   button.addEventListener('click', async () => {
+    track('instrument_start', 'physics');
     button.disabled = true;
     button.textContent = T('measuring');
     try {
@@ -155,7 +158,9 @@ export function mount(root: HTMLElement): void {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone ?? '';
       const proof = getProof().catch(() => null);
       const data = import('./tz/data.ts');
-      const known = measured ? undefined : fromNavigation(navEntry());
+      data.catch(() => {}); // awaited below; offline, the round trip may fail first
+      // An offline copy of the page was never timed by our server.
+      const known = measured || offlineCopy() ? undefined : fromNavigation(navEntry());
       // Lay the result out now, inside the click's 500 ms input window, and fill it in place:
       // late growth would count as layout shift, and this page reports its own CLS.
       show(known, null, tz, '');
@@ -164,6 +169,7 @@ export function mount(root: HTMLElement): void {
       const place = tz ? locate(tz, (await data).zones) : null;
       show(trip, judge(trip.rtt, place, where), tz, where?.city ?? '');
       measured = true;
+      track('instrument_complete', 'physics');
       if (status) {
         status.textContent = T('status-measured');
         status.classList.add('badge--info');
@@ -171,7 +177,7 @@ export function mount(root: HTMLElement): void {
     } catch (err) {
       render(figs);
       render(more);
-      render(say, h('p', null, T('error', { reason: err instanceof Error ? err.message : String(err) })));
+      render(say, h('p', null, offline() ? T('offline') : T('error', { reason: err instanceof Error ? err.message : String(err) })));
     } finally {
       button.disabled = false;
       button.textContent = T(measured ? 'again' : 'measure');

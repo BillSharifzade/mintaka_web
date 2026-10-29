@@ -5,6 +5,17 @@ export function navEntry(): PerformanceNavigationTiming | undefined {
 }
 
 /**
+ * True if this page came from the service worker's offline copy instead of our server: the copy
+ * carries `Server-Timing: sw` in place of the server's own timings (docs/CONTRACTS.md §15), and a
+ * browser that drops it still shows a worker-served page with no server timings at all.
+ */
+export function offlineCopy(nav = navEntry()): boolean {
+  const st = nav?.serverTiming;
+  if (!nav || !st) return false;
+  return st.some((m) => m.name === 'sw') || (nav.workerStart > 0 && st.length === 0);
+}
+
+/**
  * A `Server-Timing` metric from a response, in milliseconds.
  * Names the server sends: `app` (total), `route`, `render`, `tls` (first request on a TLS
  * connection only) and `krtt` (kernel smoothed RTT, when available). See docs/CONTRACTS.md.

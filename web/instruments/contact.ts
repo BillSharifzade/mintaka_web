@@ -7,6 +7,7 @@
 import { assetUrl } from '../shared/assets.ts';
 import { emit } from '../shared/bus.ts';
 import { $, h, render } from '../shared/dom.ts';
+import { offline } from '../shared/env.ts';
 import { duration } from '../shared/format.ts';
 import { lang, t, tp } from '../shared/i18n.ts';
 import { worker } from '../shared/tt.ts';
@@ -266,6 +267,48 @@ export function mount(root: HTMLElement): void {
     sync();
   });
 
+  // ---- offline: the draft stays ----
+  // Pressing Send with no connection keeps the draft in this tab's session storage (it survives a
+  // reload, not closing the tab) until the message is sent. Nothing leaves the browser by itself.
+  const DRAFT = 'mintaka.contact-draft';
+  let drafted = false;
+  const keepDraft = () => {
+    drafted = true;
+    const pairs = [...new FormData(form)].filter(([k, v]) => typeof v === 'string' && v && k !== 'website' && k !== 'lang');
+    try {
+      sessionStorage.setItem(DRAFT, JSON.stringify(pairs));
+    } catch {
+      /* storage blocked: the draft still stays in the form until the page closes */
+    }
+  };
+  const dropDraft = () => {
+    drafted = false;
+    try {
+      sessionStorage.removeItem(DRAFT);
+    } catch {
+      /* nothing kept */
+    }
+  };
+  const restoreDraft = () => {
+    let pairs: unknown;
+    try {
+      pairs = JSON.parse(sessionStorage.getItem(DRAFT) ?? 'null');
+    } catch {
+      return;
+    }
+    if (!Array.isArray(pairs) || !pairs.length) return;
+    drafted = true;
+    say(t('contact-draft'));
+    for (const [k, v] of pairs as [string, string][]) {
+      for (const el of form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(`[name="${CSS.escape(String(k))}"]`)) {
+        if (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')) el.checked ||= el.value === v;
+        else if (!el.value && el.type !== 'hidden') el.value = String(v);
+      }
+    }
+  };
+  form.addEventListener('input', () => drafted && keepDraft());
+  addEventListener('online', () => drafted && !busy && say(t('contact-online')));
+
   // ---- sending ----
   const post = async (body: Record<string, unknown>): Promise<Answer> => {
     let res: Response;
@@ -276,7 +319,8 @@ export function mount(root: HTMLElement): void {
         body: JSON.stringify(body),
       });
     } catch {
-      return { ok: false, errors: [{ field: 'form', code: 'network' }] };
+      if (offline()) keepDraft();
+      return { ok: false, errors: [{ field: 'form', code: offline() ? 'offline' : 'network' }] };
     }
     if (res.ok) return { ok: true };
     let errors: Problem[] = [];
@@ -321,6 +365,7 @@ export function mount(root: HTMLElement): void {
     say('');
     form.insertBefore(done, status);
     done.focus();
+    dropDraft();
     emit('contact:sent', undefined);
   };
 
@@ -343,6 +388,10 @@ export function mount(root: HTMLElement): void {
     const problems = validate(brief);
     if (problems.length) return show(problems);
     show([]);
+    if (offline()) {
+      keepDraft();
+      return show([{ field: 'form', code: 'offline' }]);
+    }
     busy = true;
     setBusy(true);
     say(t('contact-sending'));
@@ -364,6 +413,7 @@ export function mount(root: HTMLElement): void {
   });
 
   form.addEventListener('focusin', () => void startPow(), { once: true });
+  restoreDraft();
   // Our checks give specific, announced messages; the server checks again either way.
   form.noValidate = true;
 }

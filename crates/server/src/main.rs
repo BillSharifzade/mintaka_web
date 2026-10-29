@@ -26,7 +26,16 @@ fn main() -> ExitCode {
         .with_target("hyper_util", LevelFilter::INFO)
         .with_target("axum", LevelFilter::INFO)
         .with_target("reqwest", LevelFilter::INFO)
-        .with_target("rustls", LevelFilter::INFO);
+        .with_target("rustls", LevelFilter::INFO)
+        // HTTP/3 and ACME. h3 is built without its `tracing` feature (it would print request
+        // heads), quinn logs packet-level detail below info; both are capped all the same.
+        .with_target("quinn", LevelFilter::INFO)
+        .with_target("quinn_proto", LevelFilter::INFO)
+        .with_target("quinn_udp", LevelFilter::INFO)
+        .with_target("h3", LevelFilter::INFO)
+        .with_target("h3_quinn", LevelFilter::INFO)
+        .with_target("instant_acme", LevelFilter::INFO)
+        .with_target("hyper_rustls", LevelFilter::INFO);
     tracing_subscriber::registry()
         .with(env)
         .with(privacy)

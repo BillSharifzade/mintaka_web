@@ -108,6 +108,7 @@ test('post-quantum line', () => {
   assert.equal(exchange(tls('SecP256r1MLKEM768', true)), 'hybrid');
   assert.equal(exchange(tls('MLKEM1024', true)), 'pq');
   assert.equal(exchange(tls('X25519', false)), 'classical');
+  assert.equal(exchange({ ...tls('X25519', false)!, group: null }), 'unknown', 'an unreported group is never called classical');
   assert.equal(exchange(null), 'plain');
 });
 

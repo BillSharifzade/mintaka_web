@@ -147,13 +147,14 @@ fn count_third_party_origins(policy: &str) -> u32 {
 }
 
 /// One `Server-Timing` value (§4.5): `app`, `route`, `render` always; `tls` on the first request
-/// of a TLS connection; `krtt` when the kernel has an RTT sample.
+/// of a TLS connection; `krtt` when the kernel has an RTT sample (TCP); `qrtt` when QUIC has one.
 pub(crate) fn server_timing(
     app: Duration,
     route: Duration,
     render: Duration,
     tls_handshake: Option<Duration>,
     rtt: Option<TcpRtt>,
+    quic_rtt: Option<Duration>,
 ) -> Option<HeaderValue> {
     let mut s = String::with_capacity(128);
     s.push_str("app;dur=");
@@ -171,6 +172,11 @@ pub(crate) fn server_timing(
         s.push_str(", krtt;dur=");
         push_ms(&mut s, u64::from(rtt.rtt_us));
         s.push_str(";desc=\"kernel RTT\"");
+    }
+    if let Some(rtt) = quic_rtt {
+        s.push_str(", qrtt;dur=");
+        push_ms(&mut s, micros(rtt));
+        s.push_str(";desc=\"QUIC RTT\"");
     }
     HeaderValue::try_from(s).ok()
 }
@@ -262,11 +268,15 @@ mod tests {
             Duration::from_micros(3),
             Some(Duration::from_micros(1830)),
             Some(TcpRtt { rtt_us: 48210, rttvar_us: 1200 }),
+            None,
         )
         .unwrap();
         assert_eq!(
             v,
             "app;dur=0.021, route;dur=0.002, render;dur=0.003, tls;dur=1.83;desc=\"TLS handshake\", krtt;dur=48.21;desc=\"kernel RTT\""
         );
+        let quic = server_timing(Duration::from_micros(21), Duration::ZERO, Duration::ZERO, None, None, Some(Duration::from_micros(512)))
+            .unwrap();
+        assert_eq!(quic, "app;dur=0.021, route;dur=0, render;dur=0, qrtt;dur=0.512;desc=\"QUIC RTT\"");
     }
 }

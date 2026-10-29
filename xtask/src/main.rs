@@ -190,7 +190,26 @@ fn esbuild(root: &Path, release: bool) -> Result<PathBuf> {
     if !status.success() {
         bail!("esbuild failed");
     }
+    service_worker(root, &bin, &out, release)?;
     Ok(out)
+}
+
+/// `web/sw/sw.ts` → `target/web/sw.js`: its own bundle, a classic script (no splitting, no hash —
+/// it lives at the fixed URL `/sw.js`). Not in `meta.json`; the generator fills in this build's
+/// file list and serves it (crates/site/src/sw.rs).
+fn service_worker(root: &Path, esbuild: &Path, out: &Path, release: bool) -> Result<()> {
+    let status = Command::new(esbuild)
+        .current_dir(root)
+        .args(["web/sw/sw.ts", "--bundle", "--format=iife", "--target=es2022,chrome111,firefox115,safari16.4"])
+        .args(["--minify", "--legal-comments=none", "--charset=utf8", "--log-level=warning"])
+        .arg(format!("--outfile={}", out.join("sw.js").display()))
+        .arg(format!("--define:MINTAKA_DEV={}", !release))
+        .status()
+        .context("running esbuild for the service worker")?;
+    if !status.success() {
+        bail!("esbuild failed (service worker)");
+    }
+    Ok(())
 }
 
 fn find(dir: &Path, f: &mut dyn FnMut(&Path)) -> Result<()> {

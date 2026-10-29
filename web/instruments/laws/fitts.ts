@@ -133,6 +133,7 @@ export const fitts: Experiment = (panel, api) => {
     }
     if (!running) {
       running = true;
+      api.started();
       order = shuffle([...DESIGN]);
       data = [];
       misses = 0;

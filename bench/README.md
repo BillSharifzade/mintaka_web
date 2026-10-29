@@ -1,5 +1,19 @@
 # Benchmark: static page, constant request rate
 
+## One command: `bench/run.sh`
+
+```sh
+bench/run.sh --label <machine-name>          # defaults: --rates "20000 50000" --seconds 10 --conns 64
+```
+
+It builds the release server and the release site, serves the real `/en/` page on loopback, runs
+oha at each fixed rate over **HTTP/1.1 (plain)** and **HTTP/2 over TLS 1.3**, records the
+server's own `/_telemetry` ticks, and writes `bench/results/<date>-<label>.md` with the machine's
+facts. Run it on the production machine with nothing else busy, then publish that file: it is the
+benchmark the spec promises. Needs `oha` (`cargo install oha`), `curl` and `python3`.
+
+The run below (27 October, by hand, against the test fixture) is the method the script automates.
+
 What it measures: `GET /en/` of the test fixture (`crates/server/tests/fixtures/dist`, brotli
 variant, 281 B on the wire) served by the release build, at a **fixed request rate** with oha's
 latency correction — so a stalled request is counted from when it *should* have been sent and

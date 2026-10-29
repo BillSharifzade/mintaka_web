@@ -20,6 +20,8 @@ export interface Report {
 }
 
 export interface Api {
+  /** A run began (counted for /_rum; the measurements themselves never leave the browser). */
+  started(): void;
   /** A finished run: show the visitor's numbers on the results card. */
   report(r: Report): void;
   /** Move to the next experiment (the Fitts test's way out for keyboard users). */

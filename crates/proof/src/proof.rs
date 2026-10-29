@@ -15,7 +15,7 @@ pub struct Proof {
     pub connection: ConnectionFacts,
     pub privacy: PrivacyFacts,
     /// Lower-case names of the security headers sent on this very response (no HSTS over plain
-    /// HTTP), in the order the contract lists them.
+    /// HTTP), in the order the contract lists them, then `alt-svc` when HTTP/3 is announced.
     pub headers: Vec<String>,
 }
 
@@ -50,15 +50,16 @@ pub struct Location {
 /// The TLS session of this connection, as negotiated by rustls.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TlsFacts {
-    /// `TLSv1.3` or `TLSv1.2`.
+    /// `TLSv1.3` or `TLSv1.2` (HTTP/3: always `TLSv1.3`, the only version QUIC allows).
     pub version: String,
-    /// IANA-style rustls name, e.g. `TLS13_AES_128_GCM_SHA256`.
-    pub cipher: String,
-    /// Key-exchange group, e.g. `X25519MLKEM768`.
-    pub group: String,
-    /// True for any hybrid or pure ML-KEM group.
+    /// IANA-style rustls name, e.g. `TLS13_AES_128_GCM_SHA256`. `null` if the TLS stack did not
+    /// report it (HTTP/3: read from our own ServerHello, `null` only if that failed).
+    pub cipher: Option<String>,
+    /// Key-exchange group, e.g. `X25519MLKEM768`. `null` like `cipher`.
+    pub group: Option<String>,
+    /// True for any hybrid or pure ML-KEM group (false when `group` is `null`).
     pub post_quantum: bool,
-    /// Negotiated ALPN protocol (`h2`, `http/1.1`), `null` if the client offered none.
+    /// Negotiated ALPN protocol (`h2`, `http/1.1`, `h3`), `null` if the client offered none.
     pub alpn: Option<String>,
     /// Server-side handshake time for this connection: from the complete ClientHello to the
     /// client's Finished (so it includes one network round trip), in microseconds.
@@ -68,21 +69,26 @@ pub struct TlsFacts {
 /// The HTTP version of this request.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct HttpFacts {
-    /// `HTTP/2.0` or `HTTP/1.1`.
+    /// `HTTP/3.0`, `HTTP/2.0` or `HTTP/1.1`.
     pub version: String,
 }
 
-/// The TCP connection this request arrived on.
+/// The connection (TCP, or QUIC for HTTP/3) this request arrived on.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ConnectionFacts {
     /// Process-local counter, never derived from the client.
     pub id: u64,
     /// Requests received on this connection, including this one.
     pub requests: u64,
-    /// The kernel's smoothed RTT for this socket (`TCP_INFO.tcpi_rtt`), `null` if unavailable.
+    /// The kernel's smoothed RTT for this socket (`TCP_INFO.tcpi_rtt`), `null` if unavailable
+    /// — always on HTTP/3, which has no TCP socket.
     pub kernel_rtt_us: Option<u32>,
     /// `TCP_INFO.tcpi_rttvar`, `null` if unavailable.
     pub kernel_rttvar_us: Option<u32>,
+    /// HTTP/3 only: QUIC's own smoothed RTT for this connection (quinn's RFC 9002 estimator,
+    /// from acknowledgements of our packets), `null` on TCP.
+    #[serde(default)]
+    pub quic_rtt_us: Option<u32>,
 }
 
 /// What the server does not do with the visitor's data.
@@ -115,10 +121,11 @@ mod tests {
           "headers": ["content-security-policy", "strict-transport-security"]
         }"#;
         let proof: Proof = serde_json::from_str(json).unwrap();
-        assert_eq!(proof.tls.as_ref().unwrap().group, "X25519MLKEM768");
+        assert_eq!(proof.tls.as_ref().unwrap().group.as_deref(), Some("X25519MLKEM768"));
         let back = serde_json::to_value(&proof).unwrap();
         assert_eq!(back["server"]["location"]["lon"], 68.787);
         assert_eq!(back["connection"]["kernel_rtt_us"], 48210);
+        assert!(back["connection"]["quic_rtt_us"].is_null(), "TCP: present and null");
     }
 
     #[test]
@@ -135,7 +142,7 @@ mod tests {
             },
             tls: None,
             http: HttpFacts { version: "HTTP/1.1".into() },
-            connection: ConnectionFacts { id: 1, requests: 1, kernel_rtt_us: None, kernel_rttvar_us: None },
+            connection: ConnectionFacts { id: 1, requests: 1, kernel_rtt_us: None, kernel_rttvar_us: None, quic_rtt_us: None },
             privacy: PrivacyFacts { cookies_set: 0, third_party_origins: 0, ip_stored: false, ip_logged: false },
             headers: vec![],
         };
@@ -143,5 +150,25 @@ mod tests {
         assert!(v["tls"].is_null());
         assert!(v["server"]["location"].is_null());
         assert!(v["connection"]["kernel_rtt_us"].is_null());
+    }
+
+    #[test]
+    fn http3_shape() {
+        let json = r#"{
+          "server": { "region": "dev", "location": null, "build": "b", "software": "s",
+            "time_us": 30, "uptime_s": 1, "cores": 16 },
+          "tls": { "version": "TLSv1.3", "cipher": "TLS13_AES_128_GCM_SHA256",
+            "group": "X25519MLKEM768", "post_quantum": true, "alpn": "h3", "handshake_us": 900 },
+          "http": { "version": "HTTP/3.0" },
+          "connection": { "id": 9, "requests": 1, "kernel_rtt_us": null, "kernel_rttvar_us": null, "quic_rtt_us": 412 },
+          "privacy": { "cookies_set": 0, "third_party_origins": 0, "ip_stored": false, "ip_logged": false },
+          "headers": ["content-security-policy", "strict-transport-security", "alt-svc"]
+        }"#;
+        let proof: Proof = serde_json::from_str(json).unwrap();
+        assert_eq!(proof.connection.quic_rtt_us, Some(412));
+        assert_eq!(proof.connection.kernel_rtt_us, None);
+        let unreported = r#"{ "version": "TLSv1.3", "cipher": null, "group": null, "post_quantum": false, "alpn": "h3", "handshake_us": null }"#;
+        let tls: TlsFacts = serde_json::from_str(unreported).unwrap();
+        assert_eq!((tls.cipher, tls.group), (None, None));
     }
 }

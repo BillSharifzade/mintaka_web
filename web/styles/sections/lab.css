@@ -1,0 +1,425 @@
+/* The Lab (spec §S11): the index and the long-form posts. Prose keeps to --measure; code,
+   tables and formulas may run wider and scroll on their own (each is focusable, so the keyboard
+   can scroll it too). Mono means measured here as everywhere: numbers in table cells are the
+   post's measurements, each with its machine, date and command in the text. */
+
+@layer sections {
+  /* ── Index ──────────────────────────────────────────────────────────── */
+  .lab-index__head {
+    display: grid;
+    gap: var(--s-4);
+    max-width: 48rem;
+    margin-block-end: var(--s-7);
+  }
+
+  .lab-index__feed {
+    font-size: var(--fs-sm);
+  }
+
+  .lab-list {
+    margin: 0;
+    border-block-start: 1px solid var(--border);
+  }
+
+  .lab-item {
+    display: grid;
+    gap: var(--s-2);
+    padding-block: var(--s-5);
+    border-block-end: 1px solid var(--border);
+  }
+
+  .lab-item__meta,
+  .post__kicker,
+  .post__byline {
+    font-size: var(--fs-sm);
+    color: var(--text-2);
+  }
+
+  .lab-item__pillar,
+  .post__label,
+  .post__code-lang {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--text-2);
+  }
+
+  .lab-item__title {
+    font-size: var(--fs-xl);
+  }
+
+  .lab-item__title a {
+    color: var(--text);
+    text-decoration-color: var(--border-strong);
+  }
+
+  .lab-item__title a:hover {
+    color: var(--link-hover);
+    text-decoration-color: currentColor;
+  }
+
+  .lab-item__summary {
+    max-width: var(--measure);
+    color: var(--text-2);
+  }
+
+  /* ── Post ───────────────────────────────────────────────────────────── */
+  .post {
+    padding-block: var(--s-8) var(--s-9);
+  }
+
+  .post__head,
+  .post__body,
+  .post__foot {
+    width: min(100% - 2 * var(--gutter), 50rem);
+  }
+
+  .post__kicker {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 var(--s-1);
+  }
+
+  .post__kicker a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--tap);
+  }
+
+  .post__pillar {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-2);
+  }
+
+  .post__pillar .star-mark {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+
+  .post__title {
+    margin-block: var(--s-3) var(--s-6);
+    font-size: var(--fs-h2);
+    line-height: 1.08;
+    letter-spacing: var(--track-display);
+  }
+
+  .post__summary {
+    display: grid;
+    gap: var(--s-2);
+    max-width: var(--measure);
+    padding: var(--s-5);
+    border: 1px solid var(--border);
+    border-radius: var(--r-card);
+    background: var(--surface);
+  }
+
+  .post__lead {
+    font-size: var(--fs-lg);
+    line-height: 1.5;
+    color: var(--text);
+  }
+
+  .post__byline {
+    margin-block-start: var(--s-5);
+  }
+
+  /* Long-form prose: one column at reading width, a steady vertical rhythm. */
+  .post__body {
+    margin-block-start: var(--s-7);
+  }
+
+  .post__body > * + * {
+    margin-block-start: var(--s-4);
+  }
+
+  .post__body > :is(p, ul, ol, blockquote, h2, h3, h4) {
+    max-width: var(--measure);
+  }
+
+  .post__body :is(p, li) {
+    color: var(--text-2);
+  }
+
+  .post__body :is(strong, em) {
+    color: var(--text);
+  }
+
+  .post__body strong {
+    font-weight: 500;
+  }
+
+  .post__body h2 {
+    margin-block-start: var(--s-8);
+    font-size: var(--fs-xl);
+  }
+
+  .post__body h3 {
+    margin-block-start: var(--s-6);
+    font-size: var(--fs-lg);
+  }
+
+  .post__body h4 {
+    margin-block-start: var(--s-5);
+    font-size: var(--fs-md);
+  }
+
+  .post__body :is(ul, ol) {
+    padding-inline-start: 1.4em;
+  }
+
+  .post__body li + li {
+    margin-block-start: var(--s-2);
+  }
+
+  .post__body li::marker {
+    color: var(--steel);
+  }
+
+  .post__body blockquote {
+    margin-inline: 0;
+    padding-inline-start: var(--s-4);
+    border-inline-start: 2px solid var(--border-strong);
+  }
+
+  /* Inline code wraps rather than widening the page. */
+  .post__body :not(pre) > code {
+    padding: 0.05em 0.3em;
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--text);
+    overflow-wrap: anywhere;
+  }
+
+  /* ── Code blocks ────────────────────────────────────────────────────── */
+  .post__code {
+    margin-block: var(--s-6);
+    border: 1px solid var(--border);
+    border-radius: var(--r-card);
+    background: var(--void);
+    overflow: hidden;
+  }
+
+  .post__code-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--s-1) var(--s-3);
+    padding: var(--s-2) var(--s-4);
+    border-block-end: 1px solid var(--border);
+    background: var(--surface);
+    font-size: var(--fs-xs);
+    color: var(--text-2);
+  }
+
+  .post__code-file {
+    overflow-wrap: anywhere;
+  }
+
+  .post__pre {
+    padding: var(--s-4) var(--s-5);
+    overflow-x: auto;
+    font-size: 0.875rem;
+    line-height: 1.65;
+    color: var(--mist);
+    tab-size: 4;
+  }
+
+  .post__pre code {
+    font-size: inherit;
+  }
+
+  .post__pre:focus-visible,
+  .post__table:focus-visible,
+  .post__formula:focus-visible {
+    outline-offset: -2px;
+  }
+
+  .tok-k,
+  .tok-o,
+  .tok-t,
+  .tok-m {
+    color: var(--starlight);
+  }
+
+  .tok-c {
+    color: var(--sky);
+  }
+
+  /* ── Tables ─────────────────────────────────────────────────────────── */
+  .post__table {
+    margin-block: var(--s-6);
+    border: 1px solid var(--border);
+    border-radius: var(--r-card);
+    overflow-x: auto;
+  }
+
+  .post__table table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--fs-sm);
+  }
+
+  .post__table caption {
+    caption-side: bottom;
+    padding: var(--s-3) var(--s-4);
+    border-block-start: 1px solid var(--border);
+    color: var(--text-2);
+    text-align: start;
+  }
+
+  .post__table :is(th, td) {
+    padding: var(--s-2) var(--s-4);
+    border-block-end: 1px solid var(--border);
+    text-align: start;
+    vertical-align: baseline;
+    font-weight: 400;
+  }
+
+  .post__table tbody tr:last-child > * {
+    border-block-end: 0;
+  }
+
+  .post__table thead th {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--text-2);
+  }
+
+  .post__table tbody th {
+    color: var(--text);
+  }
+
+  .post__table td {
+    color: var(--text-2);
+  }
+
+  .post__table .num {
+    text-align: end;
+    color: var(--text);
+  }
+
+  /* ── Mathematics: MathML, laid out by the browser ───────────────────── */
+  /* Our fonts have no mathematical alphabets (U+1D400 …), which MathML uses to set one-letter
+     identifiers in italic. So: our sans, no alphabet mapping, and a slant (the generator marks
+     names such as `min` upright). Operators come from Onest's math subset. */
+  math {
+    font-family: var(--font-sans);
+  }
+
+  math mi {
+    text-transform: none;
+  }
+
+  math mi:not([mathvariant]) {
+    font-style: italic;
+  }
+
+  .post__formula {
+    max-width: var(--measure);
+    margin-block: var(--s-5);
+    padding: var(--s-2) var(--s-1);
+    overflow-x: auto;
+    font-size: var(--fs-lg);
+    color: var(--text);
+  }
+
+  .post__body p math {
+    color: var(--text);
+  }
+
+  /* ── After the post: the repository, and the way back ──────────────── */
+  .post__foot {
+    margin-block-start: var(--s-8);
+  }
+
+  .post__repo {
+    display: grid;
+    gap: var(--s-3);
+    max-width: var(--measure);
+    padding: var(--s-5);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-card);
+  }
+
+  .post__repo-title {
+    font-size: var(--fs-lg);
+  }
+
+  .post__repo p {
+    color: var(--text-2);
+  }
+
+  .post__repo-link {
+    font-size: var(--fs-sm);
+    overflow-wrap: anywhere;
+  }
+
+  .post__nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 var(--s-5);
+    margin-block-start: var(--s-5);
+  }
+
+  .post__nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--tap);
+  }
+
+  @media (forced-colors: active) {
+    .post__code,
+    .post__table,
+    .post__summary,
+    .post__repo {
+      border: 1px solid CanvasText;
+    }
+  }
+
+  /* Print: the article on white, without the site chrome. */
+  @media print {
+    :root {
+      --bg: #fff;
+      --surface: #fff;
+      --void: #fff;
+      --text: #0a0b0d;
+      --text-2: #3a3f49;
+      --mist: #3a3f49;
+      --starlight: #0a0b0d;
+      --sky: #1e4fd6;
+      --border: #d6d9df;
+      --border-strong: #b8bdc6;
+    }
+
+    html,
+    body {
+      background: #fff;
+      color: #0a0b0d;
+    }
+
+    .site-header,
+    .site-footer,
+    .post__nav {
+      display: none !important;
+    }
+
+    .post__pre,
+    .post__table,
+    .post__formula {
+      overflow: visible;
+    }
+
+    .post__pre {
+      white-space: pre-wrap;
+    }
+
+    a {
+      color: #1e4fd6;
+    }
+  }
+}

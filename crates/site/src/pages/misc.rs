@@ -54,7 +54,7 @@ pub fn sent(ctx: &Ctx) -> Markup {
 
 pub fn privacy(ctx: &Ctx) -> Markup {
     let s = ctx.s;
-    let parts = ["cookies", "logs", "contact", "physics", "experiments", "storage", "data"];
+    let parts = ["cookies", "logs", "measure", "contact", "physics", "experiments", "storage", "data"];
     html! {
         article class="sec sec--small prose" aria-labelledby="privacy-title" {
             div class="wrap" {

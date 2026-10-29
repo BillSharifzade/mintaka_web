@@ -6,7 +6,8 @@
 import init, { Router } from '../../wasm/routing/routing.js';
 import { assetUrl } from '../../shared/assets.ts';
 import { $, h, num, render } from '../../shared/dom.ts';
-import { reducedMotion } from '../../shared/env.ts';
+import { offline, reducedMotion } from '../../shared/env.ts';
+import { track } from '../../shared/rum.ts';
 import { duration } from '../../shared/format.ts';
 import { lang, t, tn } from '../../shared/i18n.ts';
 import { median } from './stats.ts';
@@ -49,6 +50,8 @@ export function mount(root: HTMLElement): void {
   }
   if (status) status.textContent = t('routing-status-loading');
   void boot(body, status).catch((err: unknown) => {
+    // Offline before the WebAssembly or the map was ever stored: say so, load once reconnected.
+    if (offline()) return void import('../../offline/index.ts').then((o) => o.unavailable(root, () => mount(root), 'wasm'));
     console.error('[mintaka] routing', err);
     if (status) status.textContent = t('routing-status-failed');
   });
@@ -77,10 +80,14 @@ async function boot(body: HTMLElement, status: HTMLElement | null): Promise<void
   // ── DOM ────────────────────────────────────────────────────────────────
   const live = h('p', { class: 'rt-live', 'aria-live': 'polite' });
   const summary = h('p', { class: 'rt-summary' });
-  const modeWatch = h('button', { type: 'button', class: 'chip', 'aria-pressed': String(watch), onclick: () => setMode(true) }, t('routing-mode-watch'));
-  const modeRace = h('button', { type: 'button', class: 'chip', 'aria-pressed': String(!watch), onclick: () => setMode(false) }, t('routing-mode-race'));
-  const presetStation = h('button', { type: 'button', class: 'chip', onclick: () => fromPreset() }, t('routing-preset-airport'));
-  const presetRandom = h('button', { type: 'button', class: 'chip', onclick: () => randomPair() }, t('routing-preset-random'));
+  // Counted for /_rum: runs the visitor asked for (the route drawn on load is not one).
+  let asked = false;
+  const started = () => ((asked = true), track('instrument_start', 'efficiency'));
+  const user = (fn: () => void) => () => (started(), fn());
+  const modeWatch = h('button', { type: 'button', class: 'chip', 'aria-pressed': String(watch), onclick: user(() => setMode(true)) }, t('routing-mode-watch'));
+  const modeRace = h('button', { type: 'button', class: 'chip', 'aria-pressed': String(!watch), onclick: user(() => setMode(false)) }, t('routing-mode-race'));
+  const presetStation = h('button', { type: 'button', class: 'chip', onclick: user(fromPreset) }, t('routing-preset-airport'));
+  const presetRandom = h('button', { type: 'button', class: 'chip', onclick: user(randomPair) }, t('routing-preset-random'));
 
   const panels: Panel[] = ALGOS.map((a) => {
     const canvas = h('canvas', { class: 'rt-canvas', 'aria-hidden': 'true' });
@@ -303,6 +310,10 @@ async function boot(body: HTMLElement, status: HTMLElement | null): Promise<void
       d: panels[0]!.settled,
       c: panels[2]!.settled,
     });
+    if (asked) {
+      asked = false;
+      track('instrument_complete', 'efficiency');
+    }
   }
 
   function fromPreset(): void {
@@ -348,6 +359,7 @@ async function boot(body: HTMLElement, status: HTMLElement | null): Promise<void
         paint();
       } else {
         end = node;
+        started();
         run();
       }
     });

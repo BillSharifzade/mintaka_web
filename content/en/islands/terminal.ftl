@@ -14,6 +14,7 @@ terminal-input = Command
 terminal-welcome = Mintaka terminal. Every answer comes from this page view. Type help to see the commands.
 terminal-unknown = command not found: { $cmd } — type help
 terminal-error = error: { $reason }
+terminal-offline = offline: this command needs our server. Try again once you're connected.
 
 terminal-help-help = list the commands
 terminal-help-whoami = what your browser tells this page, worked out locally

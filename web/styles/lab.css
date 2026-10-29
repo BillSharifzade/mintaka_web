@@ -1,0 +1,10 @@
+/* The Lab's stylesheet: inlined into Lab pages instead of page.css (allowed by its own CSP hash).
+   Lab pages have no hero, instruments or contact form, and run no JavaScript — so they never
+   load islands.css either: everything they need is here. Same layers and tokens as the page. */
+@layer tokens, fonts, base, components, sections, islands, utilities;
+
+@import "./tokens.css";
+@import "./base.css";
+@import "./components.css";
+@import "./sections/layout.css";
+@import "./sections/lab.css";

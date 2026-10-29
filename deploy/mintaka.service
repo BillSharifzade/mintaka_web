@@ -7,8 +7,17 @@
 #   MINTAKA_TELEGRAM_BOT_TOKEN=…               # optional
 #   MINTAKA_TELEGRAM_CHAT_ID=…                 # optional
 #
-# The certificate is handed over with LoadCredential (readable only by this service); restart the
-# unit after renewal (e.g. a certbot deploy hook: `systemctl restart mintaka`).
+# Certificates: the server orders and renews them from Let's Encrypt itself (TLS-ALPN-01 on
+# 443/tcp — nothing on port 80 is involved) and caches the account key and certificates in
+# ${STATE_DIRECTORY}/acme, mode 0600. Renewals are swapped in without a restart. Before the first
+# production start, run once with `--acme-directory staging` (README, "Certificates").
+# Open 443/tcp, 443/udp (HTTP/3) and 80/tcp in the firewall.
+#
+# With certificates from elsewhere instead, replace the --acme-* flags with
+#   --tls-cert ${CREDENTIALS_DIRECTORY}/fullchain.pem --tls-key ${CREDENTIALS_DIRECTORY}/privkey.pem
+# plus LoadCredential=fullchain.pem:/etc/letsencrypt/live/mintaka.tj/fullchain.pem and
+# LoadCredential=privkey.pem:/etc/letsencrypt/live/mintaka.tj/privkey.pem, and restart the unit
+# after each renewal.
 # Check the sandbox with: systemd-analyze security mintaka.service
 
 [Unit]
@@ -23,15 +32,15 @@ ExecStart=/opt/mintaka/bin/mintaka-server \
     --data-dir ${STATE_DIRECTORY} \
     --listen 127.0.0.1:8080 \
     --tls-listen [::]:443 \
-    --tls-cert ${CREDENTIALS_DIRECTORY}/fullchain.pem \
-    --tls-key ${CREDENTIALS_DIRECTORY}/privkey.pem \
+    --http3 \
+    --acme-domain mintaka.tj \
+    --acme-domain www.mintaka.tj \
+    --acme-contact mailto:ops@mintaka.tj \
     --redirect-http [::]:80 \
     --region fra-1 \
     --location "Frankfurt,DE,50.1109,8.6821"
 EnvironmentFile=-/etc/mintaka/env
 Environment=RUST_LOG=info
-LoadCredential=fullchain.pem:/etc/letsencrypt/live/mintaka.tj/fullchain.pem
-LoadCredential=privkey.pem:/etc/letsencrypt/live/mintaka.tj/privkey.pem
 
 # Graceful shutdown: SIGTERM, the server drains for up to 10 s.
 KillSignal=SIGTERM
@@ -40,7 +49,8 @@ Restart=on-failure
 RestartSec=2
 LimitNOFILE=65536
 
-# Identity and file system.
+# Identity and file system. The state directory holds the contact briefs and the ACME cache; it
+# must survive restarts (systemd keeps it), or every start orders a new certificate.
 DynamicUser=yes
 StateDirectory=mintaka
 StateDirectoryMode=0700
@@ -52,7 +62,7 @@ PrivateDevices=yes
 ProtectProc=invisible
 ProcSubset=pid
 
-# Privileges: only binding ports below 1024.
+# Privileges: only binding ports below 1024 (443/tcp, 443/udp, 80/tcp).
 NoNewPrivileges=yes
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 AmbientCapabilities=CAP_NET_BIND_SERVICE
@@ -70,7 +80,8 @@ ProtectKernelLogs=yes
 ProtectControlGroups=yes
 ProtectClock=yes
 ProtectHostname=yes
-# AF_UNIX/AF_NETLINK: the resolver (outbound HTTPS to the Telegram API only).
+# AF_UNIX/AF_NETLINK: the resolver, for outbound HTTPS to the ACME CA and the Telegram API.
+# AF_INET/AF_INET6 cover UDP too (HTTP/3).
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 SystemCallArchitectures=native
 SystemCallFilter=@system-service

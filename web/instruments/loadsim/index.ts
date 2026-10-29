@@ -6,7 +6,7 @@
 import init, { Lab, params } from '../../wasm/loadsim/loadsim.js';
 import { assetUrl } from '../../shared/assets.ts';
 import { $, h, num, render, s, type Child } from '../../shared/dom.ts';
-import { reducedMotion } from '../../shared/env.ts';
+import { offline, reducedMotion } from '../../shared/env.ts';
 import { duration } from '../../shared/format.ts';
 import { lang, pluralKey, t, tn } from '../../shared/i18n.ts';
 import { area, line, linear, loadRate, log, nice, Series } from './chart.ts';
@@ -56,6 +56,8 @@ export function mount(root: HTMLElement): void {
   init({ module_or_path: assetUrl('loadsim.wasm') })
     .then(() => start(root, body, say))
     .catch((err: unknown) => {
+      // Offline before the WebAssembly was ever stored: say so, load once reconnected.
+      if (offline()) return void import('../../offline/index.ts').then((o) => o.unavailable(root, () => mount(root), 'wasm'));
       console.error('[mintaka] loadsim', err);
       fail('loadsim-failed');
     });

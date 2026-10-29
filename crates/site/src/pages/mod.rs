@@ -1,12 +1,14 @@
 //! Page templates (Maud: HTML checked at compile time).
 
 pub mod home;
+pub mod lab;
 pub mod misc;
 pub mod svg;
 
 use crate::config::SiteConfig;
 use crate::i18n::Strings;
 use maud::{DOCTYPE, Markup, PreEscaped, html};
+use std::collections::BTreeMap;
 
 /// Everything a template needs.
 pub struct Ctx<'a> {
@@ -30,6 +32,16 @@ pub struct Ctx<'a> {
     pub mark: &'a Markup,
     /// Date of the OpenStreetMap extract behind the routing race (`2026-10-28`), if built.
     pub osm_date: &'a str,
+    /// Team portraits by member id.
+    pub portraits: &'a BTreeMap<String, Portrait>,
+    /// This language's Lab posts, newest first (spec §S11).
+    pub lab: &'a [crate::lab::Post],
+}
+
+/// Hashed URLs of one team portrait.
+pub struct Portrait {
+    pub avif: String,
+    pub webp: String,
 }
 
 impl Ctx<'_> {
@@ -51,12 +63,32 @@ pub struct Page<'a> {
     pub body: Markup,
     /// Index the page (404 and result pages are noindex).
     pub index: bool,
+    /// Set for long-form pages (the Lab): see [`LongForm`]. `None` everywhere else.
+    pub long_form: Option<LongForm<'a>>,
+}
+
+/// What a long-form page (spec §S11) changes in the document. It ships **no JavaScript at all**
+/// (spec §9.5): no boot script, no island data, and no footer controls that need a script. It
+/// inlines the long-form stylesheet instead of the page CSS (its hash is in the CSP too).
+pub struct LongForm<'a> {
+    /// Minified CSS for the page's one `<style>`.
+    pub css: &'a str,
+    /// `website` or `article`.
+    pub og_type: &'static str,
+    /// Extra `<head>` elements (article metadata).
+    pub head: Markup,
+    /// The same page in each language that has it: `(lang, path)`. The language switch and the
+    /// `hreflang` alternates link there; a language without it links to its home page.
+    pub alternates: Vec<(String, String)>,
 }
 
 /// The view-source greeting (spec §7.5): the first thing an engineer reading our HTML sees.
-fn source_greeting(cfg: &SiteConfig) -> String {
+/// Its second line is also the clue to the console challenge's second stage (`proof::CTF_CRIB`).
+fn source_greeting(cfg: &SiteConfig, scripts: bool) -> String {
+    let last = if scripts { "Press ~ on the page for a terminal." } else { "This page runs no JavaScript at all." };
     format!(
-        "<!--\n      ●            Mintaka · software at the edge of physics\n       ╲   ·\n        ╲ ·  ●     You read page source. We'd like to meet you:\n    · ·  ●         {}\n        ╱    ╲\n       ●      ●    Press ~ on the page for a terminal.\n-->\n",
+        "<!--\n      ●            Mintaka · software at the edge of physics\n       ╲   ·\n        ╲ ·  ●     {}\n    · ·  ●         {}\n        ╱    ╲\n       ●      ●    {last}\n-->\n",
+        proof::CTF_CRIB,
         cfg.contact.careers_email
     )
 }
@@ -69,9 +101,12 @@ pub fn document(ctx: &Ctx, page: Page) -> Markup {
         _ => "en_US",
     };
     let nav_href = |id: &str| if page.is_home { format!("#{id}") } else { format!("{}#{id}", ctx.home()) };
+    let long = page.long_form.as_ref();
+    let scripts = long.is_none();
+    let alternates = long.map_or(&[][..], |l| l.alternates.as_slice());
     html! {
         (DOCTYPE)
-        (PreEscaped(source_greeting(ctx.cfg)))
+        (PreEscaped(source_greeting(ctx.cfg, scripts)))
         html lang=(ctx.lang) dir="ltr" {
             head {
                 meta charset="utf-8";
@@ -87,6 +122,13 @@ pub fn document(ctx: &Ctx, page: Page) -> Markup {
                         link rel="alternate" hreflang=(l) href=(ctx.abs(&format!("/{l}/")));
                     }
                     link rel="alternate" hreflang="x-default" href=(ctx.abs("/"));
+                } @else if alternates.len() > 1 {
+                    @for (l, path) in alternates {
+                        link rel="alternate" hreflang=(l) href=(ctx.abs(path));
+                    }
+                }
+                @if !ctx.lab.is_empty() {
+                    link rel="alternate" type="application/atom+xml" title=(s.t("lab-feed-title")) href=(crate::lab::feed_path(ctx.lang));
                 }
                 @for url in &ctx.font_preloads {
                     link rel="preload" href=(url) as="font" type="font/woff2" crossorigin;
@@ -95,7 +137,7 @@ pub fn document(ctx: &Ctx, page: Page) -> Markup {
                 link rel="icon" href="/favicon.svg" type="image/svg+xml";
                 link rel="apple-touch-icon" href="/apple-touch-icon.png";
                 link rel="manifest" href="/manifest.webmanifest";
-                meta property="og:type" content="website";
+                meta property="og:type" content=(long.map_or("website", |l| l.og_type));
                 meta property="og:site_name" content="Mintaka";
                 meta property="og:title" content=(page.title);
                 meta property="og:description" content=(page.description);
@@ -105,8 +147,9 @@ pub fn document(ctx: &Ctx, page: Page) -> Markup {
                 meta property="og:image:height" content="630";
                 meta property="og:locale" content=(og_locale);
                 meta name="twitter:card" content="summary_large_image";
-                style { (PreEscaped(ctx.css)) }
-                script type="module" src=(ctx.main_js) {}
+                @if let Some(l) = long { (l.head) }
+                style { (PreEscaped(long.map_or(ctx.css, |l| l.css))) }
+                @if scripts { script type="module" src=(ctx.main_js) {} }
             }
             body {
                 svg class="sprite" aria-hidden="true" focusable="false" { (ctx.sprite) }
@@ -124,7 +167,7 @@ pub fn document(ctx: &Ctx, page: Page) -> Markup {
                                 li { a href=(nav_href("team")) { (s.t("nav-team")) } }
                             }
                         }
-                        (lang_switch(ctx))
+                        (lang_switch(ctx, alternates))
                         a class="btn btn--primary btn--sm site-header__cta" href=(nav_href("contact")) { (s.t("nav-cta")) }
                         details class="menu" {
                             summary class="btn btn--ghost btn--sm menu__toggle" { (s.t("nav-menu")) }
@@ -145,22 +188,26 @@ pub fn document(ctx: &Ctx, page: Page) -> Markup {
                 @if page.is_home { (svg::orion_nav(s)) }
                 @if page.is_home { canvas id="hero-canvas" aria-hidden="true" {} }
                 main id="main" tabindex="-1" { (page.body) }
-                (footer(ctx, page.path))
-                script type="application/json" id="mintaka-i18n" { (PreEscaped(ctx.island_json)) }
-                script type="application/json" id="mintaka-assets" { (PreEscaped(ctx.assets_json)) }
+                (footer(ctx, page.path, scripts))
+                @if scripts {
+                    script type="application/json" id="mintaka-i18n" { (PreEscaped(ctx.island_json)) }
+                    script type="application/json" id="mintaka-assets" { (PreEscaped(ctx.assets_json)) }
+                }
             }
         }
     }
 }
 
-fn lang_switch(ctx: &Ctx) -> Markup {
+/// Links to this page in each language (`alternates`), else to that language's home page.
+fn lang_switch(ctx: &Ctx, alternates: &[(String, String)]) -> Markup {
     if ctx.cfg.langs.len() < 2 {
         return html! {};
     }
+    let href = |l: &str| alternates.iter().find(|(a, _)| a == l).map_or_else(|| format!("/{l}/"), |(_, p)| p.clone());
     html! {
         nav class="lang" aria-label=(ctx.s.t("lang-switch")) {
             @for l in &ctx.cfg.langs {
-                a href=(format!("/{l}/")) hreflang=(l) lang=(l) aria-current=[(l == ctx.lang).then_some("page")] {
+                a href=(href(l)) hreflang=(l) lang=(l) aria-current=[(l == ctx.lang).then_some("page")] {
                     (ctx.s.t(&format!("lang-name-{l}")))
                 }
             }
@@ -168,8 +215,9 @@ fn lang_switch(ctx: &Ctx) -> Markup {
     }
 }
 
-/// The footer is drawn as an engineering drawing's title block.
-fn footer(ctx: &Ctx, path: &str) -> Markup {
+/// The footer is drawn as an engineering drawing's title block. Without scripts (long-form
+/// pages) the live cell says why nothing is measured, and the script-driven controls are left out.
+fn footer(ctx: &Ctx, path: &str, scripts: bool) -> Markup {
     let s = ctx.s;
     html! {
         footer class="site-footer" {
@@ -186,7 +234,11 @@ fn footer(ctx: &Ctx, path: &str) -> Markup {
                         div { dt { (s.t("ft-checked")) } dd { (s.t("ft-checked-value")) } }
                         div class="titleblock__live" {
                             dt { (s.t("ft-served")) }
-                            dd { p id="footer-stats" class="mono" aria-live="off" { (s.t("ft-served-fallback")) } }
+                            @if scripts {
+                                dd { p id="footer-stats" class="mono" aria-live="off" { (s.t("ft-served-fallback")) } }
+                            } @else {
+                                dd { p { (s.t("ft-served-static")) } }
+                            }
                         }
                     }
                 }
@@ -203,11 +255,13 @@ fn footer(ctx: &Ctx, path: &str) -> Markup {
                             li { a href="/.well-known/security.txt" { (s.t("ft-security")) } }
                             li { a href="/humans.txt" { (s.t("ft-humans")) } }
                         }
-                        p class="site-footer__tools" {
-                            button class="btn btn--quiet" type="button" data-action="terminal" { (s.t("ft-terminal")) " " kbd { "~" } }
-                            button class="btn btn--quiet" type="button" data-action="shortcuts" aria-pressed="true" {
-                                (s.t("ft-shortcuts"))
-                                span class="visually-hidden" { ": " (s.t("ft-shortcuts-keys")) }
+                        @if scripts {
+                            p class="site-footer__tools" {
+                                button class="btn btn--quiet" type="button" data-action="terminal" { (s.t("ft-terminal")) " " kbd { "~" } }
+                                button class="btn btn--quiet" type="button" data-action="shortcuts" aria-pressed="true" {
+                                    (s.t("ft-shortcuts"))
+                                    span class="visually-hidden" { ": " (s.t("ft-shortcuts-keys")) }
+                                }
                             }
                         }
                         p class="site-footer__copy" { (s.ta("ft-copyright", &[("year", ctx.year.into())])) }

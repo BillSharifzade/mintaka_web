@@ -46,7 +46,23 @@ form_urlencoded = "1"
 tower-service = "0.3"
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 http-body-util = "0.1"
+http-body = "1"
+# HTTP/3. quinn without its defaults: no *ring*, no platform verifier (server only), aws-lc-rs like
+# the TCP side. h3 without its `tracing` feature, which would log request heads at trace level.
+quinn = { version = "0.11.12", default-features = false, features = ["rustls-aws-lc-rs", "runtime-tokio"] }
+# Only for the types quinn's crypto traits name but do not re-export (`TransportParameters`).
+quinn-proto = { version = "0.11.19", default-features = false }
+h3 = "0.0.8"
+h3-quinn = "0.0.10"
+# ACME (RFC 8555) client on the hyper + rustls stack the server already links; our own renewal
+# task, TLS-ALPN-01 resolver and 0600 cache around it.
+instant-acme = { version = "0.8.5", default-features = false, features = ["aws-lc-rs", "hyper-rustls"] }
+# Reads notBefore/notAfter and the SANs of the certificates we issue and cache.
+x509-parser = { version = "0.18", default-features = false }
 
 [dev-dependencies]
-hyper = { version = "1", features = ["client", "http1", "http2"] }
+hyper = { version = "1", features = ["client", "http1", "http2", "server"] }
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "net", "time", "process", "io-util"] }
+# The in-process ACME CA of tests/acme.rs signs the server's CSR, with validity dates of its choosing.
+rcgen = { version = "0.14", default-features = false, features = ["aws_lc_rs", "pem", "x509-parser"] }
+time = "0.3"

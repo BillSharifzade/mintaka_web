@@ -27,6 +27,7 @@ hud-k-lcp = Largest Contentful Paint (LCP)
 hud-k-inp = Slowest interaction so far (INP)
 hud-k-cls = Cumulative Layout Shift (CLS)
 hud-k-tier = Hero render tier
+hud-k-visitors = Real visitors to this server
 
 hud-src-server = Server-Timing header of this page (app): from request parsed to response ready
 hud-src-weight = Resource Timing: transferSize of every request so far, summed
@@ -38,6 +39,7 @@ hud-src-lcp = PerformanceObserver: largest-contentful-paint
 hud-src-inp = Event Timing: the longest interaction measured on this page so far
 hud-src-cls = PerformanceObserver: layout-shift, largest session window
 hud-src-tier = The hero engine, on this device
+hud-src-visitors = GET /_rum: the Web Vitals visitors' browsers sent this server since it started, kept only as totals in memory. No cookies, IP addresses or browser details.
 
 hud-requests = { $n ->
     [one] { $n } request
@@ -57,6 +59,20 @@ hud-cookies-foreign = not set by this site
 hud-https-only = HTTPS only
 hud-err-proof = Couldn't reach /_proof. Close and reopen this panel to try again.
 hud-err-head = Couldn't read the headers ({ $reason }). Close and reopen this panel to try again.
+hud-offline = You're offline, and this row asks our server. Reopen the panel once you're connected.
+hud-offline-copy = Not timed: this copy of the page came from your browser's offline cache, not from our server.
+
+hud-visitors-since = { $n ->
+    [one] Since { $date }: { $n } page view measured
+   *[other] Since { $date }: { $n } page views measured
+}
+hud-visitors-p75 = 75th percentile of { $n }
+hud-visitors-few = { $n ->
+    [one] { $n } sample so far, too few for a 75th percentile (it needs { $min })
+   *[other] { $n } samples so far, too few for a 75th percentile (it needs { $min })
+}
+hud-visitors-declined = Your browser asks sites not to measure it (Global Privacy Control or Do Not Track), so this page view isn't counted.
+hud-visitors-error = Couldn't reach /_rum ({ $reason }). Close and reopen this panel to try again.
 
 hud-foot-lead = This page:
 hud-foot-server = { $value } server

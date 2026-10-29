@@ -5,6 +5,7 @@
 import { $, h, render } from '../shared/dom.ts';
 import { lang, pluralKey, t, tn } from '../shared/i18n.ts';
 import { getProof, type Proof } from '../shared/proof.ts';
+import { offline, whenOnline } from '../shared/env.ts';
 
 export const HEADERS = [
   'content-security-policy',
@@ -95,11 +96,12 @@ export function shorten(value: string, max = 44): string {
 /** "content-security-policy" → "Content-Security-Policy". */
 export const display = (name: string): string => name.replace(/(^|-)([a-z])/g, (_, dash: string, c: string) => dash + c.toUpperCase());
 
-export type Exchange = 'hybrid' | 'pq' | 'classical' | 'plain';
+export type Exchange = 'hybrid' | 'pq' | 'classical' | 'unknown' | 'plain';
 
-/** Which post-quantum line applies to this connection. */
+/** Which post-quantum line applies to this connection. `unknown`: the server did not report the group. */
 export function exchange(tls: Proof['tls']): Exchange {
   if (!tls) return 'plain';
+  if (tls.group === null) return 'unknown';
   if (!tls.post_quantum) return 'classical';
   return /x25519|secp|p-?256|p-?384/i.test(tls.group) ? 'hybrid' : 'pq';
 }
@@ -151,10 +153,18 @@ export function mount(root: HTMLElement): void {
   const summary = h('p', { class: 'arm-sum', 'aria-live': 'polite' }, T('scanning'));
   render(body, h('div', { class: 'arm' }, summary));
   if (status) status.textContent = T('status-scanning');
+  // The scan reads our server's answer: offline, it says so and runs once the connection is back.
+  const wait = () => {
+    render(summary, T('offline'));
+    if (status) status.textContent = t('offline-status');
+    whenOnline(() => mount(root));
+  };
+  if (offline()) return wait();
 
   const head = fetch(location.href, { method: 'HEAD', cache: 'no-store' });
   const proof = getProof();
   void Promise.allSettled([head, proof]).then(([res, p]) => {
+    if (res.status === 'rejected' && offline()) return wait();
     const parts: Node[] = [];
     let get: ((name: string) => string | null) | undefined;
     if (res.status === 'fulfilled' && res.value.ok) {
@@ -221,15 +231,15 @@ function tlsCard(p: PromiseSettledResult<Proof>): HTMLElement {
         'dl',
         { class: 'kv' },
         row(T('tls-version'), mono(tls.version.replace(/^TLSv?/i, 'TLS '))),
-        row(T('tls-cipher'), mono(tls.cipher)),
-        row(T('tls-group'), mono(tls.group)),
+        row(T('tls-cipher'), tls.cipher === null ? T('tls-unreported') : mono(tls.cipher)),
+        row(T('tls-group'), tls.group === null ? T('tls-unreported') : mono(tls.group)),
       ),
     h(
       'p',
       { class: 'arm-pq' },
       badge(kind === 'hybrid' || kind === 'pq' ? 'ok' : 'na', T('pq-badge-' + kind)),
       ' ',
-      ...tn('armour-pq-' + kind, { group: tls ? mono(tls.group) : '' }),
+      ...tn('armour-pq-' + kind, { group: tls?.group ? mono(tls.group) : '' }),
     ),
     h('p', { class: 'source' }, T('tls-src')),
   );

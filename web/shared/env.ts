@@ -8,6 +8,14 @@ export function saveData(): boolean {
   return c?.saveData === true;
 }
 
+/** The browser reports no network connection (DevTools' "Offline" too). */
+export const offline = (): boolean => navigator.onLine === false;
+
+/** Call `fn` once, the next time the browser reports a connection. */
+export function whenOnline(fn: () => void): void {
+  addEventListener('online', () => fn(), { once: true });
+}
+
 /** Run when the browser is idle (or after `timeout` ms at the latest). */
 export function onIdle(fn: () => void, timeout = 1500): void {
   if ('requestIdleCallback' in window) requestIdleCallback(() => fn(), { timeout });

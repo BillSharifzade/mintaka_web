@@ -9,7 +9,8 @@
 
 import { assetUrl } from '../../shared/assets.ts';
 import { $, h, render } from '../../shared/dom.ts';
-import { reducedMotion } from '../../shared/env.ts';
+import { offline, reducedMotion } from '../../shared/env.ts';
+import { track } from '../../shared/rum.ts';
 import { lang, t, tp } from '../../shared/i18n.ts';
 import { ascii, count, hex, parseInput, rate, seconds, splitPanic } from './format.ts';
 import { FuzzRun, Probe, compile, minimize, randomSeed } from './host.ts';
@@ -63,6 +64,8 @@ export function mount(root: HTMLElement): void {
       }
     })
     .catch((err: unknown) => {
+      // Offline before the WebAssembly was ever stored: say so, load once reconnected.
+      if (offline()) return void import('../../offline/index.ts').then((o) => o.unavailable(root, () => mount(root), 'wasm'));
       console.error('[mintaka] fuzzer', err);
       if (status) status.textContent = t('fuzzer-status-failed');
     });
@@ -215,6 +218,7 @@ class FuzzerIsland {
     this.state = 'running';
     this.renderControls();
     this.say(t('fuzzer-announce-start'), true);
+    track('instrument_start', 'security');
     this.raf = requestAnimationFrame(this.frame);
   }
 
@@ -286,6 +290,7 @@ class FuzzerIsland {
       if (c.id === 'fix') this.result.replaceChildren(this.fixedCard(run));
       if (c.id === 'compare') this.result.replaceChildren(this.blindCard(run));
     }
+    if (!stopped) track('instrument_complete', 'security');
     this.say(tp('fuzzer-announce-done', this.crashes, { inputs: run.execs, paths }));
     this.run = null;
     // A stopped or crash-less attack restarts the same chapter.

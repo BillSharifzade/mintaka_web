@@ -3,8 +3,9 @@
 
 import { $, $$, h, isTyping } from './shared/dom.ts';
 import { emit, on } from './shared/bus.ts';
-import { onIdle, setShortcutsEnabled, shortcutsEnabled, whenNear } from './shared/env.ts';
+import { offline, onIdle, setShortcutsEnabled, shortcutsEnabled, whenNear } from './shared/env.ts';
 import { assetUrl } from './shared/assets.ts';
+import { track } from './shared/rum.ts';
 
 interface Island {
   mount(root: HTMLElement): void;
@@ -50,11 +51,16 @@ for (const root of $$('[data-island]')) {
   const name = root.dataset['island'] ?? '';
   const load = islands[name];
   if (!load) continue;
-  whenNear(root, () => {
+  const mount = (): void => {
     withStyles(load)
       .then((m) => m.mount(root))
-      .catch((err: unknown) => console.error(`[mintaka] island "${name}" failed`, err));
-  });
+      .catch((err: unknown) => {
+        // Offline before this island's code was ever stored: say so in its frame, retry when back.
+        if (offline()) void import('./offline/index.ts').then((o) => o.unavailable(root, mount));
+        else console.error(`[mintaka] island "${name}" failed`, err);
+      });
+  };
+  whenNear(root, mount);
 }
 
 const canvas = $<HTMLCanvasElement>('#hero-canvas');
@@ -64,6 +70,8 @@ onIdle(() => {
   void import('./nav/index.ts').then((m) => m.start());
   void withStyles(() => import('./hud/index.ts')).then((m) => m.mount());
   void import('./console/index.ts').then((m) => m.greet());
+  void import('./rum/index.ts').then((m) => m.start());
+  void import('./offline/index.ts').then((m) => m.start());
 });
 
 on('proof:open', () => void withStyles(() => import('./hud/index.ts')).then((m) => m.open()));
@@ -87,6 +95,10 @@ document.addEventListener('keydown', (e) => {
 
 // Declarative actions: `<button data-action="terminal">`. Links keep their default navigation.
 document.addEventListener('click', (e) => {
+  // Counted for /_rum (web/shared/rum.ts): every "Start a project" link, the language switcher.
+  const link = (e.target as Element | null)?.closest<HTMLAnchorElement>('a[href]');
+  if (link?.hash === '#contact') track('cta_start_project');
+  else if (link?.closest('.lang') && link.getAttribute('aria-current') !== 'page') track('lang_switch');
   const el = (e.target as Element | null)?.closest<HTMLElement>('[data-action]');
   switch (el?.dataset['action']) {
     case 'proof':

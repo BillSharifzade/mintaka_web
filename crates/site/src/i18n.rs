@@ -127,16 +127,34 @@ pub fn rich_markup(text: &str) -> Markup {
 /// typically plurals — and each variant is exported as `id[key]` (`hud-requests[one]`), with the
 /// default variant also under the plain `id`; the browser picks with `Intl.PluralRules`.
 pub fn island_strings(root: &Path, lang: &str) -> Result<BTreeMap<String, String>> {
-    let dir = root.join("content").join(lang).join("islands");
-    let mut files: Vec<_> = match std::fs::read_dir(&dir) {
+    strings_in(&ftl_files(&root.join("content").join(lang).join("islands")))
+}
+
+/// The bundles in `content/{lang}/islands/lazy/<name>.ftl`, by name: long texts read only after an
+/// explicit action, shipped as their own JSON file rather than inline on every page view.
+pub fn lazy_island_strings(root: &Path, lang: &str) -> Result<BTreeMap<String, BTreeMap<String, String>>> {
+    let mut out = BTreeMap::new();
+    for file in ftl_files(&root.join("content").join(lang).join("islands/lazy")) {
+        let name = file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+        out.insert(name, strings_in(std::slice::from_ref(&file))?);
+    }
+    Ok(out)
+}
+
+/// The `.ftl` files directly in `dir`, sorted (none if it doesn't exist).
+fn ftl_files(dir: &Path) -> Vec<std::path::PathBuf> {
+    let mut files: Vec<_> = match std::fs::read_dir(dir) {
         Ok(rd) => rd.filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.extension().is_some_and(|x| x == "ftl")).collect(),
         Err(_) => vec![],
     };
     files.sort();
+    files
+}
 
+fn strings_in(files: &[std::path::PathBuf]) -> Result<BTreeMap<String, String>> {
     let mut terms: BTreeMap<String, ast::Pattern<String>> = BTreeMap::new();
     let mut messages: Vec<(String, ast::Pattern<String>, String)> = vec![];
-    for file in &files {
+    for file in files {
         let source = std::fs::read_to_string(file)?;
         let res = fluent_syntax::parser::parse(source)
             .map_err(|(_, errs)| anyhow::anyhow!("{}: Fluent syntax errors: {errs:?}", file.display()))?;
@@ -263,6 +281,20 @@ mod island_tests {
         assert_eq!(m["t-req[other]"], "Sent {n} requests today");
         assert_eq!(m["t-req"], "Sent {n} requests today");
         assert_eq!(m["t-plain"], "Hi {who}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn lazy_bundles_stay_out_of_the_inline_strings() {
+        let dir = std::env::temp_dir().join(format!("mintaka-i18n-lazy-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("content/xx/islands/lazy")).unwrap();
+        std::fs::write(dir.join("content/xx/islands/t.ftl"), "t-fail = It did not load\n").unwrap();
+        std::fs::write(dir.join("content/xx/islands/lazy/t.ftl"), "t-long = A long text for { $who }\n").unwrap();
+        let inline = island_strings(&dir, "xx").unwrap();
+        assert_eq!(inline.keys().collect::<Vec<_>>(), ["t-fail"]);
+        let lazy = lazy_island_strings(&dir, "xx").unwrap();
+        assert_eq!(lazy["t"]["t-long"], "A long text for {who}");
+        assert!(lazy_island_strings(&dir, "yy").unwrap().is_empty(), "no lazy directory, no bundles");
         let _ = std::fs::remove_dir_all(dir);
     }
 }

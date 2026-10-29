@@ -18,6 +18,14 @@ struct Output {
     #[serde(rename = "entryPoint")]
     entry_point: Option<String>,
     bytes: u64,
+    #[serde(default)]
+    imports: Vec<Import>,
+}
+
+#[derive(Deserialize)]
+struct Import {
+    path: String,
+    kind: String,
 }
 
 pub struct Js {
@@ -27,6 +35,22 @@ pub struct Js {
     pub named: BTreeMap<String, String>,
     /// Every JS file: (file name, minified bytes) — for the budget report.
     pub files: Vec<(String, u64)>,
+    /// File name → the files it imports statically (they always load with it).
+    pub imports: BTreeMap<String, Vec<String>>,
+}
+
+impl Js {
+    /// `roots` and everything they import statically, each file once.
+    pub fn with_imports<'a>(&'a self, roots: impl IntoIterator<Item = &'a str>) -> std::collections::BTreeSet<&'a str> {
+        let mut seen = std::collections::BTreeSet::new();
+        let mut stack: Vec<&str> = roots.into_iter().collect();
+        while let Some(file) = stack.pop() {
+            if seen.insert(file) {
+                stack.extend(self.imports.get(file).into_iter().flatten().map(String::as_str));
+            }
+        }
+        seen
+    }
 }
 
 pub fn import(js_dir: &Path, dist: &mut Dist) -> Result<Js> {
@@ -37,8 +61,14 @@ pub fn import(js_dir: &Path, dist: &mut Dist) -> Result<Js> {
     let mut main = None;
     let mut named = BTreeMap::new();
     let mut files = vec![];
+    let mut imports = BTreeMap::new();
+    let file_name = |path: &str| Path::new(path).file_name().map(|n| n.to_string_lossy().into_owned());
     for (out_path, out) in &meta.outputs {
-        let file = Path::new(out_path).file_name().context("output without a file name")?.to_string_lossy().into_owned();
+        let file = file_name(out_path).context("output without a file name")?;
+        let statics: Vec<String> = out.imports.iter().filter(|i| i.kind == "import-statement").filter_map(|i| file_name(&i.path)).collect();
+        if !statics.is_empty() {
+            imports.insert(file.clone(), statics);
+        }
         let bytes = std::fs::read(js_dir.join(&file)).with_context(|| format!("reading esbuild output {file}"))?;
         let ext = file.rsplit('.').next().unwrap_or("");
         let url = format!("/assets/{file}");
@@ -57,5 +87,5 @@ pub fn import(js_dir: &Path, dist: &mut Dist) -> Result<Js> {
         }
     }
     files.sort_by_key(|f| std::cmp::Reverse(f.1));
-    Ok(Js { main: main.context("esbuild metafile has no web/main.ts entry")?, named, files })
+    Ok(Js { main: main.context("esbuild metafile has no web/main.ts entry")?, named, files, imports })
 }

@@ -43,7 +43,7 @@ impl Notifier {
     }
 
     /// Fire and forget; failures are logged without the URL (which holds the token).
-    pub fn brief_received(&self, id: &str, kinds: &[Kind], timeline: Option<Timeline>) {
+    pub fn brief_received(&self, id: &str, kinds: &[Kind], timeline: Option<Timeline>, ctf_solved: bool) {
         let request = self
             .client
             .post(&self.endpoint)
@@ -51,7 +51,7 @@ impl Notifier {
             .body(
                 serde_json::json!({
                     "chat_id": self.chat_id,
-                    "text": notification_text(id, kinds, timeline),
+                    "text": notification_text(id, kinds, timeline, ctf_solved),
                     "disable_web_page_preview": true,
                 })
                 .to_string(),
@@ -66,15 +66,17 @@ impl Notifier {
     }
 }
 
-/// "New brief · ai, performance · asap · 1793102400123-a1b2c3d4e5f6a7b8".
-pub(crate) fn notification_text(id: &str, kinds: &[Kind], timeline: Option<Timeline>) -> String {
+/// "New brief · ai, performance · asap · 1793102400123-a1b2c3d4e5f6a7b8", or "New application
+/// (console challenge solved) · …" for a brief sent with a valid challenge pass.
+pub(crate) fn notification_text(id: &str, kinds: &[Kind], timeline: Option<Timeline>, ctf_solved: bool) -> String {
     let kinds = if kinds.is_empty() {
         "—".to_owned()
     } else {
         kinds.iter().map(|k| k.as_str()).collect::<Vec<_>>().join(", ")
     };
     let timeline = timeline.map_or("—", Timeline::as_str);
-    format!("New brief · {kinds} · {timeline} · {id}")
+    let what = if ctf_solved { "New application (console challenge solved)" } else { "New brief" };
+    format!("{what} · {kinds} · {timeline} · {id}")
 }
 
 #[cfg(test)]
@@ -84,10 +86,11 @@ mod tests {
     #[test]
     fn text_has_no_body() {
         assert_eq!(
-            notification_text("1-ab", &[Kind::Ai, Kind::Design], Some(Timeline::Asap)),
+            notification_text("1-ab", &[Kind::Ai, Kind::Design], Some(Timeline::Asap), false),
             "New brief · ai, design · asap · 1-ab"
         );
-        assert_eq!(notification_text("1-ab", &[], None), "New brief · — · — · 1-ab");
+        assert_eq!(notification_text("1-ab", &[], None, false), "New brief · — · — · 1-ab");
+        assert_eq!(notification_text("1-ab", &[], None, true), "New application (console challenge solved) · — · — · 1-ab");
     }
 
     #[test]

@@ -19,6 +19,12 @@ country = "Tajikistan"
 lat = 38.5598
 lon = 68.7870
 
+[lab]
+# Lab posts link to their code here (spec §S11). The build checks that every linked path exists
+# in this working tree; links point at `branch`, so publish from that branch.
+repo = "https://github.com/BillSharifzade/mintaka_web"
+branch = "main"
+
 [contact]
 email = "hello@mintaka.tj"
 telegram = "mintaka"
@@ -82,3 +88,19 @@ key = "practice-comfort"
 [[claims]]
 group = "practice"
 key = "practice-speed"
+
+# ---------------------------------------------------------------------------------------------
+# S12 team grid, in this order. Name, role and the one line are strings (content/{lang}/page.ftl:
+# team-<id>-name, team-<id>-role, team-<id>-line), because they are written per language. The
+# portrait is assets/team/<id>.avif + <id>.webp: square, 224 px, transparent background, published
+# with the person's consent.
+# ---------------------------------------------------------------------------------------------
+[[team]]
+id = "bilol"
+github = "BillSharifzade"
+site = "https://billsharifzade.github.io/"
+
+[[team]]
+id = "amirhamza"
+github = "lob1knot-stack"
+site = "https://lob1knot-stack.github.io/forCvWS/"

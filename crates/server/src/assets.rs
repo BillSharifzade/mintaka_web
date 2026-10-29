@@ -332,6 +332,11 @@ impl Site {
         Some((i, self.routes.get(i)?))
     }
 
+    /// Paths of the manifest's page routes, in manifest order (the routes a `/_rum` beacon may name).
+    pub fn page_paths(&self) -> impl Iterator<Item = &str> {
+        self.pages.iter().map(|p| p.path.as_str())
+    }
+
     /// A route by index (for log labels).
     pub fn route_at(&self, i: usize) -> Option<&StaticRoute> {
         self.routes.get(i)

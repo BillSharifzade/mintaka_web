@@ -258,11 +258,27 @@ pw-self-cta = Open the proof console
 lab-eyebrow = Research
 lab-title = The Lab
 lab-lead = Where we write down what we learn: the problem, the method, the mathematics, the code, and a benchmark you can reproduce.
-lab-soon = Being written
-lab-post-1 = How this website serves a page in under a millisecond
-lab-post-2 = Contraction Hierarchies on Dushanbe's roads
-lab-post-3 = Post-quantum TLS in production with rustls
-lab-post-4 = Designing one interface for Tajik, Russian and English
+# Post titles and summaries live in each post's front matter: content/{lang}/lab/*.md
+lab-description = Long-form notes from Mintaka: the problem, the method, the mathematics, the code, and a benchmark you can reproduce.
+lab-all = All posts in the Lab
+lab-feed = Atom feed
+lab-feed-title = The Lab — Mintaka
+lab-feed-follow = Follow the Lab with an Atom feed
+lab-summary = Summary
+lab-byline = Mintaka
+lab-updated = updated
+lab-code-for = Code:
+lab-reproduce = Reproduce it
+lab-reproduce-text = Everything this post describes is in our public repository, and each number in it names the machine, the date and the command that produced it. The code is here:
+lab-formula = Formula
+lab-code = { $lang } code
+lab-code-titled = { $lang } code: { $title }
+lab-code-lines = lines { $from }–{ $to }
+lab-lang-rust = Rust
+lab-lang-sh = Shell
+lab-lang-toml = TOML
+lab-lang-ftl = Fluent
+lab-lang-text = Text
 
 ## S12 Team — Bellatrix
 
@@ -270,6 +286,16 @@ team-eyebrow = Team
 team-title = From the Pamir to Orion.
 # Draft — the team should rewrite this in its own words.
 team-body = We're a young team of engineers from Dushanbe, Tajikistan — friends with one shared obsession: how things really work. We take software apart down to the kernel and build it back faster, safer and simpler.
+team-photo-alt = Portrait of { $name }
+# One card per person in content/site.toml [[team]]. The lines are drafts — their owners should
+# rewrite them. An optional team-<id>-photo replaces the portrait's generic alt text.
+team-bilol-name = Sharifzoda Bilol
+team-bilol-role = Founder
+team-bilol-line = I build high-load backends in Rust, and break them on purpose before production does.
+team-amirhamza-name = Amirhamza Sayfiddinzoda
+team-amirhamza-role = Co-founder
+team-amirhamza-line = I take web products from architecture to release, in React, Node.js, Python and Go, and teach others to do the same.
+team-amirhamza-photo = Amirhamza Sayfiddinzoda, seen from behind in a cap
 team-name-title = Why “Mintaka”
 team-name-star = Mintaka is the star at the western end of Orion's belt. The name comes from the Arabic al-mintaqa, “the belt”.
 team-name-word = In Tajik, минтақа means “region” or “zone”.
@@ -340,19 +366,21 @@ nf-home = Navigate by the stars
 ## Privacy
 
 pv-title = Privacy
-pv-lead = The short version: we don't track you. This page is the whole policy.
+pv-lead = The short version: we don't track you. We keep totals only: how fast our pages load for visitors and how often a few features are used. This page is the whole policy.
 pv-cookies-title = No cookies, no trackers
-pv-cookies = This site sets no cookies, loads nothing from other companies, and runs no analytics scripts. Your browser can confirm it: open the proof console (press P).
+pv-cookies = This site sets no cookies, loads nothing from other companies and runs no third-party analytics. Our own measurement, described below, keeps totals only. Your browser can confirm the rest: open the proof console (press P).
 pv-logs-title = Server logs
 pv-logs = Our server logs the time, the page, the response status and how long it took. It does not store or log IP addresses, browser details or what you type.
+pv-measure-title = Page speed and feature counts
+pv-measure = When you leave a page or switch away from it, your browser sends our server one small message. It says which of our pages it was, from a fixed list; five speed measurements of that visit (time to first byte, first and largest contentful paint, layout shift and the slowest interaction); how many times you opened the proof console or the terminal, followed a link to the contact form, sent the form, switched language, started or finished an instrument and solved a stage of the console challenge; and which of the four ways your device drew the opening animation. It carries no cookie, identifier, IP address, browser details or anything you typed. The server adds it to totals in memory (counts, and 75th percentiles since it started and for the last 24 hours) and keeps nothing else: nothing is written to disk, and the totals start again from zero when the server restarts. To stop one network from flooding the totals, it counts messages per network (the first three parts of the address), in memory only. Anyone can read the totals in the proof console or at /_rum. If your browser sends Global Privacy Control or Do Not Track, it measures and sends nothing.
 pv-contact-title = When you write to us
 pv-contact = Your message is encrypted the moment it reaches our server and is read only by the team, to reply to you. Spam protection uses a small calculation your browser solves and a short-lived counter per network, kept in memory only.
 pv-physics-title = The speed-of-light measurement
 pv-physics = It estimates your location from your device's time zone, inside your browser. Nothing about it is sent to us.
 pv-experiments-title = The experiments
-pv-experiments = The Fitts, Hick–Hyman and pop-out experiments measure your clicks and reaction times inside your browser. The measurements never leave it.
-pv-storage-title = Your settings
-pv-storage = If you switch the keyboard shortcuts off, your browser remembers that choice in its own storage. It is never sent to us.
+pv-experiments = The Fitts, Hick–Hyman and pop-out experiments measure your clicks and reaction times inside your browser. The measurements never leave it; only the fact that you started or finished one is counted, as described above.
+pv-storage-title = What your browser keeps
+pv-storage = If you switch the keyboard shortcuts off, your browser remembers that choice in its own storage. After your first visit it also keeps a copy of the pages you opened and their files, so the site opens without a connection (a service worker; clearing this site's data in your browser removes it). If you press Send on the contact form while offline, your draft stays in that tab's storage until it is sent or the tab is closed. If you start the console challenge, your browser keeps your progress (a token our server issued) until you start over or clear this site's data; it goes to our server only when you ask for a puzzle or check an answer. Nothing else here is sent to us.
 pv-data-title = Map data
 pv-data = Time zone locations come from the IANA time zone database (public domain).
 pv-contact-us = Questions about privacy: { $email }
@@ -375,6 +403,7 @@ ft-sheet = Sheet
 ft-build = Build
 ft-served = This page
 ft-served-fallback = Measured live with JavaScript on.
+ft-served-static = Runs no JavaScript, so nothing here is measured live. Each number in a post names its machine, date and command.
 ft-checked = Checked by
 ft-checked-value = your browser
 ft-promises = What this page promises

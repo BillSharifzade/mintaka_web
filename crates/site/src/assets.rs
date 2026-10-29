@@ -93,6 +93,7 @@ fn compressible(content_type: &str) -> bool {
         || content_type.starts_with("application/json")
         || content_type.starts_with("application/manifest+json")
         || content_type.starts_with("application/xml")
+        || content_type.starts_with("application/atom+xml")
         || content_type.starts_with("image/svg+xml")
         || content_type.starts_with("image/x-icon")
         || content_type.starts_with("application/wasm")
@@ -121,11 +122,14 @@ pub fn content_type_for(ext: &str) -> &'static str {
         "webmanifest" => "application/manifest+json",
         "svg" => "image/svg+xml",
         "png" => "image/png",
+        "avif" => "image/avif",
+        "webp" => "image/webp",
         "ico" => "image/x-icon",
         "woff2" => "font/woff2",
         "wasm" => "application/wasm",
         "txt" => "text/plain; charset=utf-8",
         "xml" => "application/xml; charset=utf-8",
+        "atom" => "application/atom+xml; charset=utf-8",
         "map" => "application/json",
         _ => "application/octet-stream",
     }

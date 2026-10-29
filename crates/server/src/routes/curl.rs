@@ -158,11 +158,12 @@ fn proof_text(p: &Proof, ctx: &ReqCtx) -> String {
     match &p.tls {
         Some(t) => {
             let alpn = t.alpn.as_deref().map_or_else(String::new, |a| format!(" · ALPN {a}"));
-            line("tls", STARLIGHT, &format!("{} · {}{alpn}", t.version, t.cipher));
-            if t.post_quantum {
-                line("key share", SUCCESS, &format!("{} · post-quantum", t.group));
-            } else {
-                line("key share", RUST, &format!("{} · not post-quantum", t.group));
+            let cipher = t.cipher.as_deref().unwrap_or("cipher not reported");
+            line("tls", STARLIGHT, &format!("{} · {cipher}{alpn}", t.version));
+            match (&t.group, t.post_quantum) {
+                (Some(group), true) => line("key share", SUCCESS, &format!("{group} · post-quantum")),
+                (Some(group), false) => line("key share", RUST, &format!("{group} · not post-quantum")),
+                (None, _) => line("key share", MIST, "not reported"),
             }
             if let Some(us) = t.handshake_us {
                 line("handshake", STARLIGHT, &format!("{} (server side, includes one round trip)", ms(us)));
@@ -175,9 +176,13 @@ fn proof_text(p: &Proof, ctx: &ReqCtx) -> String {
     line("connection", STARLIGHT, &format!("#{} · request {} on it", c.id, c.requests));
     let rtt = match (c.kernel_rtt_us, c.kernel_rttvar_us) {
         (Some(rtt), Some(var)) => format!("{} ± {} (TCP_INFO)", ms(rtt.into()), ms(var.into())),
+        _ if c.quic_rtt_us.is_some() => "not available (QUIC: no TCP socket)".to_owned(),
         _ => "not available".to_owned(),
     };
     line("kernel rtt", STARLIGHT, &rtt);
+    if let Some(rtt) = c.quic_rtt_us {
+        line("quic rtt", STARLIGHT, &format!("{} (QUIC's own estimate)", ms(rtt.into())));
+    }
     let v = &p.privacy;
     let yes_no = |b: bool, what: &str| if b { format!("IP {what}") } else { format!("IP not {what}") };
     line(

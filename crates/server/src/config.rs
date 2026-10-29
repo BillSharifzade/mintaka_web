@@ -44,6 +44,34 @@ pub struct Cli {
     #[arg(long)]
     pub tls12: bool,
 
+    /// Get and renew the certificate from an ACME CA (Let's Encrypt) for this name; repeat for
+    /// more names. Validated with TLS-ALPN-01 on the TLS listener, which must be reachable on
+    /// port 443. The account key and certificates are cached in {data-dir}/acme.
+    #[arg(long, value_name = "DOMAIN", conflicts_with_all = ["tls_cert", "tls_key", "tls_self_signed"])]
+    pub acme_domain: Vec<String>,
+
+    /// ACME account contact, e.g. mailto:ops@mintaka.tj.
+    #[arg(long, value_name = "MAILTO")]
+    pub acme_contact: Option<String>,
+
+    /// ACME directory: production or staging (Let's Encrypt), or a directory URL [default: production].
+    #[arg(long, value_name = "DIRECTORY")]
+    pub acme_directory: Option<String>,
+
+    /// PEM CA certificate to trust for the ACME directory's HTTPS instead of the system roots
+    /// (Pebble or a private ACME CA).
+    #[arg(long, value_name = "PEM")]
+    pub acme_ca_root: Option<PathBuf>,
+
+    /// Also serve HTTP/3 (QUIC) on UDP at the TLS listener's address, announced with Alt-Svc.
+    #[arg(long)]
+    pub http3: bool,
+
+    /// UDP port announced in Alt-Svc [default: the port HTTP/3 listens on] — for containers or
+    /// NAT that map the public port 443 onto another one.
+    #[arg(long, value_name = "PORT", requires = "http3")]
+    pub http3_advertise_port: Option<u16>,
+
     /// Answer plain HTTP on this address with a 301 to https:// on the same host.
     #[arg(long, value_name = "ADDR")]
     pub redirect_http: Option<SocketAddr>,
@@ -108,6 +136,15 @@ pub struct TlsSettings {
     pub source: CertSource,
     /// Accept TLS 1.2 in addition to TLS 1.3.
     pub allow_tls12: bool,
+    /// HTTP/3 on UDP at the same address; `None` disables it.
+    pub http3: Option<Http3Settings>,
+}
+
+/// HTTP/3 over QUIC, next to the TLS listener.
+#[derive(Debug, Clone, Default)]
+pub struct Http3Settings {
+    /// Port announced in `Alt-Svc`; `None` announces the UDP port actually bound.
+    pub advertise_port: Option<u16>,
 }
 
 /// Where the certificate comes from.
@@ -122,6 +159,41 @@ pub enum CertSource {
     },
     /// Generated at startup for `localhost`, `127.0.0.1` and `::1` (development).
     SelfSigned,
+    /// Issued and renewed by the server itself over ACME (RFC 8555), validated with
+    /// TLS-ALPN-01 (RFC 8737).
+    Acme(AcmeSettings),
+}
+
+/// Let's Encrypt production directory.
+pub const LETS_ENCRYPT_PRODUCTION: &str = "https://acme-v02.api.letsencrypt.org/directory";
+/// Let's Encrypt staging directory (untrusted certificates, generous rate limits).
+pub const LETS_ENCRYPT_STAGING: &str = "https://acme-staging-v02.api.letsencrypt.org/directory";
+
+/// The ACME certificate source.
+#[derive(Debug, Clone)]
+pub struct AcmeSettings {
+    /// Names on the certificate: lower-case, no trailing dot, no wildcards, de-duplicated.
+    pub domains: Vec<String>,
+    /// `mailto:` contact for the account.
+    pub contact: Option<String>,
+    /// Directory URL of the CA.
+    pub directory: String,
+    /// CA certificate to trust for the directory's HTTPS instead of the system roots.
+    pub ca_root: Option<PathBuf>,
+    /// Account key and certificates, mode 0600 in a 0700 directory (`{data_dir}/acme`).
+    pub cache: PathBuf,
+}
+
+impl AcmeSettings {
+    /// Where the account (its id and private key) for this directory is cached.
+    pub fn account_path(&self) -> PathBuf {
+        crate::acme::cache::account_path(&self.cache, &self.directory)
+    }
+
+    /// Where the certificate chain and key for this directory and these names are cached.
+    pub fn certificate_path(&self) -> PathBuf {
+        crate::acme::cache::certificate_path(&self.cache, &self.directory, &self.domains)
+    }
 }
 
 /// Telegram bot notification target (`MINTAKA_TELEGRAM_BOT_TOKEN`, `MINTAKA_TELEGRAM_CHAT_ID`).
@@ -145,22 +217,39 @@ impl fmt::Debug for TelegramSettings {
 impl Config {
     /// Validates the command line and reads the Telegram settings from the environment.
     pub fn from_cli(cli: Cli) -> anyhow::Result<Config> {
-        let source = match (cli.tls_cert, cli.tls_key, cli.tls_self_signed) {
-            (Some(cert), Some(key), false) => Some(CertSource::Pem { cert, key }),
-            (None, None, true) => Some(CertSource::SelfSigned),
-            (None, None, false) => None,
-            _ => bail!("use either --tls-cert with --tls-key, or --tls-self-signed"),
+        let acme = !cli.acme_domain.is_empty();
+        // (clap's `requires` does not see a repeatable flag, so this is checked here.)
+        if !acme && (cli.acme_contact.is_some() || cli.acme_directory.is_some() || cli.acme_ca_root.is_some()) {
+            bail!("--acme-contact, --acme-directory and --acme-ca-root need --acme-domain");
+        }
+        let source = match (cli.tls_cert, cli.tls_key, cli.tls_self_signed, acme) {
+            (Some(cert), Some(key), false, false) => Some(CertSource::Pem { cert, key }),
+            (None, None, true, false) => Some(CertSource::SelfSigned),
+            (None, None, false, true) => Some(CertSource::Acme(AcmeSettings {
+                domains: acme_domains(&cli.acme_domain)?,
+                contact: cli.acme_contact.as_deref().map(acme_contact).transpose()?,
+                directory: acme_directory(cli.acme_directory.as_deref().unwrap_or("production"))?,
+                ca_root: cli.acme_ca_root,
+                cache: cli.data_dir.join("acme"),
+            })),
+            (None, None, false, false) => None,
+            _ => bail!("use one certificate source: --tls-cert with --tls-key, --tls-self-signed, or --acme-domain"),
         };
+        let http3 = cli.http3.then_some(Http3Settings { advertise_port: cli.http3_advertise_port });
+        if cli.http3_advertise_port == Some(0) {
+            bail!("--http3-advertise-port must be a port number (1-65535)");
+        }
         let tls = match (source, cli.tls_listen) {
             (Some(source), listen) => {
                 let listen = match listen {
                     Some(addr) => addr,
                     None => DEFAULT_TLS_LISTEN.parse().context("default TLS address")?,
                 };
-                Some(TlsSettings { listen, source, allow_tls12: cli.tls12 })
+                Some(TlsSettings { listen, source, allow_tls12: cli.tls12, http3 })
             }
-            (None, Some(_)) => bail!("--tls-listen needs --tls-cert/--tls-key or --tls-self-signed"),
+            (None, Some(_)) => bail!("--tls-listen needs a certificate source (--tls-cert/--tls-key, --tls-self-signed or --acme-domain)"),
             (None, None) if cli.tls12 => bail!("--tls12 needs a TLS listener"),
+            (None, None) if http3.is_some() => bail!("--http3 needs a TLS listener (QUIC is always encrypted)"),
             (None, None) => None,
         };
         if cli.redirect_http.is_some() && tls.is_none() {
@@ -200,6 +289,66 @@ fn telegram_from_env() -> anyhow::Result<Option<TelegramSettings>> {
         }
         (None, None) => Ok(None),
         _ => bail!("set both MINTAKA_TELEGRAM_BOT_TOKEN and MINTAKA_TELEGRAM_CHAT_ID, or neither"),
+    }
+}
+
+/// `--acme-domain` values as the CA will see them: lower-case DNS names (A-labels), no trailing
+/// dot, in order, without duplicates.
+fn acme_domains(raw: &[String]) -> anyhow::Result<Vec<String>> {
+    let mut domains: Vec<String> = Vec::with_capacity(raw.len());
+    for value in raw {
+        let name = value.trim().trim_end_matches('.').to_ascii_lowercase();
+        if name.starts_with("*.") {
+            // RFC 8737 §3: TLS-ALPN-01 cannot prove control of a wildcard; that needs DNS-01.
+            bail!("--acme-domain {value:?}: wildcard names cannot be validated with TLS-ALPN-01");
+        }
+        if !name.is_ascii() {
+            bail!("--acme-domain {value:?}: write internationalised names in their A-label (xn--…) form");
+        }
+        if name.parse::<std::net::IpAddr>().is_ok() {
+            bail!("--acme-domain {value:?}: an IP address is not a domain name");
+        }
+        let label_ok = |l: &str| {
+            !l.is_empty()
+                && l.len() <= 63
+                && !l.starts_with('-')
+                && !l.ends_with('-')
+                && l.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+        };
+        if name.len() > 253 || !name.contains('.') || !name.split('.').all(label_ok) {
+            bail!("--acme-domain {value:?} is not a fully qualified domain name");
+        }
+        if !domains.contains(&name) {
+            domains.push(name);
+        }
+    }
+    Ok(domains)
+}
+
+/// `--acme-contact`: a single `mailto:` address (the only scheme Let's Encrypt accepts).
+fn acme_contact(raw: &str) -> anyhow::Result<String> {
+    let value = raw.trim();
+    let address = value.strip_prefix("mailto:").unwrap_or("");
+    let valid = address.split_once('@').is_some_and(|(local, host)| !local.is_empty() && host.contains('.'))
+        && !address.bytes().any(|b| b.is_ascii_whitespace() || matches!(b, b',' | b'?' | b'<' | b'>'));
+    if !valid {
+        bail!("--acme-contact {raw:?}: expected one address as mailto:name@example.com");
+    }
+    Ok(value.to_owned())
+}
+
+/// `--acme-directory`: `production`, `staging` or an `https://` directory URL.
+fn acme_directory(raw: &str) -> anyhow::Result<String> {
+    match raw.trim() {
+        "production" => Ok(LETS_ENCRYPT_PRODUCTION.to_owned()),
+        "staging" => Ok(LETS_ENCRYPT_STAGING.to_owned()),
+        url => {
+            let uri: http::Uri = url.parse().map_err(|_| anyhow::anyhow!("--acme-directory {raw:?} is not a URL"))?;
+            if uri.scheme_str() != Some("https") || uri.host().is_none() {
+                bail!("--acme-directory {raw:?}: use production, staging or an https:// directory URL");
+            }
+            Ok(url.to_owned())
+        }
     }
 }
 
@@ -262,6 +411,69 @@ mod tests {
         let tls = c.tls.unwrap();
         assert!(tls.allow_tls12);
         assert!(matches!(tls.source, CertSource::Pem { .. }));
+        assert!(tls.http3.is_none());
+    }
+
+    fn parse(args: &[&str]) -> Result<Config, String> {
+        let cli = Cli::try_parse_from(std::iter::once("mintaka-server").chain(args.iter().copied()));
+        cli.map_err(|e| e.to_string()).and_then(|c| Config::from_cli(c).map_err(|e| e.to_string()))
+    }
+
+    fn acme(c: Config) -> AcmeSettings {
+        match c.tls.unwrap().source {
+            CertSource::Acme(settings) => settings,
+            other => panic!("expected ACME, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn acme_flags_are_checked() {
+        let a = acme(parse(&["--acme-domain", "Mintaka.TJ.", "--acme-domain", "www.mintaka.tj", "--acme-domain", "mintaka.tj"]).unwrap());
+        assert_eq!(a.domains, ["mintaka.tj", "www.mintaka.tj"], "lower-cased, trailing dot dropped, de-duplicated");
+        assert_eq!(a.directory, LETS_ENCRYPT_PRODUCTION);
+        assert_eq!(a.contact, None);
+        assert_eq!(a.cache, PathBuf::from("data/acme"));
+
+        let a = acme(
+            parse(&["--acme-domain", "mintaka.tj", "--acme-contact", "mailto:ops@mintaka.tj", "--acme-directory", "staging", "--data-dir", "/var/lib/m"])
+                .unwrap(),
+        );
+        assert_eq!(a.directory, LETS_ENCRYPT_STAGING);
+        assert_eq!(a.contact.as_deref(), Some("mailto:ops@mintaka.tj"));
+        assert_eq!(a.cache, PathBuf::from("/var/lib/m/acme"));
+        let a = acme(parse(&["--acme-domain", "mintaka.tj", "--acme-directory", "https://ca.example/dir"]).unwrap());
+        assert_eq!(a.directory, "https://ca.example/dir");
+
+        // Exactly one certificate source.
+        for other in [&["--tls-self-signed"][..], &["--tls-cert", "a", "--tls-key", "b"]] {
+            let mut args = vec!["--acme-domain", "mintaka.tj"];
+            args.extend_from_slice(other);
+            assert!(parse(&args).is_err(), "{args:?}");
+        }
+        // The other ACME flags mean nothing without a domain.
+        assert!(parse(&["--tls-self-signed", "--acme-contact", "mailto:a@b.c"]).is_err());
+        assert!(parse(&["--tls-self-signed", "--acme-directory", "staging"]).is_err());
+
+        for bad in ["*.mintaka.tj", "localhost", "127.0.0.1", "-a.tj", "a..tj", "mintaka_tj.tj", "минтака.тж", ""] {
+            assert!(parse(&["--acme-domain", bad]).is_err(), "domain {bad:?}");
+        }
+        for bad in ["ops@mintaka.tj", "mailto:", "mailto:ops", "mailto:a@b.c,c@d.e", "mailto:a b@c.d", "https://x.tj"] {
+            assert!(parse(&["--acme-domain", "mintaka.tj", "--acme-contact", bad]).is_err(), "contact {bad:?}");
+        }
+        for bad in ["http://ca.example/dir", "prod", "https://", "ftp://x"] {
+            assert!(parse(&["--acme-domain", "mintaka.tj", "--acme-directory", bad]).is_err(), "directory {bad:?}");
+        }
+    }
+
+    #[test]
+    fn http3_flags_are_checked() {
+        let tls = parse(&["--tls-self-signed", "--http3"]).unwrap().tls.unwrap();
+        assert_eq!(tls.http3.unwrap().advertise_port, None);
+        let tls = parse(&["--acme-domain", "mintaka.tj", "--http3", "--http3-advertise-port", "443"]).unwrap().tls.unwrap();
+        assert_eq!(tls.http3.unwrap().advertise_port, Some(443));
+        assert!(parse(&["--http3"]).is_err(), "QUIC needs TLS");
+        assert!(parse(&["--tls-self-signed", "--http3-advertise-port", "443"]).is_err(), "port without --http3");
+        assert!(parse(&["--tls-self-signed", "--http3", "--http3-advertise-port", "0"]).is_err());
     }
 
     #[test]

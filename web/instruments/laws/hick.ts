@@ -103,6 +103,7 @@ export const hick: Experiment = (panel, api) => {
 
   async function run(): Promise<void> {
     const me = ++token;
+    api.started();
     const data: Pt[] = [];
     const by = new Map<number, number[]>();
     const rows: string[][] = [];

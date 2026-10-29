@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
@@ -14,7 +15,11 @@ use http_body_util::{BodyExt, Full};
 use hyper::body::Incoming;
 use hyper::client::conn::{http1, http2};
 use hyper_util::rt::{TokioExecutor, TokioIo};
-use server::{Config, SelfSigned, Server};
+use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+use rustls::crypto::{CryptoProvider, verify_tls12_signature, verify_tls13_signature};
+use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+use rustls::{ClientConfig, DigitallySignedStruct, SignatureScheme, SupportedProtocolVersion};
+use server::{CertSource, Config, SelfSigned, Server, TlsSettings};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
 use tokio::sync::oneshot;
@@ -52,10 +57,24 @@ pub fn config(name: &str) -> Config {
     }
 }
 
+/// `config` plus a self-signed TLS listener, optionally with HTTP/3.
+pub fn tls_config(name: &str, allow_tls12: bool, http3: bool) -> Config {
+    let mut cfg = config(name);
+    cfg.tls = Some(TlsSettings {
+        listen: "127.0.0.1:0".parse().unwrap(),
+        source: CertSource::SelfSigned,
+        allow_tls12,
+        http3: http3.then(Default::default),
+    });
+    cfg
+}
+
 /// A running server; shuts down when dropped.
 pub struct TestServer {
     pub http: Option<SocketAddr>,
     pub https: Option<SocketAddr>,
+    /// The UDP address of HTTP/3.
+    pub http3: Option<SocketAddr>,
     pub redirect: Option<SocketAddr>,
     pub self_signed: Option<SelfSigned>,
     pub data_dir: PathBuf,
@@ -70,12 +89,13 @@ impl TestServer {
         let (stop, stopped) = oneshot::channel::<()>();
         let http = server.http_addr();
         let https = server.https_addr();
+        let http3 = server.http3_addr();
         let redirect = server.redirect_addr();
         let self_signed = server.self_signed().cloned();
         let task = tokio::spawn(server.run(async move {
             let _ = stopped.await;
         }));
-        TestServer { http, https, redirect, self_signed, data_dir, stop: Some(stop), task: Some(task) }
+        TestServer { http, https, http3, redirect, self_signed, data_dir, stop: Some(stop), task: Some(task) }
     }
 
     pub fn addr(&self) -> SocketAddr {
@@ -275,6 +295,78 @@ pub fn assert_security_headers(reply: &Reply, tls: bool, what: &str) {
         assert!(timing.contains_key(metric), "{what}: Server-Timing lacks {metric}: {:?}", reply.header("server-timing"));
     }
     assert!(timing["app"] + 0.0011 >= timing["route"], "{what}: app ≥ route");
-    #[cfg(target_os = "linux")]
-    assert!(timing.contains_key("krtt"), "{what}: Server-Timing lacks krtt");
+    // The kernel RTT exists only for TCP; HTTP/3 reports QUIC's own instead.
+    if reply.version == Version::HTTP_3 {
+        assert!(!timing.contains_key("krtt"), "{what}: krtt over QUIC");
+        assert!(timing.contains_key("qrtt"), "{what}: Server-Timing lacks qrtt");
+    } else {
+        #[cfg(target_os = "linux")]
+        assert!(timing.contains_key("krtt"), "{what}: Server-Timing lacks krtt");
+        assert!(!timing.contains_key("qrtt"), "{what}: qrtt over TCP");
+    }
+}
+
+/// Trusts exactly one certificate (the server's self-signed one), with real signature checks.
+#[derive(Debug)]
+pub struct Pinned {
+    pub cert: CertificateDer<'static>,
+    pub provider: Arc<CryptoProvider>,
+}
+
+impl ServerCertVerifier for Pinned {
+    fn verify_server_cert(
+        &self,
+        end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        _server_name: &ServerName<'_>,
+        _ocsp: &[u8],
+        _now: UnixTime,
+    ) -> Result<ServerCertVerified, rustls::Error> {
+        if end_entity.as_ref() == self.cert.as_ref() {
+            Ok(ServerCertVerified::assertion())
+        } else {
+            Err(rustls::Error::General("not the pinned certificate".into()))
+        }
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        verify_tls12_signature(message, cert, dss, &self.provider.signature_verification_algorithms)
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        verify_tls13_signature(message, cert, dss, &self.provider.signature_verification_algorithms)
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        self.provider.signature_verification_algorithms.supported_schemes()
+    }
+}
+
+/// A rustls client that trusts only `cert`, with the given provider (rustls' default aws-lc-rs
+/// one is what any rustls client would use), versions and ALPN offer.
+pub fn pinned_client(
+    cert: &CertificateDer<'static>,
+    provider: CryptoProvider,
+    versions: &[&'static SupportedProtocolVersion],
+    alpn: &[&[u8]],
+) -> ClientConfig {
+    let provider = Arc::new(provider);
+    let mut config = ClientConfig::builder_with_provider(Arc::clone(&provider))
+        .with_protocol_versions(versions)
+        .unwrap()
+        .dangerous()
+        .with_custom_certificate_verifier(Arc::new(Pinned { cert: cert.clone(), provider }))
+        .with_no_client_auth();
+    config.alpn_protocols = alpn.iter().map(|p| p.to_vec()).collect();
+    config
 }

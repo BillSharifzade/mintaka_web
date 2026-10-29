@@ -31,6 +31,7 @@ physics-no-zone = Your device's time zone ({ $zone }) doesn't name a place, so t
 physics-no-server = Our server's location isn't configured (development server), so only the upper bound is shown.
 physics-no-proof = Couldn't reach /_proof for our server's location, so only the upper bound is shown.
 physics-error = Couldn't time a round trip: { $reason }. Try again.
+physics-offline = You're offline. Measuring needs one round trip to our server, so press the button again once you're connected.
 
 physics-bar-label = Where the time went · { $total }
 physics-part-floor = Physics floor

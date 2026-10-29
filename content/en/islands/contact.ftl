@@ -28,3 +28,6 @@ contact-error-rate-limited = Too many messages came from your network in the las
 contact-error-too-large = The form is too large to send. Shorten your message and try again.
 contact-error-server-error = Something went wrong on our side and your message wasn't sent. Try again in a minute.
 contact-error-network = Your message wasn't sent: we couldn't reach the server. Check your connection and send again.
+contact-error-offline = You're offline, so your message wasn't sent. It stays in this form, even if you reload the page. Press Send again once you're connected.
+contact-online = You're back online. Press Send to send your message.
+contact-draft = Your unsent message is back in the form. Press Send once you're connected.

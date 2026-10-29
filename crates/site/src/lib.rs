@@ -13,8 +13,10 @@ pub mod geo;
 pub mod highlight;
 pub mod i18n;
 pub mod js;
+pub mod lab;
 pub mod orion;
 pub mod pages;
+pub mod sw;
 pub mod text;
 pub mod util;
 pub mod well_known;
@@ -66,6 +68,18 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
     let islands_css_url = dist.add_hashed("islands", "css", islands_css.as_bytes(), content_type_for("css"))?;
     let page_css = format!("{}{}", css::bundle(&root.join("web/styles/page.css"))?, css::minify(&fonts.css)?);
     let style_hash = util::csp_hash(page_css.as_bytes());
+    // Lab pages inline the long-form stylesheet instead (no hero, instruments or contact form).
+    let lab_css = format!("{}{}", css::bundle(&root.join("web/styles/lab.css"))?, css::minify(&fonts.css)?);
+    let lab_style_hash = util::csp_hash(lab_css.as_bytes());
+
+    // Lab posts (spec §S11), rendered first: they are part of the build fingerprint.
+    let mut lab_posts = BTreeMap::new();
+    for lang in &cfg.langs {
+        let s = Strings::load(root, lang)?;
+        let posts = lab::load(root, lang, &cfg, &s)?;
+        s.finish()?;
+        lab_posts.insert(lang.clone(), posts);
+    }
 
     // Brand files at fixed URLs (browsers and crawlers ask for these by name).
     for (src, url) in [
@@ -82,6 +96,18 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
         dist.add(url, url.trim_start_matches('/'), &bytes, content_type_for(ext), CachePolicy::Short, RouteKind::File, None)?;
     }
 
+    // Team portraits (S12): AVIF with a WebP fallback, prepared by hand (see content/site.toml).
+    let mut portraits = BTreeMap::new();
+    for m in &cfg.team {
+        let mut url = |ext: &str| -> Result<String> {
+            let path = root.join("assets/team").join(format!("{}.{ext}", m.id));
+            let bytes = std::fs::read(&path).with_context(|| format!("reading portrait {}", path.display()))?;
+            dist.add_hashed(&format!("team/{}", m.id), ext, &bytes, content_type_for(ext))
+        };
+        let portrait = pages::Portrait { avif: url("avif")?, webp: url("webp")? };
+        portraits.insert(m.id.clone(), portrait);
+    }
+
     // The build id: date + hash of everything that shapes the pages.
     let mut fingerprint = page_css.clone().into_bytes();
     fingerprint.extend(js.main.as_bytes());
@@ -92,6 +118,10 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
         }
     }
     fingerprint.extend(std::fs::read(root.join("content/site.toml")).unwrap_or_default());
+    fingerprint.extend(lab_css.as_bytes());
+    for post in lab_posts.values().flatten() {
+        fingerprint.extend(post.html.as_bytes());
+    }
     let build = format!("{date}.{}", util::short_hash(&fingerprint).to_lowercase());
 
     let (sprite, logo_vb) = svg::brand_symbol(root, "mintaka-logo-horizontal-on-dark.svg", "logo")?;
@@ -127,6 +157,25 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
             wasm_sizes.push((format!("{stem}.bin"), bytes.len() as u64));
         }
     }
+    // Lazy string bundles (content/{lang}/islands/lazy/): one JSON file per bundle and language,
+    // named `strings/<name>.<lang>` for `loadStrings()` in web/shared/i18n.ts.
+    let mut gaps: BTreeMap<char, BTreeSet<String>> = BTreeMap::new();
+    for lang in &cfg.langs {
+        let inline = i18n::island_strings(root, lang)?;
+        for (name, strings) in i18n::lazy_island_strings(root, lang)? {
+            for (key, value) in &strings {
+                if inline.contains_key(key) {
+                    bail!("content/{lang}/islands/lazy/{name}.ftl: {key} is also an inline island message");
+                }
+                for c in fonts.uncovered_text(value) {
+                    gaps.entry(c).or_default().insert(format!("{lang}:{key}"));
+                }
+            }
+            let stem = format!("strings/{name}.{lang}");
+            let url = dist.add_hashed(&stem, "json", serde_json::to_string(&strings)?.as_bytes(), content_type_for("json"))?;
+            named.insert(stem, url);
+        }
+    }
     let assets_json = util::json_for_html(&serde_json::to_value(&named)?);
 
     let osm_date = std::fs::read_to_string(root.join("assets/data/dushanbe.meta.json"))
@@ -136,11 +185,18 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
         .unwrap_or_else(|| "—".into());
     let mut text_map = BTreeMap::new();
     let mut not_found = BTreeMap::new();
-    let mut gaps: BTreeMap<char, BTreeSet<String>> = BTreeMap::new();
     let host = cfg.origin.trim_start_matches("https://").trim_start_matches("http://").to_owned();
+    let mut lab_pages: Vec<(String, String)> = vec![];
 
+    let mut people = vec![];
     for lang in &cfg.langs {
         let s = Strings::load(root, lang)?;
+        if *lang == cfg.default_lang {
+            for m in &cfg.team {
+                let t = |field: &str| s.t(&format!("team-{}-{field}", m.id));
+                people.push((t("role"), t("name"), m.github.clone(), m.site.clone()));
+            }
+        }
         let islands = i18n::island_strings(root, lang)?;
         for (key, value) in &islands {
             for c in fonts.uncovered_text(value) {
@@ -164,11 +220,13 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
             logo: &logo,
             mark: &mark,
             osm_date: &osm_date,
+            portraits: &portraits,
+            lab: lab_posts.get(lang).map_or(&[][..], Vec::as_slice),
         };
 
         let mut page = |rel_path: &str, title: String, body: maud::Markup, is_home: bool, index: bool| -> Result<String> {
             let path = format!("/{lang}{rel_path}");
-            let html = document(&ctx, Page { path: &path, title, description: s.t("meta-description"), is_home, body, index }).into_string();
+            let html = document(&ctx, Page { path: &path, title, description: s.t("meta-description"), is_home, body, index, long_form: None }).into_string();
             for c in fonts.uncovered(&html) {
                 gaps.entry(c).or_default().insert(path.clone());
             }
@@ -193,6 +251,18 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
         dist.write(&format!("{lang}/404.html"), html.as_bytes())?;
         not_found.insert(lang.clone(), format!("{lang}/404.html"));
 
+        // The Lab (spec §S11): long-form pages with no JavaScript, and the Atom feed. Their
+        // glyphs and the no-script rule are checked after the loop.
+        for (path, html) in pages::lab::pages(&ctx, &lab_posts, &lab_css) {
+            let file = format!("{}index.html", path.trim_start_matches('/'));
+            dist.add(&path, &file, html.as_bytes(), HTML, CachePolicy::Document, RouteKind::Page, Some(lang))?;
+            lab_pages.push((path, html));
+        }
+        if !ctx.lab.is_empty() {
+            let feed = lab::atom(&cfg, lang, &s, ctx.lab);
+            dist.add(&lab::feed_path(lang), &format!("{lang}/lab/feed.xml"), feed.as_bytes(), content_type_for("atom"), CachePolicy::Short, RouteKind::File, Some(lang))?;
+        }
+
         let tp = text::pages(root, &s, &host, &cfg.contact.email, &cfg.contact.telegram)?;
         let mut files = BTreeMap::new();
         for (key, body) in [("/", &tp.index), ("/pillars", &tp.pillars), ("/contact", &tp.contact)] {
@@ -206,13 +276,36 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
         s.finish()?;
     }
 
+    // Lab pages: every glyph covered, and no script of any kind (spec §9.5).
+    for (path, html) in &lab_pages {
+        for c in fonts.uncovered(html) {
+            gaps.entry(c).or_default().insert(path.clone());
+        }
+        if html.contains("<script") {
+            bail!("{path} contains a <script> element: Lab pages ship no JavaScript (spec §9.5)");
+        }
+    }
+    let lab_urls = lab::sitemap_urls(&lab_posts);
+
     // Well-known files.
     let short = |d: &mut Dist, url: &str, body: String, ct: &str| d.add(url, url.trim_start_matches('/'), body.as_bytes(), ct, CachePolicy::Short, RouteKind::File, None);
     short(&mut dist, "/robots.txt", well_known::robots(&cfg), content_type_for("txt"))?;
-    short(&mut dist, "/humans.txt", well_known::humans(&cfg, &date), content_type_for("txt"))?;
-    short(&mut dist, "/sitemap.xml", well_known::sitemap(&cfg, &["/", "/privacy/"], &date), content_type_for("xml"))?;
+    short(&mut dist, "/humans.txt", well_known::humans(&cfg, &date, &people), content_type_for("txt"))?;
+    short(&mut dist, "/sitemap.xml", well_known::sitemap(&cfg, &["/", "/privacy/"], &lab_urls, &date), content_type_for("xml"))?;
     short(&mut dist, "/.well-known/security.txt", well_known::security_txt(&cfg, days), content_type_for("txt"))?;
     short(&mut dist, "/manifest.webmanifest", well_known::webmanifest(&cfg), content_type_for("webmanifest"))?;
+
+    // Offline mode: the service worker, with the file list of everything added above.
+    let preloads = cfg.langs.iter().map(|l| (l.clone(), fonts.preloads_for(l).map(str::to_owned).collect())).collect();
+    let sw_inputs = sw::Inputs { build: &build, js_dir: &opts.js_dir, islands_css: &islands_css_url, fonts: preloads };
+    let sw_bytes = sw::add(&mut dist, &sw_inputs)?;
+    if sw_bytes.is_none() {
+        let msg = "no service worker in esbuild's output (sw.js): this build has no offline mode";
+        if opts.release {
+            bail!(msg);
+        }
+        warnings.push(msg.into());
+    }
 
     dist.compress_all()?;
 
@@ -234,6 +327,20 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
         }
     }
     budget.add("inline page CSS (minified)", page_css.len() as u64, None);
+    // Lab pages: the same 14 kB first-round-trip rule for what a reader sees first (head, CSS,
+    // header, the post's title and summary), and the home page's 32 kB cap for a whole page. The
+    // feed is read by feed readers, never on a first visit, so it only gets a ceiling.
+    for (path, html) in &lab_pages {
+        let cut = html.find(r#"<div class="post__body"#).or_else(|| html.find(r#"<ol class="lab-list"#)).unwrap_or(html.len());
+        budget.add(format!("{path} first screen (brotli)"), assets::brotli(&html.as_bytes()[..cut])?.len() as u64, Some(14_000));
+        budget.add(format!("{path} whole page (brotli)"), route_size(&dist, path), Some(32_000));
+    }
+    if !lab_pages.is_empty() {
+        budget.add("inline Lab CSS (minified)", lab_css.len() as u64, None);
+    }
+    for lang in lab_posts.iter().filter(|(_, posts)| !posts.is_empty()).map(|(lang, _)| lang) {
+        budget.add(format!("{} (brotli)", lab::feed_path(lang)), route_size(&dist, &lab::feed_path(lang)), Some(64_000));
+    }
     let js_limit = |name: &str| -> Option<u64> {
         match name {
             "main" => Some(4_000),
@@ -243,6 +350,12 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
             "hud" => Some(6_000),
             "terminal" => Some(8_000),
             "pow" => Some(4_000),
+            // The console challenge: client and application form, fetched only on a challenge
+            // command (its text is a lazy string bundle, not counted here).
+            "ctf" => Some(7_000),
+            // Real-user measurements (loaded on idle), offline mode (on idle), the console's visitors row.
+            "rum" => Some(3_000),
+            "offline" | "visitors" => Some(2_000),
             "physics" | "armour" | "trace" | "live" | "laws" | "contact" | "routing" | "loadsim" => Some(15_000),
             // Three chapters, the coverage sky, the crash minimiser and a hand-input panel.
             "fuzzer" => Some(21_000),
@@ -252,18 +365,27 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
     for (file, bytes) in &js.files {
         let name = file.split('.').next().unwrap_or(file);
         budget.add(format!("{file} (minified)"), *bytes, js_limit(name));
-        // First view: boot, hero core and its renderer (WebGL2, the larger one), HUD, nav, console.
-        if ["main", "hero", "webgl", "hud", "nav", "console"].contains(&name) {
-            first_view += route_size(&dist, &format!("/assets/{file}"));
-        }
+    }
+    // First view: boot, hero core and its renderer (WebGL2, the larger one), HUD, nav, console, the
+    // two idle-time modules every view loads (real-user measurements, offline mode), and the shared
+    // chunks they import.
+    let first_js = js.files.iter().map(|(f, _)| f.as_str()).filter(|f| {
+        ["main", "hero", "webgl", "hud", "nav", "console", "rum", "offline"].contains(&f.split('.').next().unwrap_or(f))
+    });
+    for file in js.with_imports(first_js) {
+        first_view += route_size(&dist, &format!("/assets/{file}"));
     }
     for (name, bytes) in &wasm_sizes {
         let (label, limit) = if name.ends_with(".bin") { (format!("{name} (lazy data, raw)"), 3_000_000) } else { (format!("{name}.wasm (lazy)"), 250_000) };
         budget.add(label, *bytes, Some(limit));
     }
     first_view += route_size(&dist, &islands_css_url);
+    if let Some(bytes) = sw_bytes {
+        budget.add("sw.js (minified, with this build's file list)", bytes, Some(8_000));
+        first_view += route_size(&dist, "/sw.js");
+    }
     budget.add("islands CSS (minified)", islands_css.len() as u64, None);
-    budget.add("first full view, compressed (HTML, fonts, boot, hero, HUD)", first_view, Some(100_000));
+    budget.add("first full view, compressed (HTML, fonts, boot, hero, HUD, RUM, offline)", first_view, Some(100_000));
 
     // Report and enforce.
     if !gaps.is_empty() {
@@ -298,7 +420,7 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
         origin: cfg.origin.clone(),
         default_lang: cfg.default_lang.clone(),
         langs: cfg.langs.clone(),
-        csp: Csp { style_src: vec![style_hash], script_src: vec![] },
+        csp: Csp { style_src: if lab_pages.is_empty() { vec![style_hash] } else { vec![style_hash, lab_style_hash] }, script_src: vec![] },
         routes: std::mem::take(&mut dist.routes),
         not_found,
         text: text_map,

@@ -8,7 +8,7 @@ use axum::response::Response;
 use http::{StatusCode, Version};
 use proof::{ConnectionFacts, HttpFacts, PrivacyFacts, Proof, ServerFacts, TlsFacts};
 
-use super::{GET_HEAD, RouteName, ctx, internal_error, is_read, json, mark, method_not_allowed};
+use super::{GET_HEAD, RouteName, alt_svc, ctx, internal_error, is_read, json, mark, method_not_allowed};
 use crate::app::{AppState, SOFTWARE};
 use crate::conn::ReqCtx;
 use crate::headers::micros;
@@ -43,11 +43,11 @@ pub(crate) fn collect(app: &AppState, ctx: &ReqCtx, version: Version) -> Proof {
         },
         tls: tls.map(|t| TlsFacts {
             version: t.version.to_owned(),
-            cipher: t.cipher.to_owned(),
-            group: t.group.to_owned(),
+            cipher: t.cipher.map(str::to_owned),
+            group: t.group.map(str::to_owned),
             post_quantum: t.post_quantum,
             alpn: t.alpn.map(str::to_owned),
-            handshake_us: Some(micros(t.handshake)),
+            handshake_us: t.handshake.map(micros),
         }),
         http: HttpFacts { version: http_version(version).to_owned() },
         connection: ConnectionFacts {
@@ -55,17 +55,26 @@ pub(crate) fn collect(app: &AppState, ctx: &ReqCtx, version: Version) -> Proof {
             requests: ctx.seq,
             kernel_rtt_us: ctx.rtt.map(|r| r.rtt_us),
             kernel_rttvar_us: ctx.rtt.map(|r| r.rttvar_us),
+            quic_rtt_us: ctx.quic_rtt.map(|d| u32::try_from(micros(d)).unwrap_or(u32::MAX)),
         },
         privacy: PrivacyFacts {
             // No code path in this server sets a cookie (tests check every response type).
             cookies_set: 0,
             third_party_origins: app.security.third_party_origins(),
-            // Logs carry method, route, status and duration only; rate limiting keeps a /24 or
-            // /48 prefix in memory for at most an hour.
+            // Logs carry method, route, status and duration only. The rate limiters keep a /24 or
+            // /48 prefix in memory (never the address, never on disk); idle ones are dropped once
+            // 10,000 networks are tracked, and all of them on restart.
             ip_stored: false,
             ip_logged: false,
         },
-        headers: app.security.names(tls.is_some()).map(str::to_owned).collect(),
+        // What `routes::finish` will send on this very response: the security set, and
+        // `alt-svc` when HTTP/3 is announced.
+        headers: app
+            .security
+            .names(tls.is_some())
+            .chain(alt_svc(app, ctx).map(|_| "alt-svc"))
+            .map(str::to_owned)
+            .collect(),
     }
 }
 

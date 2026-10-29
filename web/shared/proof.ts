@@ -18,21 +18,25 @@ export interface Proof {
   /** null when the connection is plain HTTP (local development). */
   tls: {
     version: string; // "TLSv1.3"
-    cipher: string; // "TLS13_AES_128_GCM_SHA256"
-    group: string; // "X25519MLKEM768"
+    /** null if the TLS stack did not report it (HTTP/3: read from the server's own ServerHello). */
+    cipher: string | null; // "TLS13_AES_128_GCM_SHA256"
+    /** null like `cipher`; then `post_quantum` is false. */
+    group: string | null; // "X25519MLKEM768"
     post_quantum: boolean;
-    alpn: string | null; // "h2"
+    alpn: string | null; // "h2" | "http/1.1" | "h3"
     handshake_us: number | null; // server-side handshake duration for this connection
   } | null;
-  http: { version: string }; // "HTTP/2.0" | "HTTP/1.1"
+  http: { version: string }; // "HTTP/3.0" | "HTTP/2.0" | "HTTP/1.1"
   connection: {
     /** Process-local counter; not linked to the visitor. */
     id: number;
     /** Requests served on this connection, including this one. */
     requests: number;
-    /** Smoothed RTT the Linux kernel measured on this TCP connection (TCP_INFO), µs. */
+    /** Smoothed RTT the Linux kernel measured on this TCP connection (TCP_INFO), µs; null on HTTP/3. */
     kernel_rtt_us: number | null;
     kernel_rttvar_us: number | null;
+    /** HTTP/3 only: QUIC's own smoothed RTT estimate for this connection, µs; null on TCP. */
+    quic_rtt_us: number | null;
   };
   privacy: {
     cookies_set: number;
@@ -40,7 +44,7 @@ export interface Proof {
     ip_stored: boolean;
     ip_logged: boolean;
   };
-  /** Lower-case names of the security headers the server sends on every response. */
+  /** Lower-case names of the security headers sent on this response (then "alt-svc" when HTTP/3 is announced). */
   headers: string[];
 }
 

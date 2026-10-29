@@ -16,9 +16,22 @@ pub struct SiteConfig {
     /// Statements that must be true on launch day (see [`Claim`]).
     #[serde(default)]
     pub claims: Vec<Claim>,
+    /// The S12 team grid, in display order.
+    #[serde(default)]
+    pub team: Vec<Member>,
     /// Set to true only when the domain and every contact detail above are final.
     #[serde(default)]
     pub launch_ready: bool,
+    /// Where the Lab's code links point (spec §S11: a reproducible repository for every post).
+    pub lab: Lab,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Lab {
+    /// The public repository, e.g. `https://github.com/BillSharifzade/mintaka_web`.
+    pub repo: String,
+    /// The branch the site is built from: code links point at it.
+    pub branch: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -54,6 +67,19 @@ pub struct Claim {
     pub verified: bool,
 }
 
+/// A person in the S12 team grid. Name, role and the one line are strings (`team-<id>-name`,
+/// `team-<id>-role`, `team-<id>-line`) because they are written per language; the portrait is
+/// `assets/team/<id>.avif` with a `.webp` fallback.
+#[derive(Debug, Clone, Deserialize)]
+pub struct Member {
+    pub id: String,
+    /// GitHub user name.
+    pub github: String,
+    /// Personal site (https), if any.
+    #[serde(default)]
+    pub site: String,
+}
+
 impl SiteConfig {
     pub fn load(root: &Path) -> Result<Self> {
         let path = root.join("content/site.toml");
@@ -62,8 +88,23 @@ impl SiteConfig {
         if cfg.origin.ends_with('/') {
             bail!("site.toml: origin must not end with '/'");
         }
+        if !cfg.lab.repo.starts_with("https://") || cfg.lab.branch.is_empty() {
+            bail!("site.toml: [lab] needs an https:// repo and a branch");
+        }
         if !cfg.langs.contains(&cfg.default_lang) {
             bail!("site.toml: default_lang {:?} is not in langs", cfg.default_lang);
+        }
+        for m in &cfg.team {
+            // The id names files and string ids; the GitHub name goes into a URL path.
+            if m.id.is_empty() || !m.id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-') {
+                bail!("site.toml: team id {:?} must be lower-case letters, digits and '-'", m.id);
+            }
+            if m.github.is_empty() || !m.github.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-') {
+                bail!("site.toml: team {:?} has an invalid GitHub name {:?}", m.id, m.github);
+            }
+            if !m.site.is_empty() && !m.site.starts_with("https://") {
+                bail!("site.toml: team {:?} site must be an https:// URL", m.id);
+            }
         }
         Ok(cfg)
     }

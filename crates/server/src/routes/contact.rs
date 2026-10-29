@@ -115,6 +115,9 @@ async fn receive(app: &AppState, req: Request) -> Response {
         }
     }
 
+    // An application from someone who finished the console challenge. A bad pass is ignored, not
+    // refused: the brief still reaches us, just without the mark.
+    let ctf_solved = raw.ctf_pass.as_deref().is_some_and(|pass| app.ctf.is_pass(pass));
     let (id, received_at_unix_ms) = new_id();
     let kinds = brief.kinds.clone();
     let timeline = brief.timeline;
@@ -131,6 +134,7 @@ async fn receive(app: &AppState, req: Request) -> Response {
         telegram: brief.telegram.map(|t| t.into_inner()),
         company: brief.company.map(|c| c.into_inner()),
         proof_of_work: with_pow,
+        ctf_solved,
     };
     let store = Arc::clone(&app.contact.store);
     let saved = tokio::task::spawn_blocking(move || store.save(&record)).await;
@@ -138,7 +142,7 @@ async fn receive(app: &AppState, req: Request) -> Response {
         Ok(Ok(_)) => {
             tracing::info!(target: "contact", id = %id, "brief stored");
             if let Some(notifier) = &app.contact.notifier {
-                notifier.brief_received(&id, &kinds, timeline);
+                notifier.brief_received(&id, &kinds, timeline, ctf_solved);
             }
             accepted(flavor, lang)
         }
@@ -182,6 +186,7 @@ fn parse_form(body: &[u8]) -> (ContactRequest, bool) {
             "lang" => &mut raw.lang,
             "website" => &mut raw.website,
             "pow_challenge" => &mut raw.pow_challenge,
+            "ctf_pass" => &mut raw.ctf_pass,
             _ => continue,
         };
         // First occurrence wins.

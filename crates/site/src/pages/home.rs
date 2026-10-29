@@ -1,6 +1,7 @@
 //! The landing page, S1–S13 (spec §6). S14 is the shared footer.
 
 use super::{Ctx, instrument, pillar_head, svg};
+use crate::config::Member;
 use crate::geo;
 use crate::highlight;
 use maud::{Markup, PreEscaped, html};
@@ -388,9 +389,9 @@ fn proof_wall(ctx: &Ctx) -> Markup {
     }
 }
 
+/// S11: the published Lab posts (`content/{lang}/lab/`), each linking to its page.
 fn lab(ctx: &Ctx) -> Markup {
     let s = ctx.s;
-    let posts = [("1", "highload"), ("2", "efficiency"), ("3", "security"), ("4", "design")];
     html! {
         section id="lab" class="sec sec--lab" aria-labelledby="lab-title" {
             div class="wrap" {
@@ -399,13 +400,20 @@ fn lab(ctx: &Ctx) -> Markup {
                     h2 class="sec__title" id="lab-title" { (s.t("lab-title")) }
                     p class="lead" { (s.t("lab-lead")) }
                 }
-                ol class="lab" role="list" {
-                    @for (n, pillar) in posts {
-                        li class="lab__post" {
-                            span class="lab__pillar mono" { (s.t(&format!("pillar-{pillar}"))) }
-                            span class="lab__title" { (s.t(&format!("lab-post-{n}"))) }
-                            span class="badge badge--plain lab__state" { (s.t("lab-soon")) }
+                @if !ctx.lab.is_empty() {
+                    ol class="lab" role="list" {
+                        @for post in ctx.lab {
+                            li class="lab__post" {
+                                span class="lab__pillar mono" { (s.t(&post.pillar.label_key())) }
+                                a class="lab__title" href=(post.path(ctx.lang)) { (post.title) }
+                                time class="lab__state" datetime=(post.date) { (post.date) }
+                            }
                         }
+                    }
+                    p class="lab__more" {
+                        a href=(crate::lab::index_path(ctx.lang)) { (s.t("lab-all")) }
+                        span aria-hidden="true" { " · " }
+                        a href=(crate::lab::feed_path(ctx.lang)) type="application/atom+xml" { (s.t("lab-feed")) }
                     }
                 }
             }
@@ -420,6 +428,13 @@ fn team(ctx: &Ctx) -> Markup {
         section id="team" class="sec sec--team" data-star="bellatrix" aria-labelledby="team-title" {
             div class="wrap" {
                 (pillar_head(ctx, "bellatrix", "team", "team-eyebrow", "team-title", "team-body"))
+                @if !ctx.cfg.team.is_empty() {
+                    ul class="team-grid" role="list" {
+                        @for m in &ctx.cfg.team {
+                            (member(ctx, m))
+                        }
+                    }
+                }
                 div class="name-story" {
                     h3 class="name-story__title" { (s.t("team-name-title")) }
                     p { (s.t("team-name-star")) }
@@ -436,6 +451,36 @@ fn team(ctx: &Ctx) -> Markup {
                 div class="horizon__sky" aria-hidden="true" { (svg::orion_figure(220.0)) }
                 (ridge)
                 p class="horizon__caption" { (s.t("team-peak")) }
+            }
+        }
+    }
+}
+
+/// One card of the team grid (spec §S12): portrait, name, role, one line, links.
+fn member(ctx: &Ctx, m: &Member) -> Markup {
+    let s = ctx.s;
+    let name = s.t(&format!("team-{}-name", m.id));
+    let host = m.site.trim_start_matches("https://").split('/').next().unwrap_or("");
+    let photo_key = format!("team-{}-photo", m.id);
+    let alt = if s.has(&photo_key) { s.t(&photo_key) } else { s.ta("team-photo-alt", &[("name", name.clone().into())]) };
+    html! {
+        li class="member" {
+            @if let Some(p) = ctx.portraits.get(&m.id) {
+                picture class="member__photo" {
+                    source type="image/avif" srcset=(p.avif);
+                    img src=(p.webp) width="224" height="224" loading="lazy" decoding="async" alt=(alt);
+                }
+            }
+            div class="member__text" {
+                h3 class="member__name" { (name) }
+                p class="member__role" { (s.t(&format!("team-{}-role", m.id))) }
+                p class="member__line" { (s.t(&format!("team-{}-line", m.id))) }
+                ul class="member__links" role="list" {
+                    li { a href=(format!("https://github.com/{}", m.github)) { "github.com/" (m.github) } }
+                    @if !host.is_empty() {
+                        li { a href=(m.site) { (host) } }
+                    }
+                }
             }
         }
     }

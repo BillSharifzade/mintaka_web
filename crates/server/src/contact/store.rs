@@ -147,6 +147,7 @@ mod tests {
             telegram: None,
             company: None,
             proof_of_work: true,
+            ctf_solved: false,
         };
         let path = store.save(&brief).unwrap();
         assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
