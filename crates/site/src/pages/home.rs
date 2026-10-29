@@ -229,8 +229,9 @@ fn security(ctx: &Ctx) -> Markup {
                         ul class="duel__list" role="list" { @for i in 1..=6 { li { (s.rich(&format!("sec-def-{i}"))) } } }
                     }
                 }
-                (instrument("shield", &s.t("sec-shield-id"), &s.t("sec-shield-title"), &s.t("instrument-static"),
-                    html! { p class="instrument__fallback" { (s.t("sec-shield-fallback")) } }, None))
+                (instrument("fuzzer", &s.t("sec-fuzz-id"), &s.t("sec-fuzz-title"), &s.t("instrument-static"),
+                    html! { p class="instrument__fallback" { (s.t("sec-fuzz-fallback")) } },
+                    Some(html! { (s.t("sec-fuzz-foot")) })))
                 div class="armour" {
                     div class="armour__text" {
                         h3 class="armour__title" { (s.t("sec-armour-title")) }
@@ -426,7 +427,7 @@ fn team(ctx: &Ctx) -> Markup {
                     p { (s.t("team-name-pass")) }
                     p class="name-story__end" { (s.t("team-name-end")) }
                 }
-                div class="careers" {
+                div id="careers" class="careers" {
                     p class="careers__line" { (s.t("team-careers")) }
                     a class="btn btn--ghost" href=(format!("mailto:{}", ctx.cfg.contact.careers_email)) { (s.t("team-join")) }
                 }

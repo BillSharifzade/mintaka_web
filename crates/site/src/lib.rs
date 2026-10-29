@@ -243,7 +243,9 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
             "hud" => Some(6_000),
             "terminal" => Some(8_000),
             "pow" => Some(4_000),
-            "physics" | "armour" | "trace" | "live" | "laws" | "contact" | "routing" | "shield" | "loadsim" => Some(15_000),
+            "physics" | "armour" | "trace" | "live" | "laws" | "contact" | "routing" | "loadsim" => Some(15_000),
+            // Three chapters, the coverage sky, the crash minimiser and a hand-input panel.
+            "fuzzer" => Some(21_000),
             _ => None,
         }
     };

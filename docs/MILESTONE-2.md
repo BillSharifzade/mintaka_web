@@ -1,7 +1,7 @@
 # Milestone 2 — WebAssembly instruments (28 October 2026)
 
-Tests now: 121 Rust (generator, server, router incl. 1,000 real-pair agreement, simulator) and
-114 TypeScript, all green; release build within every budget.
+Tests now: 129 Rust (generator, server, router incl. 1,000 real-pair agreement, simulator, fuzzer)
+and 127 TypeScript, all green; release build within every budget.
 
 ## Pipeline
 
@@ -49,9 +49,32 @@ files from `assets/data/*.bin` the same way (3 MB budget). Conventions: docs/CON
   Back at ×1, the naive system needs ~30 s to drain work nobody is waiting for.
 - 40.3 kB of WebAssembly, 10.4 kB island; says "simulation" on screen; no network calls.
 
-## S5 · Try to break this — on hold
+## S5 · Attack our code — done
 
-The payload analyser (recognise classic attack strings, explain which defence stops each) was
-paused when an automated safety check stopped the worker building its pattern corpus. It is
-defensive and runs only in the visitor's browser, but it needs the owner's explicit go-ahead
-before work resumes. The S5 frame shows its static explanation until then.
+The original "Try to break this" payload analyser was dropped. In its slot, between the
+offence/defence lists and "This page's armour", S5 now shows a fuzzer attacking our own code.
+
+- **What it is** (`crates/fuzzer`, no dependencies): a small coverage-guided fuzzer in the spirit of
+  libFuzzer/AFL, attacking a parser for a tiny binary star-chart format. The parser ships in two
+  builds: v1 trusts a length byte from its input (`target.rs:129`), v2 is the one-line fix two lines
+  below. 39 hand-placed coverage points; seeded xorshift64\*, so every run replays from its seed.
+- **Three chapters in the browser:** *Attack* starts from four meaningless bytes (`star`), learns
+  the format with no dictionary, lights Orion path by path from Meissa down to Saiph, and crashes
+  v1 — the card shows Rust's own panic message captured through the panic hook
+  (`panicked at crates/fuzzer/src/target.rs:129:42`), the input minimised to its 1-minimal core,
+  and the fix as a two-line diff. *Fix* runs v2 for 10,000,000 inputs: 0 crashes, 38 of 39 paths
+  (the dark one, a chart named exactly MINTAKA, explains what coverage feedback can't see).
+  *Compare* runs the same engine blind: 2 of 39 paths. Plus *Try to crash it yourself*, whose
+  crash message links to `#careers`.
+- **Measured here:** the bug is found after 7,492–510,441 inputs over 20 seeds (median 39,127);
+  in Chrome a guided run found it after 38,164 inputs in 5.0 s of Watch mode; the fixed build took
+  10 M inputs in 9.0 s of fuzzing time; blind reached 2 paths in 7.8 M inputs. No console errors or
+  CSP/Trusted Types violations; no horizontal scroll at 390 px.
+- **Tests:** 8 Rust (the bug is real, the fix holds over 2 M random and mutated inputs, guidance
+  finds it for all 20 seeds, blind never passes the header, determinism) and 13 TypeScript against
+  the built module (panic location matches the source line, minimisation, strings both ways).
+- 26.3 kB of WebAssembly, 20.5 kB island (its own 21 kB budget); runs only after a click and only
+  while on screen, in ≤ 10 ms main-thread slices; touches nothing but the embedded parser.
+- Built from a drop-in prepared outside this repo, then ported to the house conventions: shared
+  `h`/`t`/`assetUrl`, rendering inside the instrument frame, strings in `fuzzer.ftl`, tokens and
+  components in CSS, tests against the built module instead of a checked-in binary.

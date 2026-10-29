@@ -12,8 +12,8 @@ the landing-page concept and build spec, kept outside this repository (referred 
 | Site generator and build pipeline | `crates/site/`, `xtask/`, `content/en/page.ftl`, `web/styles/sections/` | main |
 | Hero engine, constellation nav | `web/hero/`, `web/nav/` | main |
 | S4 routing race (Rust → WebAssembly) | `crates/routing/`, `web/instruments/routing/`, `assets/data/dushanbe.*`, `routing.css`, `routing.ftl` | main |
+| S5 fuzzer (Rust → WebAssembly) | `crates/fuzzer/`, `web/instruments/fuzzer/`, `fuzzer.css`, `fuzzer.ftl` | main |
 | S6 overload lab (Rust → WebAssembly) | `crates/loadsim/`, `web/instruments/loadsim/`, `loadsim.css`, `loadsim.ftl` | worker C |
-| S5 payload analyser (Rust → WebAssembly) | `crates/shield/`, `web/instruments/shield/` — **on hold, awaiting the owner's go-ahead** | — |
 | Server | `crates/server/`, `crates/proof/src/{proof,telemetry,contact}.rs` (+ re-exports in `lib.rs`), `deploy/`, `bench/` | worker A |
 | Proof console, terminal, console greeting, S2 physics, S5 armour | `web/hud/`, `web/terminal/`, `web/console/`, `web/instruments/{physics,armour}.ts`, `web/instruments/tz/`, matching `web/styles/islands/*.css` and `content/en/islands/*.ftl` | worker B |
 | S6 follow one request, S6 live load, S7 laws you can feel, S13 contact | `web/instruments/{trace,live,contact,pow.worker}.ts`, `web/instruments/laws/`, matching CSS and FTL | worker C |
@@ -406,18 +406,17 @@ glyph is on screen) — avoid them above the fold.
 
 ## 13. WebAssembly instruments
 
-Three instruments are Rust compiled to WebAssembly: S4 `routing` (main), S5 `shield` (worker B),
-S6 `loadsim` (worker C). Each is a crate under `crates/<name>`:
+Three instruments are Rust compiled to WebAssembly: S4 `routing`, S5 `fuzzer` and S6 `loadsim`. Each is a crate under `crates/<name>`:
 
 ```toml
 [package]
-name = "shield"            # = the island name = the asset name
+name = "loadsim"           # = the island name = the asset name
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
 [lib]
-crate-type = ["cdylib", "rlib"]   # cdylib for wasm32, rlib so `cargo test -p shield` runs natively
+crate-type = ["cdylib", "rlib"]   # cdylib for wasm32, rlib so `cargo test -p loadsim` runs natively
 
 [package.metadata.mintaka]
 wasm = true                # tells `cargo xtask build` to compile it for wasm32
@@ -442,5 +441,13 @@ wasm-bindgen = "=0.2.128"  # MUST equal the installed wasm-bindgen CLI (Arch pac
   cross-origin isolated). No OS randomness: take seeds from JS. Keep dependencies minimal — prefer
   returning typed arrays or small hand-written JSON over pulling in serde for the wasm build.
   Strings crossing into JS: offsets in **UTF-16 code units**, not bytes.
-- **Budgets:** each `.wasm` ≤ 250 kB (checked by the build), each island ≤ 15 kB minified.
+- **Without bindgen:** a crate whose metadata also says `bindgen = false` (S5 `fuzzer`) exports plain
+  `extern "C"` functions; xtask copies the module to `web/wasm/<name>/<name>_bg.wasm` and runs
+  wasm-opt, and the island compiles it itself (`WebAssembly.compileStreaming(fetch(assetUrl(…)))`)
+  and reads results straight from linear memory. The fuzzer needs this: a parser panic must abort
+  (`panic = "abort"`, inherited from the release profile) so the host catches the trap as a
+  `WebAssembly.RuntimeError` and reads the panic message the hook saved in atomics. Its TS tests
+  load the built module from `web/wasm/fuzzer/`, so run `cargo xtask build` before `node --test`.
+- **Budgets:** each `.wasm` ≤ 250 kB (checked by the build), each island ≤ 15 kB minified — except
+  `fuzzer` at 21 kB (three chapters, the coverage sky, a crash minimiser and a hand-input panel).
 - CSP already allows WebAssembly (`'wasm-unsafe-eval'`); nothing else changes.

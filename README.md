@@ -29,7 +29,7 @@ cargo xtask graph [--fetch]      # rebuild assets/data/dushanbe.bin from OpenStr
 
 Check it from a terminal: `curl http://127.0.0.1:8761/` (curl mode), `curl -sk https://127.0.0.1:8762/_proof` (look for `"group": "X25519MLKEM768"`).
 
-Tests: `cargo test -p site -p proof -p server` · `npx tsc --noEmit -p .` · `node --test "web/**/*.test.ts"`.
+Tests: `cargo test --workspace` · `npx tsc --noEmit -p .` · `node --test "web/**/*.test.ts"` (after one `cargo xtask build`: the fuzzer tests load the built module).
 
 ## How it fits together
 
@@ -49,12 +49,13 @@ assets/ (fonts, brand kit files) ─────┘                             
 | `crates/site` | Generator: Maud templates (`src/pages/`), Fluent strings, Lightning CSS, font `@font-face` + metric-matched fallbacks + a WOFF2 glyph-coverage check, curl-mode ANSI art rasterised from the logo SVG, `security.txt`/`sitemap.xml`/`humans.txt`, precompression, budgets |
 | `crates/server` | The server: headers, Server-Timing (incl. kernel RTT), `/_proof`, `/_telemetry` (SSE), `/_ping`, curl mode, 404 suggestions, contact API with proof of work and age encryption |
 | `crates/proof` | Types shared by both (manifest, `/_proof`, telemetry, contact) |
+| `crates/fuzzer` | S5: a coverage-guided fuzzer attacking a small parser of ours (v1 with one bug, v2 fixed) → WebAssembly without bindgen |
 | `crates/routing` | S4: road graph, Dijkstra, A*, our own Contraction Hierarchies (build-time `prep` feature turns an OpenStreetMap extract into `assets/data/dushanbe.bin`) → WebAssembly |
 | `crates/loadsim` | S6: discrete-event queueing simulator (naive vs. load-shedding + autoscaling) → WebAssembly |
 | `xtask` | `cargo xtask build / dev` |
 | `web/hero` | The hourglass engine: WebGL2 transform-feedback particle simulation in logo space (tier B), Canvas 2D twin (tier C), static poster (tier D) |
 | `web/hud`, `web/terminal`, `web/console` | Proof console (`P`), terminal (`~`), DevTools greeting + `mintaka.help()` |
-| `web/instruments` | S2 physics, S5 armour, S6 follow-one-request + live load, S7 laws you can feel, S13 contact (+ proof-of-work worker) |
+| `web/instruments` | S2 physics, S4 routing race, S5 fuzzer + armour, S6 follow-one-request + live load + overload lab, S7 laws you can feel, S13 contact (+ proof-of-work worker) |
 | `web/nav` | Constellation navigation ("you are here") |
 | `web/shared` | DOM builder (Trusted Types–safe), strings, `/_proof` client, timing, bus, formatting |
 | `content/` | `site.toml` (published facts + claims to verify), `en/page.ftl`, `en/islands/*.ftl` |

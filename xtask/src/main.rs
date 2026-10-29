@@ -69,7 +69,9 @@ fn graph(root: &Path, fetch: bool) -> Result<()> {
 }
 
 /// Crates marked `[package.metadata.mintaka] wasm = true`, by package name.
-fn wasm_crates(root: &Path) -> Result<Vec<String>> {
+/// Crates marked `[package.metadata.mintaka] wasm = true`, and whether they use wasm-bindgen
+/// (`bindgen = false` ships the module as compiled, for plain C-ABI exports).
+fn wasm_crates(root: &Path) -> Result<Vec<(String, bool)>> {
     let mut out = vec![];
     for entry in std::fs::read_dir(root.join("crates"))? {
         let manifest = entry?.path().join("Cargo.toml");
@@ -81,14 +83,16 @@ fn wasm_crates(root: &Path) -> Result<Vec<String>> {
             .lines()
             .find_map(|l| l.trim().strip_prefix("name = \"").and_then(|r| r.strip_suffix('"')))
             .with_context(|| format!("no package name in {}", manifest.display()))?;
-        out.push(name.to_owned());
+        let bindgen = !text.lines().any(|l| l.trim() == "bindgen = false");
+        out.push((name.to_owned(), bindgen));
     }
     out.sort();
     Ok(out)
 }
 
 /// Rust → WebAssembly: one cargo build for every instrument crate, then wasm-bindgen glue into
-/// `web/wasm/<name>/` (bundled by esbuild with the island that imports it) and wasm-opt.
+/// `web/wasm/<name>/` (bundled by esbuild with the island that imports it) and wasm-opt. Either
+/// way the module ends up as `web/wasm/<name>/<name>_bg.wasm`, which the generator ships.
 fn wasm(root: &Path) -> Result<()> {
     let crates = wasm_crates(root)?;
     if crates.is_empty() {
@@ -96,28 +100,33 @@ fn wasm(root: &Path) -> Result<()> {
     }
     let mut cmd = Command::new("cargo");
     cmd.current_dir(root).args(["build", "--quiet", "--target", "wasm32-unknown-unknown", "--profile", "wasm"]);
-    for c in &crates {
+    for (c, _) in &crates {
         cmd.args(["-p", c]);
     }
     if !cmd.status().context("running cargo for wasm32")?.success() {
         bail!("WebAssembly build failed (is the target installed? `pacman -S rust-wasm`)");
     }
-    for c in &crates {
+    for (c, bindgen) in &crates {
         let lib = c.replace('-', "_");
         let input = root.join(format!("target/wasm32-unknown-unknown/wasm/{lib}.wasm"));
         let out_dir = root.join("web/wasm").join(c);
-        let ok = Command::new("wasm-bindgen")
-            .args(["--target", "web", "--out-name", c])
-            .arg("--out-dir")
-            .arg(&out_dir)
-            .arg(&input)
-            .status()
-            .context("running wasm-bindgen (`pacman -S wasm-bindgen`)")?
-            .success();
-        if !ok {
-            bail!("wasm-bindgen failed for {c}");
-        }
         let bg = out_dir.join(format!("{c}_bg.wasm"));
+        if *bindgen {
+            let ok = Command::new("wasm-bindgen")
+                .args(["--target", "web", "--out-name", c])
+                .arg("--out-dir")
+                .arg(&out_dir)
+                .arg(&input)
+                .status()
+                .context("running wasm-bindgen (`pacman -S wasm-bindgen`)")?
+                .success();
+            if !ok {
+                bail!("wasm-bindgen failed for {c}");
+            }
+        } else {
+            std::fs::create_dir_all(&out_dir)?;
+            std::fs::copy(&input, &bg).with_context(|| format!("copying {}", input.display()))?;
+        }
         let ok = Command::new("wasm-opt")
             .args([
                 "-O3",

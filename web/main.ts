@@ -42,7 +42,7 @@ const islands: Record<string, () => Promise<Island>> = {
   laws: () => import('./instruments/laws/index.ts'),
   contact: () => import('./instruments/contact.ts'),
   routing: () => import('./instruments/routing/index.ts'),
-  shield: () => import('./instruments/shield/index.ts'),
+  fuzzer: () => import('./instruments/fuzzer/index.ts'),
   loadsim: () => import('./instruments/loadsim/index.ts'),
 };
 

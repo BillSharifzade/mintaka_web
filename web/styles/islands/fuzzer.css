@@ -1,0 +1,545 @@
+/* S5 · Attack our code (web/instruments/fuzzer/). Crash is Danger, never rust: rust stays for
+   Betelgeuse on the sky and the page CTA. */
+@layer islands {
+  .fz {
+    container-type: inline-size;
+  }
+
+  .fz__layout {
+    display: grid;
+    gap: var(--s-5);
+  }
+
+  @container (min-width: 50rem) {
+    .fz__layout {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+      align-items: start;
+    }
+  }
+
+  .fz [hidden] {
+    display: none !important;
+  }
+
+  /* ── sky and counters ──────────────────────────────────────────────── */
+
+  .fz__sky {
+    display: grid;
+    border: 1px solid var(--border);
+    border-radius: var(--r-control);
+    background: radial-gradient(120% 80% at 45% 30%, var(--ink) 0%, var(--void) 70%);
+    overflow: hidden;
+  }
+
+  .fz-sky {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 34rem;
+    padding: var(--s-3) var(--s-3) 0;
+  }
+
+  .fz-sky__guides line {
+    stroke: var(--graphite);
+    stroke-width: 1;
+    stroke-dasharray: 2 4;
+  }
+
+  .fz-sky__link {
+    stroke: var(--mist);
+    stroke-width: 1.2;
+    opacity: 0;
+    transition: opacity var(--t-reveal) var(--ease-enter);
+  }
+
+  .fz-sky__link.is-lit {
+    opacity: 0.5;
+  }
+
+  .fz-sky__link--crash {
+    stroke: var(--danger);
+    stroke-width: 1.6;
+  }
+
+  .fz-sky__link--crash.is-lit {
+    opacity: 0.9;
+  }
+
+  .fz-sky__dot {
+    fill: var(--graphite);
+    transition: fill var(--t-ui) var(--ease-enter);
+  }
+
+  .fz-sky__dot.is-lit {
+    fill: var(--starlight);
+  }
+
+  .fz-sky__dot--betelgeuse.is-lit {
+    fill: var(--betelgeuse);
+  }
+
+  .fz-sky__dot--mintaka.is-lit {
+    fill: var(--mintaka);
+  }
+
+  .fz-sky__dot--saiph.is-crash {
+    fill: var(--danger);
+  }
+
+  .fz-sky__dot.is-you {
+    stroke: var(--sky);
+    stroke-width: 1.6;
+  }
+
+  .fz-sky__name {
+    font-size: 9px;
+    letter-spacing: 0.04em;
+    fill: var(--mist);
+    opacity: 0;
+    transition: opacity var(--t-reveal) var(--ease-enter);
+  }
+
+  .fz-sky__name.is-lit {
+    opacity: 1;
+  }
+
+  .fz-sky__name.is-crash {
+    fill: var(--danger);
+  }
+
+  .fz-sky__pulse {
+    fill: none;
+    stroke: var(--starlight);
+    stroke-width: 0.8;
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: fz-pulse var(--t-scene) var(--ease-exit) forwards;
+  }
+
+  .fz-sky__pulse--crash {
+    stroke: var(--danger);
+    stroke-width: 1.5;
+    animation-duration: 1.6s;
+  }
+
+  @keyframes fz-pulse {
+    from {
+      opacity: 0.8;
+      transform: scale(1);
+    }
+
+    to {
+      opacity: 0;
+      transform: scale(3.2);
+    }
+  }
+
+  .fz__stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--s-3);
+    margin: 0;
+    padding: var(--s-3) var(--s-4) var(--s-4);
+    border-block-start: 1px solid var(--border);
+  }
+
+  .fz__stat {
+    display: grid;
+    gap: var(--s-1);
+    min-width: 0;
+  }
+
+  .fz__stat-label {
+    font-size: var(--fs-xs);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--text-2);
+  }
+
+  .fz__stat-value {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-feature-settings: "tnum" 1;
+    font-size: var(--fs-md);
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  .fz__stat.is-alert .fz__stat-value {
+    color: var(--danger);
+  }
+
+  /* ── story and controls ────────────────────────────────────────────── */
+
+  .fz__side {
+    display: grid;
+    gap: var(--s-4);
+    min-width: 0;
+  }
+
+  .fz__chapters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-2) var(--s-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--fs-sm);
+    color: var(--text-2);
+  }
+
+  .fz__chapter {
+    display: flex;
+    align-items: center;
+    gap: var(--s-2);
+  }
+
+  .fz__chapter[aria-current="step"] {
+    color: var(--text);
+  }
+
+  .fz__chapter-n {
+    display: inline-grid;
+    place-items: center;
+    width: 1.375rem;
+    height: 1.375rem;
+    border: 1px solid var(--border-strong);
+    border-radius: 50%;
+    font-size: var(--fs-xs);
+  }
+
+  .fz__chapter[aria-current="step"] .fz__chapter-n {
+    border-color: var(--starlight);
+  }
+
+  .fz__chapter.is-done .fz__chapter-n {
+    border-color: var(--mintaka);
+    background: var(--mintaka);
+    color: var(--void);
+  }
+
+  .fz__lead {
+    max-width: var(--measure);
+    color: var(--text-2);
+  }
+
+  .fz__controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s-2) var(--s-3);
+  }
+
+  .fz__go {
+    border-color: var(--mintaka);
+  }
+
+  .fz__pace {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-2);
+  }
+
+  .fz__hint {
+    margin-block-start: calc(-1 * var(--s-2));
+    font-size: var(--fs-sm);
+    color: var(--text-2);
+  }
+
+  /* ── log ───────────────────────────────────────────────────────────── */
+
+  .fz__log {
+    max-height: 12.5rem;
+    margin: 0;
+    padding: var(--s-2) var(--s-3);
+    overflow: auto;
+    list-style: none;
+    border: 1px solid var(--border);
+    border-radius: var(--r-control);
+    background: var(--void);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    scrollbar-color: var(--graphite) transparent;
+  }
+
+  .fz__log:empty {
+    display: none;
+  }
+
+  .fz__log-item {
+    display: grid;
+    grid-template-columns: 5.4em 6.4em minmax(0, 1fr);
+    column-gap: var(--s-2);
+  }
+
+  .fz__log-time,
+  .fz__log-tag,
+  .fz__log-bytes {
+    color: var(--text-2);
+  }
+
+  .fz__log-time {
+    font-feature-settings: "tnum" 1;
+  }
+
+  .fz__log-item--new .fz__log-tag {
+    color: var(--sky);
+  }
+
+  .fz__log-item--crash .fz__log-tag,
+  .fz__log-item--crash .fz__log-text {
+    color: var(--danger);
+  }
+
+  .fz__log-text {
+    color: var(--text);
+    overflow-wrap: anywhere;
+  }
+
+  .fz__log-bytes {
+    grid-column: 3;
+    overflow: hidden;
+    white-space: pre;
+    text-overflow: ellipsis;
+  }
+
+  @container (max-width: 30rem) {
+    .fz__log-item {
+      grid-template-columns: 4.8em minmax(0, 1fr);
+    }
+
+    .fz__log-tag {
+      display: none;
+    }
+
+    .fz__log-bytes {
+      grid-column: 2;
+    }
+  }
+
+  /* ── result cards ──────────────────────────────────────────────────── */
+
+  .fz__result:empty {
+    display: none;
+  }
+
+  .fz__card {
+    display: grid;
+    gap: var(--s-2);
+    padding: var(--s-4);
+    border: 1px solid var(--border);
+    border-inline-start: 3px solid var(--mist);
+    border-radius: var(--r-control);
+    background: var(--void);
+    font-size: var(--fs-sm);
+  }
+
+  .fz__card--crash {
+    border-inline-start-color: var(--danger);
+  }
+
+  .fz__card--safe {
+    border-inline-start-color: var(--success);
+  }
+
+  .fz__card-title {
+    font-size: var(--fs-md);
+    font-weight: 500;
+    letter-spacing: 0;
+  }
+
+  .fz__card-label {
+    margin-block-start: var(--s-2);
+    font-size: var(--fs-xs);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--text-2);
+  }
+
+  .fz__code {
+    margin: 0;
+    padding: var(--s-2) var(--s-3);
+    border-radius: 6px;
+    background: var(--ink);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: var(--text);
+  }
+
+  .fz__code--diff {
+    overflow-x: auto;
+    white-space: pre;
+    overflow-wrap: normal;
+  }
+
+  .fz__del {
+    color: var(--danger);
+  }
+
+  .fz__add {
+    color: var(--success);
+  }
+
+  .fz__bytes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-3);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+  }
+
+  .fz__bytes code {
+    font-family: inherit;
+    color: var(--text);
+  }
+
+  .fz__bytes .fz__bytes-ascii {
+    color: var(--text-2);
+  }
+
+  .fz__note {
+    color: var(--text-2);
+  }
+
+  /* ── try it yourself ───────────────────────────────────────────────── */
+
+  .fz__try {
+    padding-block-start: var(--s-4);
+    border-block-start: 1px solid var(--border);
+    font-size: var(--fs-sm);
+  }
+
+  .fz__try summary {
+    display: flex;
+    align-items: center;
+    gap: var(--s-2);
+    min-height: var(--tap);
+    font-weight: 500;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .fz__try summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .fz__try summary::before {
+    content: "+";
+    width: 1em;
+    font-family: var(--font-mono);
+    color: var(--sky);
+  }
+
+  .fz__try[open] summary::before {
+    content: "−";
+  }
+
+  .fz__try-lead,
+  .fz__try-format {
+    margin-block-start: var(--s-2);
+    max-width: var(--measure);
+    color: var(--text-2);
+  }
+
+  .fz__try-label {
+    display: block;
+    margin-block: var(--s-4) var(--s-2);
+    font-size: var(--fs-xs);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--text-2);
+  }
+
+  .fz__try-input {
+    width: 100%;
+    min-height: var(--tap);
+    padding: var(--s-2) var(--s-3);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-control);
+    background: var(--void);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: var(--fs-sm);
+  }
+
+  .fz__try-input:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  .fz__try-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s-3);
+    margin-block-start: var(--s-3);
+  }
+
+  .fz__try-builds,
+  .fz__try-examples {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-2);
+  }
+
+  .fz__try-examples {
+    margin-block-start: var(--s-3);
+  }
+
+  .fz__try-out {
+    margin-block-start: var(--s-3);
+    padding-inline-start: var(--s-3);
+    border-inline-start: 3px solid transparent;
+  }
+
+  .fz__try-out:empty {
+    display: none;
+  }
+
+  .fz__try-out[data-kind="ok"] {
+    border-inline-start-color: var(--success);
+  }
+
+  .fz__try-out[data-kind="rejected"] {
+    border-inline-start-color: var(--mist);
+  }
+
+  .fz__try-out[data-kind="crash"],
+  .fz__try-out[data-kind="invalid"] {
+    border-inline-start-color: var(--danger);
+  }
+
+  .fz__try-panic {
+    display: block;
+    margin-block-start: var(--s-2);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .fz-sky__link,
+    .fz-sky__dot,
+    .fz-sky__name {
+      transition: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .fz-sky__dot.is-lit {
+      fill: CanvasText;
+    }
+
+    .fz-sky__link.is-lit {
+      stroke: CanvasText;
+    }
+
+    .fz-sky__dot--saiph.is-crash,
+    .fz-sky__link--crash.is-lit {
+      fill: Highlight;
+      stroke: Highlight;
+    }
+  }
+}
