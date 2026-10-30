@@ -6,6 +6,7 @@
 //! folds the shards into a 10-slot ring, reads `/proc/self`, and publishes one pre-serialised
 //! `event: tick` frame through a `watch` channel that every stream reads.
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -15,6 +16,7 @@ use hdrhistogram::Histogram;
 use proof::{TelemetryHello, TelemetryTick};
 use tokio::sync::watch;
 
+use crate::contact::ClientNet;
 use crate::headers::micros;
 
 /// Seconds of history behind the percentiles.
@@ -267,33 +269,55 @@ pub(crate) mod procfs {
     }
 }
 
-/// Caps concurrent `/_telemetry` streams.
+/// Concurrent `/_telemetry` streams one network (/24 or /48) may hold: a few tabs and devices,
+/// never the whole process cap.
+pub(crate) const STREAMS_PER_NETWORK: usize = 4;
+
+/// Caps concurrent `/_telemetry` streams, in total and per network.
 pub(crate) struct StreamLimit {
-    active: Arc<AtomicUsize>,
+    active: Arc<Mutex<Active>>,
     max: usize,
 }
 
+#[derive(Default)]
+struct Active {
+    total: usize,
+    per_net: HashMap<ClientNet, usize>,
+}
+
 /// One admitted stream; releases its slot on drop.
-pub(crate) struct StreamPermit(Arc<AtomicUsize>);
+pub(crate) struct StreamPermit {
+    active: Arc<Mutex<Active>>,
+    net: ClientNet,
+}
 
 impl StreamLimit {
     pub fn new(max: usize) -> Self {
-        StreamLimit { active: Arc::new(AtomicUsize::new(0)), max }
+        StreamLimit { active: Arc::new(Mutex::new(Active::default())), max }
     }
 
-    pub fn try_acquire(&self) -> Option<StreamPermit> {
-        if self.active.fetch_add(1, Ordering::AcqRel) < self.max {
-            Some(StreamPermit(Arc::clone(&self.active)))
-        } else {
-            self.active.fetch_sub(1, Ordering::AcqRel);
-            None
+    pub fn try_acquire(&self, net: ClientNet) -> Option<StreamPermit> {
+        let mut a = self.active.lock().unwrap_or_else(PoisonError::into_inner);
+        let mine = a.per_net.get(&net).copied().unwrap_or(0);
+        if a.total >= self.max || mine >= STREAMS_PER_NETWORK {
+            return None;
         }
+        a.total += 1;
+        a.per_net.insert(net, mine + 1);
+        Some(StreamPermit { active: Arc::clone(&self.active), net })
     }
 }
 
 impl Drop for StreamPermit {
     fn drop(&mut self) {
-        self.0.fetch_sub(1, Ordering::AcqRel);
+        let mut a = self.active.lock().unwrap_or_else(PoisonError::into_inner);
+        a.total = a.total.saturating_sub(1);
+        if let Some(n) = a.per_net.get_mut(&self.net) {
+            *n -= 1;
+            if *n == 0 {
+                a.per_net.remove(&self.net);
+            }
+        }
     }
 }
 
@@ -324,12 +348,21 @@ mod tests {
 
     #[test]
     fn stream_limit() {
+        let net = |last: u8| ClientNet::of(std::net::IpAddr::from([198, 51, last, 1]));
         let limit = StreamLimit::new(2);
-        let a = limit.try_acquire().unwrap();
-        let _b = limit.try_acquire().unwrap();
-        assert!(limit.try_acquire().is_none());
+        let a = limit.try_acquire(net(1)).unwrap();
+        let _b = limit.try_acquire(net(2)).unwrap();
+        assert!(limit.try_acquire(net(3)).is_none(), "the process cap");
         drop(a);
-        assert!(limit.try_acquire().is_some());
+        assert!(limit.try_acquire(net(3)).is_some());
+
+        let limit = StreamLimit::new(64);
+        let mine: Vec<_> = (0..STREAMS_PER_NETWORK).map(|_| limit.try_acquire(net(7)).unwrap()).collect();
+        assert!(limit.try_acquire(net(7)).is_none(), "one network can't take every slot");
+        assert!(limit.try_acquire(net(8)).is_some(), "others still get in");
+        drop(mine);
+        assert!(limit.try_acquire(net(7)).is_some(), "slots come back when streams end");
+        assert!(limit.active.lock().unwrap().per_net.len() <= 2, "empty networks are forgotten");
     }
 
     #[cfg(target_os = "linux")]

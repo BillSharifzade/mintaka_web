@@ -2,8 +2,11 @@
 //!
 //! Each connection gets a [`ConnService`] that stamps every request with a [`ReqCtx`] — the
 //! instant its head was parsed, the connection's facts (id, TLS, request count) and the kernel's
-//! RTT for the socket — and hands it to [`respond`], which HTTP/3 (`quic`) shares: the router,
-//! then [`routes::finish`] for the headers every response carries.
+//! RTT for the socket — and hands it to [`respond`], which HTTP/3 (`quic`) shares: the site's URL
+//! prefix off, the router, then [`routes::finish`] for the headers every response carries.
+//!
+//! A connection from a `--trusted-proxy` carries many visitors' requests: each request's visitor
+//! network comes from the proxy's header, and the socket's RTT (the proxy hop) is not reported.
 //!
 //! A ClientHello that offers only `acme-tls/1` is an ACME validation: it gets the challenge
 //! configuration, and the connection ends with the handshake.
@@ -20,7 +23,8 @@ use std::time::{Duration, Instant};
 use axum::Router;
 use axum::response::Response;
 use bytes::Bytes;
-use http::Request;
+use http::uri::PathAndQuery;
+use http::{HeaderMap, Request, Uri};
 use hyper::body::Incoming;
 use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
 use hyper_util::server::conn::auto;
@@ -45,6 +49,9 @@ pub(crate) const FIRST_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 /// …and send each complete HTTP/1.1 request head (HTTP/3: each request's HEADERS) within this
 /// time (also closes idle keep-alive connections).
 pub(crate) const HEADER_READ_TIMEOUT: Duration = Duration::from_secs(10);
+/// The largest HTTP/1.1 request head we buffer (hyper's default is ~400 KiB). Ours are a few
+/// hundred bytes; cookies other applications on a shared host set for it can add a few KiB.
+const MAX_HEAD_BYTES: usize = 64 * 1024;
 
 /// Process-local connection ids, starting at 1. Never derived from the client.
 static NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(1);
@@ -61,13 +68,20 @@ pub(crate) struct ConnInfo {
     pub tls: Option<TlsFacts>,
     /// Requests received so far (the current one included, once counted).
     requests: AtomicU64,
-    /// The client's /24 or /48, for rate limiting. The address itself is not kept.
+    /// The peer's /24 or /48, for rate limiting. The address itself is not kept.
     pub client_net: ClientNet,
+    /// The peer is the `--trusted-proxy`: requests name their visitor in a header.
+    pub proxied: bool,
 }
 
 impl ConnInfo {
     pub fn new(id: u64, tls: Option<TlsFacts>, client_net: ClientNet) -> Arc<ConnInfo> {
-        Arc::new(ConnInfo { id, tls, requests: AtomicU64::new(0), client_net })
+        Arc::new(ConnInfo { id, tls, requests: AtomicU64::new(0), client_net, proxied: false })
+    }
+
+    /// A connection from the trusted proxy.
+    pub fn proxied(id: u64, client_net: ClientNet) -> Arc<ConnInfo> {
+        Arc::new(ConnInfo { id, tls: None, requests: AtomicU64::new(0), client_net, proxied: true })
     }
 
     /// Counts a request whose head has arrived; returns its 1-based position.
@@ -94,6 +108,39 @@ pub(crate) struct ReqCtx {
     /// QUIC's own smoothed RTT for the connection (quinn's RFC 9002 estimator), read when the
     /// request arrived. `None` on TCP.
     pub quic_rtt: Option<Duration>,
+    /// The visitor's /24 or /48, for rate limiting: the connection's peer, or behind the trusted
+    /// proxy the address its header names (the peer's when it names none we can read).
+    pub client_net: ClientNet,
+    /// Set when the request came through the trusted proxy.
+    pub edge: Option<Edge>,
+}
+
+/// What the trusted proxy says about the visitor's connection.
+#[derive(Clone, Copy)]
+pub(crate) struct Edge {
+    /// `X-Forwarded-Proto`, when it is `https` or `http`.
+    pub proto: Option<&'static str>,
+}
+
+impl Edge {
+    fn of(headers: &HeaderMap) -> Edge {
+        let proto = match headers.get("x-forwarded-proto").map(|v| v.as_bytes()) {
+            Some(b"https") => Some("https"),
+            Some(b"http") => Some("http"),
+            _ => None,
+        };
+        Edge { proto }
+    }
+}
+
+/// The last address in a forwarding header (`client, proxy1` → `proxy1`; the proxy we trust
+/// appended or set it), as the network to rate-limit.
+fn named_client(headers: &HeaderMap, name: &http::HeaderName) -> Option<ClientNet> {
+    let value = headers.get_all(name).iter().next_back()?.to_str().ok()?;
+    let last = value.rsplit(',').next()?.trim();
+    // `[2001:db8::1]:443` and `203.0.113.7:443` forms, besides the plain address.
+    let ip = last.parse::<std::net::IpAddr>().ok().or_else(|| last.parse::<SocketAddr>().ok().map(|s| s.ip()))?;
+    Some(ClientNet::of(ip))
 }
 
 impl ReqCtx {
@@ -118,6 +165,7 @@ pub(crate) fn http_builder() -> auto::Builder<TokioExecutor> {
         .http1()
         .timer(TokioTimer::new())
         .header_read_timeout(HEADER_READ_TIMEOUT)
+        .max_buf_size(MAX_HEAD_BYTES)
         .keep_alive(true)
         .http2()
         .timer(TokioTimer::new())
@@ -153,7 +201,8 @@ async fn serve(stream: TcpStream, peer: SocketAddr, ctx: Listener, watcher: Watc
     let id = next_connection_id();
 
     let Some(tls) = &ctx.tls else {
-        let conn = ConnInfo::new(id, None, client_net);
+        let proxied = ctx.app.proxy.as_ref().is_some_and(|p| p.trusts(peer.ip()));
+        let conn = if proxied { ConnInfo::proxied(id, client_net) } else { ConnInfo::new(id, None, client_net) };
         let service = ConnService { app: Arc::clone(&ctx.app), router: ctx.router.clone(), conn: Arc::clone(&conn), fd };
         let connection = ctx.http.serve_connection(TokioIo::new(stream), service);
         drive(watcher.watch(connection), &conn).await;
@@ -236,15 +285,35 @@ impl hyper::service::Service<Request<Incoming>> for ConnService {
     fn call(&self, req: Request<Incoming>) -> Self::Future {
         let t0 = Instant::now();
         let seq = self.conn.next_request();
-        let ctx = ReqCtx { t0, conn: Arc::clone(&self.conn), seq, rtt: sys::tcp_rtt(self.fd), quic_rtt: None };
+        let ctx = match self.app.proxy.as_ref().filter(|_| self.conn.proxied) {
+            Some(proxy) => ReqCtx {
+                t0,
+                conn: Arc::clone(&self.conn),
+                seq,
+                // The socket's RTT is the proxy hop's, not the visitor's.
+                rtt: None,
+                quic_rtt: None,
+                client_net: named_client(req.headers(), &proxy.client_ip_header).unwrap_or(self.conn.client_net),
+                edge: Some(Edge::of(req.headers())),
+            },
+            None => ReqCtx {
+                t0,
+                conn: Arc::clone(&self.conn),
+                seq,
+                rtt: sys::tcp_rtt(self.fd),
+                quic_rtt: None,
+                client_net: self.conn.client_net,
+                edge: None,
+            },
+        };
         let router = self.router.clone();
         let app = Arc::clone(&self.app);
         Box::pin(async move { Ok(respond(&app, router, ctx, req).await) })
     }
 }
 
-/// One request, whatever the transport: attach the [`ReqCtx`], route, then
-/// [`routes::finish`] (security headers, Server-Timing, metrics, access log).
+/// One request, whatever the transport: attach the [`ReqCtx`], take the site's URL prefix off,
+/// route, then [`routes::finish`] (security headers, Server-Timing, metrics, access log).
 pub(crate) async fn respond<B>(app: &AppState, mut router: Router, ctx: ReqCtx, mut req: Request<B>) -> Response
 where
     B: http_body::Body<Data = Bytes> + Send + 'static,
@@ -252,7 +321,52 @@ where
 {
     let method = req.method().clone();
     req.extensions_mut().insert(ctx.clone());
-    let Ok(mut response) = router.call(req).await;
+    // RFC 9112 §3.2: an HTTP/1.1 request without Host (and not in absolute form) is a 400.
+    let hostless = req.version() == http::Version::HTTP_11 && req.uri().authority().is_none() && !req.headers().contains_key(http::header::HOST);
+    let mut response = match unprefixed(req.uri(), &app.site.base) {
+        _ if hostless => routes::bad_request("an HTTP/1.1 request needs a Host header\n"),
+        Some(Prefix::Keep) => {
+            let Ok(response) = router.call(req).await;
+            response
+        }
+        Some(Prefix::Strip(uri)) => {
+            *req.uri_mut() = uri;
+            let Ok(response) = router.call(req).await;
+            response
+        }
+        // The bare prefix: on to the root of the site (`/`, prefixed by `finish`).
+        None if req.uri().path() == app.site.base => {
+            let to = req.uri().query().map_or_else(|| "/".to_owned(), |q| format!("/?{q}"));
+            routes::mark(routes::moved(&to), routes::RouteName::Named("(prefix) -> (prefix)/"), Instant::now())
+        }
+        // Outside the prefix is not this site's (another application may live next to it).
+        None => routes::outside_base(),
+    };
     routes::finish(app, &ctx, &method, &mut response);
     response
+}
+
+/// How a request's URI relates to the site's URL prefix.
+enum Prefix {
+    /// No prefix configured: route the URI as it is.
+    Keep,
+    /// Route this URI instead (the prefix taken off).
+    Strip(Uri),
+}
+
+/// `/mintaka/en/?q` → `/en/?q` under `/mintaka`; `None` when the path is outside the prefix (or
+/// is the bare prefix itself).
+fn unprefixed(uri: &Uri, base: &str) -> Option<Prefix> {
+    if base.is_empty() {
+        return Some(Prefix::Keep);
+    }
+    let rest = uri.path().strip_prefix(base).filter(|rest| rest.starts_with('/'))?;
+    let path_and_query = match uri.query() {
+        Some(q) => PathAndQuery::try_from(format!("{rest}?{q}")),
+        None => PathAndQuery::try_from(rest),
+    }
+    .ok()?;
+    let mut parts = uri.clone().into_parts();
+    parts.path_and_query = Some(path_and_query);
+    Uri::from_parts(parts).ok().map(Prefix::Strip)
 }

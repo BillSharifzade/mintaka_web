@@ -1,23 +1,28 @@
 // Proof console: a pill with this page's vital signs and a panel saying where each number comes
 // from. Also fills the footer's live line (#footer-stats). On mount it reads only what the browser
 // already measured, plus GET /_proof; the HEAD request for headers and GET /_rum (other visitors'
-// totals) wait for the panel to open.
+// totals) wait for the panel to open. So do the panel's rows: their text is a lazy string bundle
+// (content/{lang}/islands/lazy/hud.ftl), fetched on the first opening.
 
 import { $, h, num, render, s, type Child } from '../shared/dom.ts';
-import { lang, pluralKey, t, tn, tp } from '../shared/i18n.ts';
+import { lang, loadStrings, numberLocale, pluralKey, t, tn, tp } from '../shared/i18n.ts';
 import { getProof, type Proof } from '../shared/proof.ts';
-import { offlineCopy, pageWeight, serverTiming } from '../shared/timing.ts';
+import { navEntry, offlineCopy, pageWeight, serverTiming } from '../shared/timing.ts';
 import { bytes, duration } from '../shared/format.ts';
 import { on } from '../shared/bus.ts';
 import { offline } from '../shared/env.ts';
 import { track } from '../shared/rum.ts';
-import { cls, clsText, cookies, httpVersion, slowest, tlsVersion, transport, type Shift } from './metrics.ts';
+import { cls, clsText, cookies, httpVersion, nextHop, slowest, tlsVersion, transport, type Shift } from './metrics.ts';
 
 const T = (key: string, vars?: Record<string, string | number>): string => t('hud-' + key, vars);
 const WIDE = ['third', 'tls', 'headers', 'visitors'];
 
 let pill: HTMLButtonElement | undefined;
 let panel: HTMLElement;
+let hud: HTMLElement;
+let list: HTMLElement;
+let built: Promise<boolean> | undefined;
+let opener: Element | null = null; // what had focus when the panel opened, to give it back
 let proof: Proof | null | undefined; // undefined: on its way · null: failed
 let headed = false;
 const cells: Record<string, HTMLElement> = {};
@@ -25,23 +30,14 @@ const rows: Record<string, HTMLElement> = {};
 const parts: Record<string, HTMLElement> = {};
 const L = lang();
 const ms = (x: number) => num(duration(x, L));
-const count = (n: number, cls?: string) => num({ value: new Intl.NumberFormat(L).format(n), unit: '' }, cls);
+const count = (n: number, cls?: string) => num({ value: new Intl.NumberFormat(numberLocale(L)).format(n), unit: '' }, cls);
 const tick = () => s('svg', { class: 'hud-tick', viewBox: '0 0 12 12', 'aria-hidden': 'true' }, s('path', { d: 'M2.5 6.5 5 9l4.5-6' }));
-const set = (key: string, ...value: Child[]) => render(cells[key]!, ...value);
+// A row that isn't built yet (the panel never opened) has nothing to update.
+const set = (key: string, ...value: Child[]) => cells[key] && render(cells[key], ...value);
 const vh = (text: string) => h('span', { class: 'visually-hidden' }, text);
 
 export function mount(): void {
   if (pill) return;
-  const row = (key: string) => {
-    cells[key] = h('dd', { class: 'hud-v' }, T(key === 'inp' ? 'inp-none' : key === 'tier' ? 'tier-none' : 'pending'));
-    return (rows[key] = h(
-      'div',
-      { class: WIDE.includes(key) ? 'hud-row hud-row--wide' : 'hud-row' },
-      h('dt', null, T('k-' + key)),
-      cells[key],
-      h('dd', { class: 'source' }, T('src-' + key)),
-    ));
-  };
   const raw = h('pre', { class: 'hud-raw', id: 'hud-raw', hidden: true });
   const rawButton: HTMLButtonElement = h(
     'button',
@@ -75,7 +71,7 @@ export function mount(): void {
       h('h2', { class: 'hud-title', id: 'hud-title' }, T('title')),
       h('button', { type: 'button', class: 'btn btn--quiet btn--sm hud-close', onclick: () => toggle(false) }, T('close')),
     ),
-    h('dl', { class: 'hud-rows' }, ['server', 'weight', 'third', 'cookies', 'tls', 'headers', 'lcp', 'inp', 'cls', 'tier', 'visitors'].map(row)),
+    (list = h('dl', { class: 'hud-rows' })),
     h('div', { class: 'hud-foot' }, rawButton, raw),
   );
   const onkeydown = (e: KeyboardEvent) => {
@@ -84,11 +80,12 @@ export function mount(): void {
       toggle(false);
     }
   };
-  document.body.append(h('aside', { class: 'hud', 'aria-label': T('region'), onkeydown }, pill, panel));
+  document.body.append((hud = h('aside', { class: 'hud', 'aria-label': T('region'), onkeydown }, pill, panel)));
+  // The panel isn't modal: when focus lands anywhere else on the page, it closes rather than cover
+  // what the visitor is tabbing to (WCAG 2.4.11).
+  document.addEventListener('focusin', (e) => panel.hidden || hud.contains(e.target as Node) || toggle(false, false));
 
   local();
-  vitals();
-  on('tier', (tier) => set('tier', T('tier-' + tier.toLowerCase())), { replay: true });
   getProof().then(
     (p) => ((proof = p), local()),
     () => ((proof = null), local()),
@@ -108,21 +105,59 @@ export function open(): void {
   toggle(true);
 }
 
-function toggle(show = panel.hidden): void {
-  if (show !== panel.hidden) {
-    if (show) panel.focus();
+/** The panel's rows, built with their text the first time it opens (false: the text didn't load). */
+function rowsReady(): Promise<boolean> {
+  built ??= loadStrings('hud').then((ok) => {
+    if (!ok) {
+      built = undefined; // try again on the next opening
+      if (offline()) render(list, h('p', { class: 'hud-sub' }, t('offline-island')));
+      return false;
+    }
+    const row = (key: string) => {
+      cells[key] = h('dd', { class: 'hud-v' }, T(key === 'inp' ? 'inp-none' : key === 'tier' ? 'tier-none' : 'pending'));
+      return (rows[key] = h(
+        'div',
+        { class: WIDE.includes(key) ? 'hud-row hud-row--wide' : 'hud-row' },
+        h('dt', null, T('k-' + key)),
+        cells[key],
+        h('dd', { class: 'source' }, T('src-' + key)),
+      ));
+    };
+    render(list, ['server', 'weight', 'third', 'cookies', 'tls', 'headers', 'lcp', 'inp', 'cls', 'tier', 'visitors'].map(row));
+    vitals();
+    on('tier', (tier) => set('tier', T('tier-' + tier.toLowerCase())), { replay: true });
+    return true;
+  });
+  return built;
+}
+
+function toggle(show = panel.hidden, refocus = true): void {
+  if (!show) {
+    if (panel.hidden) return;
+    panel.hidden = true;
+    pill!.setAttribute('aria-expanded', 'false');
+    // Focus goes back to what opened the panel (a button on the page, or the pill).
+    if (refocus) (opener instanceof HTMLElement && opener.isConnected ? opener : pill!).focus();
     return;
   }
-  panel.hidden = !show;
-  pill!.setAttribute('aria-expanded', String(show));
-  if (!show) return pill!.focus();
-  track('proof_open');
-  if (proof === null) getProof().then((p) => ((proof = p), local()), () => {}); // retry once per opening
-  local();
-  headers();
-  // Other visitors' totals change while the page is open: asked again on every opening.
-  import('./visitors.ts').then((m) => m.show(cells['visitors']!), () => set('visitors', T(offline() ? 'offline' : 'pending')));
-  panel.focus();
+  if (!panel.hidden) return panel.focus();
+  const from = document.activeElement;
+  opener = !from || from === document.body || hud.contains(from) ? pill! : from;
+  // Shown once its rows exist, so the first opening doesn't grow under the reader's eyes.
+  void rowsReady().then((ok) => {
+    if (!panel.hidden) return panel.focus();
+    panel.hidden = false;
+    pill!.setAttribute('aria-expanded', 'true');
+    track('proof_open');
+    if (ok) {
+      if (proof === null) getProof().then((p) => ((proof = p), local()), () => {}); // retry once per opening
+      local();
+      headers();
+      // Other visitors' totals change while the page is open: asked again on every opening.
+      import('./visitors.ts').then((m) => m.show(cells['visitors']!), () => set('visitors', T(offline() ? 'offline' : 'pending')));
+    }
+    panel.focus();
+  });
 }
 
 /** Everything the browser already measured, plus /_proof once it arrives. Cheap; no requests. */
@@ -140,32 +175,39 @@ function local(): void {
     'tls',
     mode === 'pq'
       ? ['PQ', tick(), vh(T('pill-pq'))]
-      : mode === 'dev'
-        ? T('pill-dev')
+      : mode === 'dev' || mode === 'edge'
+        ? T(`pill-${mode}`)
         : mode,
   );
 
-  // Blame the browser only when the API itself is missing; otherwise the server didn't report it.
-  set('server', app !== undefined ? ms(app) : T(offlineCopy() ? 'offline-copy' : 'PerformanceServerTiming' in globalThis ? 'not-reported' : 'na'));
-  set(
-    'weight',
-    'transferSize' in PerformanceResourceTiming.prototype ? num(bytes(w.transferred, L)) : T('na'),
-    ' ',
-    h('span', { class: 'hud-sub' }, tp('hud-requests', w.requests, { cached: w.fromCache })),
-  );
-  set('third', count(third.length, third.length ? 'hud-bad' : ''), third.length > 0 && h('ul', { class: 'hud-list', role: 'list' }, third.map((o) => h('li', null, o))));
-  set(
-    'cookies',
-    count(jar.count, jar.ours ? 'hud-bad' : ''),
-    jar.count > 0 && jar.ours !== undefined && h('span', { class: 'hud-sub' }, T(jar.ours ? 'cookies-ours' : 'cookies-foreign')),
-  );
-  if (proof === null) set('tls', T(offline() ? 'offline' : 'err-proof'));
-  else if (proof) {
-    const http = httpVersion(proof.http.version);
-    const tls = proof.tls;
-    // A fact the server did not report (null) is left out, never filled in.
-    const facts = tls && [tlsVersion(tls.version), tls.cipher, tls.group, http].filter((f) => f !== null);
-    set('tls', facts ? h('span', { class: 'mono' }, facts.join(' · ')) : T('plain', { http }));
+  // The panel's rows exist once it has opened: their text is a lazy string bundle.
+  if (cells['server']) {
+    // Blame the browser only when the API itself is missing; otherwise the server didn't report it.
+    set('server', app !== undefined ? ms(app) : T(offlineCopy() ? 'offline-copy' : 'PerformanceServerTiming' in globalThis ? 'not-reported' : 'na'));
+    set(
+      'weight',
+      'transferSize' in PerformanceResourceTiming.prototype ? num(bytes(w.transferred, L)) : T('na'),
+      ' ',
+      h('span', { class: 'hud-sub' }, tp('hud-requests', w.requests, { cached: w.fromCache })),
+    );
+    set('third', count(third.length, third.length ? 'hud-bad' : ''), third.length > 0 && h('ul', { class: 'hud-list', role: 'list' }, third.map((o) => h('li', null, o))));
+    set(
+      'cookies',
+      count(jar.count, jar.ours ? 'hud-bad' : ''),
+      jar.count > 0 && jar.ours !== undefined && h('span', { class: 'hud-sub' }, T(jar.ours ? 'cookies-ours' : 'cookies-foreign')),
+    );
+    if (proof === null) set('tls', T(offline() ? 'offline' : 'err-proof'));
+    else if (proof) {
+      const http = httpVersion(proof.http.version);
+      const tls = proof.tls;
+      // A fact the server did not report (null) is left out, never filled in.
+      const facts = tls && [tlsVersion(tls.version), tls.cipher, tls.group, http].filter((f) => f !== null);
+      // Behind the hosting edge the server saw only the proxy's hop; the browser knows its own protocol.
+      const edge = () => T('edge', { http: nextHop(navEntry()?.nextHopProtocol) ?? http });
+      set('tls', facts ? h('span', { class: 'mono' }, facts.join(' · ')) : proof.edge ? edge() : T('plain', { http }));
+      const source = rows['tls']?.querySelector('dd.source');
+      if (source && proof.edge) source.textContent = T('src-edge');
+    }
   }
 
   const footer = $('#footer-stats');
@@ -176,7 +218,7 @@ function local(): void {
   // The site's own cookies: what /_proof reports, or what scripts see when that is nothing at all.
   if (jar.ours !== undefined) bits.push(tn(pluralKey('hud-foot-cookies', jar.ours ? jar.count : 0), { n: count(jar.ours ? jar.count : 0) }));
   bits.push(tn(pluralKey('hud-foot-third', third.length), { n: count(third.length) }));
-  if (proof) bits.push([proof.tls ? (proof.tls.post_quantum ? T('foot-pq', { tls: tlsVersion(proof.tls.version) }) : tlsVersion(proof.tls.version)) : T('foot-dev')]);
+  if (proof) bits.push([proof.tls ? (proof.tls.post_quantum ? T('foot-pq', { tls: tlsVersion(proof.tls.version) }) : tlsVersion(proof.tls.version)) : T(proof.edge ? 'foot-edge' : 'foot-dev')]);
   render(footer, T('foot-lead'), ' ', bits.map((bit, i) => [i ? ' · ' : '', ...bit]));
 }
 

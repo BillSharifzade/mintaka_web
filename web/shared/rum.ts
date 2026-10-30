@@ -62,6 +62,10 @@ export interface RumBeacon {
   /** Milliseconds (CLS unitless). */
   metrics?: Partial<Record<Metric, number>>;
   events?: Record<string, number>;
+  /** The A/B test variant this page view shows (docs/CONTRACTS.md §17), on every beacon of a page view our server sent with one. */
+  variant?: string;
+  /** The test's metrics this page view reached for the first time. */
+  converted?: string[];
 }
 
 /** GET /_rum. */
@@ -75,6 +79,23 @@ export interface RumSummary {
   /** The current hour and the 23 before it. */
   day: RumWindow;
   rejected: { invalid: number; rate_limited: number };
+  /** The A/B test of this build since the server started; null when none runs. */
+  experiment: RumExperiment | null;
+}
+
+/** GET /_rum → experiment (crates/proof/src/rum.rs). */
+export interface RumExperiment {
+  id: string;
+  /** The primary metric, an event key. */
+  metric: string;
+  /** Counted, never tested. */
+  secondary: string[];
+  /** `alpha` is shared by the comparisons with the control; `sample_size` is page views per variant. */
+  plan: { baseline: number; mde: number; alpha: number; power: number; sample_size: number };
+  /** Control first. Page views count up to the planned size; conversions are page views that reached the metric. */
+  variants: { id: string; views: number; conversions: number; secondary: Record<string, number> }[];
+  /** Each variant after the control against it; null until every variant has its planned page views. */
+  result: { variant: string; z: number; p: number; significant: boolean }[] | null;
 }
 
 export interface RumWindow {

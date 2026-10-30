@@ -5,6 +5,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -19,3 +20,9 @@ prep = ["dep:serde_json"]
 [dependencies]
 wasm-bindgen = "=0.2.128"
 serde_json = { workspace = true, optional = true }
+
+# The timings of the Lab post on Contraction Hierarchies:
+# `cargo run --release -p routing --features prep --example timing`
+[[example]]
+name = "timing"
+required-features = ["prep"]

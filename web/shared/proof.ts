@@ -1,5 +1,6 @@
 // The server's view of this connection: `GET /_proof` (Cache-Control: no-store).
 // Mirrors the Rust types in crates/proof; docs/CONTRACTS.md is the source of truth.
+import { at } from './base.ts';
 
 export interface Proof {
   server: {
@@ -46,6 +47,11 @@ export interface Proof {
   };
   /** Lower-case names of the security headers sent on this response (then "alt-svc" when HTTP/3 is announced). */
   headers: string[];
+  /**
+   * Set when the visitor's connection ended at a reverse proxy in front of the server (the hosting
+   * edge): `tls` is then null and `connection` describes the proxy's hop. Absent from older servers.
+   */
+  edge?: { proto: string | null } | null;
 }
 
 let cached: Promise<Proof> | null = null;
@@ -53,7 +59,7 @@ let cached: Promise<Proof> | null = null;
 /** Fetch `/_proof` once per page view; pass `{ fresh: true }` to re-measure. */
 export function getProof(opts: { fresh?: boolean } = {}): Promise<Proof> {
   if (!cached || opts.fresh) {
-    cached = fetch('/_proof', { cache: 'no-store', headers: { accept: 'application/json' } }).then(async (r) => {
+    cached = fetch(at('/_proof'), { cache: 'no-store', headers: { accept: 'application/json' } }).then(async (r) => {
       if (!r.ok) throw new Error(`/_proof answered ${r.status}`);
       return (await r.json()) as Proof;
     });

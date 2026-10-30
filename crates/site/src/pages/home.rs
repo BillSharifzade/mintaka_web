@@ -54,6 +54,13 @@ fn hero(ctx: &Ctx) -> Markup {
                         a class="btn btn--ghost" href="#physics" data-action="proof" { (s.t("hero-proof")) }
                     }
                     p class="hero__note" { (rich_kbd(&s.t("hero-note"))) }
+                    // The particles move for as long as the hero is on screen, so they can be paused
+                    // (WCAG 2.2.2). Shown by web/main.ts once the engine draws: with reduced motion or
+                    // without JavaScript the hero is a still poster and needs no control.
+                    button class="btn btn--quiet btn--sm hero__motion" type="button" data-action="motion" hidden {
+                        span { (s.t("hero-motion-pause")) }
+                        span hidden { (s.t("hero-motion-play")) }
+                    }
                 }
                 div class="hero__figure" data-anchor="hourglass" {
                     div class="hero__poster" { (ctx.mark) }
@@ -91,8 +98,8 @@ fn physics(ctx: &Ctx) -> Markup {
                 @for (city, km, ms) in &rows {
                     tr {
                         th scope="row" { (city) }
-                        td class="table__num" { span class="num" { (group(km.round() as u64)) span class="num__unit" { "km" } } }
-                        td class="table__num" { span class="num" { (format!("{ms:.1}")) span class="num__unit" { "ms" } } }
+                        td class="table__num" { span class="num" { (s.int(km.round() as u64)) span class="num__unit" { (s.unit("km")) } } }
+                        td class="table__num" { span class="num" { (s.dec(*ms, 1)) span class="num__unit" { (s.unit("ms")) } } }
                     }
                 }
             }
@@ -111,19 +118,6 @@ fn physics(ctx: &Ctx) -> Markup {
             }
         }
     }
-}
-
-/// 4800 → "4,800" (English grouping; other languages get their own at build time later).
-fn group(n: u64) -> String {
-    let digits = n.to_string();
-    let mut out = String::new();
-    for (i, c) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i).is_multiple_of(3) {
-            out.push(',');
-        }
-        out.push(c);
-    }
-    out
 }
 
 fn pillars(ctx: &Ctx) -> Markup {
@@ -389,9 +383,12 @@ fn proof_wall(ctx: &Ctx) -> Markup {
     }
 }
 
-/// S11: the published Lab posts (`content/{lang}/lab/`), each linking to its page.
+/// S11: the published Lab posts (`content/{lang}/lab/`), each linking to its page. A language
+/// without posts lists the default language's, says so, and marks them with their language.
 fn lab(ctx: &Ctx) -> Markup {
     let s = ctx.s;
+    let listed = super::lab::listed(ctx);
+    let other = listed.and_then(|(_, l)| (l != ctx.lang).then_some(l));
     html! {
         section id="lab" class="sec sec--lab" aria-labelledby="lab-title" {
             div class="wrap" {
@@ -400,20 +397,21 @@ fn lab(ctx: &Ctx) -> Markup {
                     h2 class="sec__title" id="lab-title" { (s.t("lab-title")) }
                     p class="lead" { (s.t("lab-lead")) }
                 }
-                @if !ctx.lab.is_empty() {
+                @if let Some((posts, posts_lang)) = listed {
+                    @if other.is_some() { p class="lab__note" { (s.t("lab-untranslated")) } }
                     ol class="lab" role="list" {
-                        @for post in ctx.lab {
+                        @for post in posts {
                             li class="lab__post" {
                                 span class="lab__pillar mono" { (s.t(&post.pillar.label_key())) }
-                                a class="lab__title" href=(post.path(ctx.lang)) { (post.title) }
+                                a class="lab__title" href=(ctx.url(&post.path(posts_lang))) hreflang=[other] lang=[other] { (post.title) }
                                 time class="lab__state" datetime=(post.date) { (post.date) }
                             }
                         }
                     }
                     p class="lab__more" {
-                        a href=(crate::lab::index_path(ctx.lang)) { (s.t("lab-all")) }
+                        a href=(ctx.url(&crate::lab::index_path(ctx.lang))) { (s.t("lab-all")) }
                         span aria-hidden="true" { " · " }
-                        a href=(crate::lab::feed_path(ctx.lang)) type="application/atom+xml" { (s.t("lab-feed")) }
+                        a href=(ctx.url(&crate::lab::feed_path(posts_lang))) type="application/atom+xml" hreflang=[other] { (s.t("lab-feed")) }
                     }
                 }
             }
@@ -444,7 +442,7 @@ fn team(ctx: &Ctx) -> Markup {
                 }
                 div id="careers" class="careers" {
                     p class="careers__line" { (s.t("team-careers")) }
-                    a class="btn btn--ghost" href=(format!("mailto:{}", ctx.cfg.contact.careers_email)) { (s.t("team-join")) }
+                    a class="btn btn--ghost" href=(ctx.cfg.contact.careers().0) { (s.t("team-join")) }
                 }
             }
             div class="horizon" {
@@ -521,14 +519,12 @@ fn contact(ctx: &Ctx) -> Markup {
                     div class="direct" {
                         p class="direct__title" { (s.t("ct-direct")) }
                         ul class="direct__list" role="list" {
-                            li { a href=(format!("mailto:{}", c.email)) { (c.email) } }
-                            li { a href=(format!("https://t.me/{}", c.telegram)) { "@" (c.telegram) } }
-                            @if !c.phone.is_empty() { li { a href=(format!("tel:{}", c.phone.replace(' ', ""))) { (c.phone) } } }
+                            @for (href, text) in c.direct() { li { a href=(href) { (text) } } }
                         }
                     }
                     p class="contact__privacy" { (s.t("ct-privacy")) }
                 }
-                form id="contact-form" class="contact" data-island="contact" method="post" action="/api/contact" {
+                form id="contact-form" class="contact" data-island="contact" method="post" action=(ctx.url("/api/contact")) {
                     input type="hidden" name="lang" value=(ctx.lang);
                     fieldset class="contact__group" data-field="kind" {
                         legend class="field__label" { (s.t("ct-kind")) }

@@ -7,6 +7,7 @@ import { $, h, render } from '../shared/dom.ts';
 import { lang, loadStrings, t } from '../shared/i18n.ts';
 import { reducedMotion } from '../shared/env.ts';
 import { track } from '../shared/rum.ts';
+import { at } from '../shared/base.ts';
 
 export type Puzzle =
   | { star: 'rigel'; grid: string }
@@ -25,7 +26,6 @@ export interface State {
 export const STAGES = 4;
 const RUN = 'mintaka-ctf';
 const SENT = 'mintaka-ctf-sent';
-const STAR_NAMES = { rigel: 'Rigel', saiph: 'Saiph', betelgeuse: 'Betelgeuse', meissa: 'Meissa' } as const;
 
 /**
  * The stage a run token carries — byte 16 of `nonce[16] ‖ stage ‖ tag[16]` — read without asking
@@ -68,7 +68,7 @@ class Failure extends Error {}
 async function call(path: 'start' | 'puzzle' | 'flag', body: Record<string, string>): Promise<State> {
   let res: Response;
   try {
-    res = await fetch(`/api/ctf/${path}`, {
+    res = await fetch(at(`/api/ctf/${path}`), {
       method: 'POST',
       cache: 'no-store',
       headers: { 'content-type': 'application/json', accept: 'application/json' },
@@ -169,7 +169,7 @@ export async function flag(answer: unknown): Promise<boolean> {
       return false;
     }
     track('ctf_stage', before.stage as 1 | 2 | 3 | 4);
-    if (before.puzzle) console.log(t('ctf-right', { star: STAR_NAMES[before.puzzle.star] }));
+    if (before.puzzle) console.log(t('ctf-right', { star: t(`ctf-star-${before.puzzle.star}`) }));
     show(after);
     return true;
   } catch (e) {
@@ -265,9 +265,12 @@ function buildForm(pass: string): HTMLFormElement {
         p.hidden = !problem;
         p.textContent = problem ? message(problem.code) : '';
       }
-      // "Email or Telegram" belongs to both inputs.
+      // "Email or Telegram" belongs to both inputs. aria-invalid must say "true": the empty value
+      // toggleAttribute() leaves counts as false, for screen readers and for the red border alike.
       for (const id of name === 'contact' ? ['email', 'telegram'] : [name]) {
-        if (problem || !errors.some((e) => e.field === id)) $(`#a-${id}`, form)?.toggleAttribute('aria-invalid', !!problem);
+        const input = $(`#a-${id}`, form);
+        if (problem) input?.setAttribute('aria-invalid', 'true');
+        else if (!errors.some((e) => e.field === id)) input?.removeAttribute('aria-invalid');
       }
     }
     const general = errors.find((e) => !(FIELDS as readonly string[]).includes(e.field));
@@ -295,7 +298,7 @@ function buildForm(pass: string): HTMLFormElement {
     const body: Record<string, unknown> = { lang: lang(), kind: [], name: value('name'), website: '', ctf_pass: pass };
     for (const k of ['email', 'telegram', 'message']) if (value(k)) body[k] = value(k);
     try {
-      const res = await fetch('/api/contact', {
+      const res = await fetch(at('/api/contact'), {
         method: 'POST',
         headers: { 'content-type': 'application/json', accept: 'application/json' },
         body: JSON.stringify(body),

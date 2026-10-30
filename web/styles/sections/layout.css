@@ -124,7 +124,8 @@
     position: absolute;
     inset-block-start: calc(100% + var(--s-2));
     inset-inline-end: 0;
-    min-width: 15rem;
+    /* Wide enough for the three language names on one line under the sections. */
+    min-width: 17rem;
     padding: var(--s-2);
     border: 1px solid var(--border-strong);
     border-radius: var(--r-card);
@@ -150,8 +151,16 @@
     background: var(--graphite);
   }
 
+  .menu__panel .lang {
+    flex-wrap: wrap;
+    margin-block-start: var(--s-2);
+    padding-block-start: var(--s-2);
+    border-block-start: 1px solid var(--border);
+  }
+
   @media (max-width: 64rem) {
-    .site-nav {
+    .site-nav,
+    .site-header__inner > .lang {
       display: none;
     }
 
@@ -164,7 +173,26 @@
     }
   }
 
-  @media (max-width: 22rem) {
+  /* Russian section names run ~130 px longer than English and Tajik: below ~1125 px the full
+     header pushes the call to action off the screen, so Russian keeps the menu a little longer. */
+  @media (max-width: 72rem) {
+    .site-nav:lang(ru),
+    .site-header__inner > .lang:lang(ru) {
+      display: none;
+    }
+
+    .menu:lang(ru) {
+      display: block;
+    }
+
+    .site-header__cta:lang(ru) {
+      margin-inline-start: auto;
+    }
+  }
+
+  /* Phones up to ~400 px: logo, call to action and menu don't fit side by side (the call to
+     action is right below in the hero, and in the menu). */
+  @media (max-width: 25rem) {
     .site-header__cta {
       display: none;
     }
@@ -287,6 +315,10 @@
     font-size: var(--fs-h2);
     line-height: 1.06;
     letter-spacing: var(--track-display);
+    /* A single long word (Russian «Конфиденциальность») breaks rather than widen a 320 px page:
+       as a grid item the title would otherwise be at least as wide as that word. */
+    min-width: 0;
+    overflow-wrap: break-word;
   }
 
   /* Pillar sections open like a drawing callout: the star on the left, the statement right. */
@@ -455,17 +487,9 @@
     color: var(--text-2);
   }
 
-  /* Below the first screens, let the browser skip rendering until a section is near. */
-  .sec--pillar,
-  .sec--process,
-  .sec--qualities,
-  .sec--wall,
-  .sec--lab,
-  .sec--team,
-  .sec--contact {
-    content-visibility: auto;
-    contain-intrinsic-size: auto 1100px;
-  }
+  /* No `content-visibility: auto` on sections: Chrome drops the headings, links and form fields
+     of skipped sections from the accessibility tree ("notRendered"), so screen readers could not
+     list or reach anything below the first screens (docs/ACCESSIBILITY.md). */
 
   /* ── Footer: an engineering drawing's title block ──────────────────── */
   .site-footer {

@@ -3,7 +3,7 @@
 // page is cross-origin isolated, and whether Trusted Types are enforced. Grading is pure.
 
 import { $, h, render } from '../shared/dom.ts';
-import { lang, pluralKey, t, tn } from '../shared/i18n.ts';
+import { numberLocale, pluralKey, t, tn } from '../shared/i18n.ts';
 import { getProof, type Proof } from '../shared/proof.ts';
 import { offline, whenOnline } from '../shared/env.ts';
 
@@ -170,7 +170,7 @@ export function mount(root: HTMLElement): void {
     if (res.status === 'fulfilled' && res.value.ok) {
       get = (n) => res.value.headers.get(n);
       const { checks, ok, of } = grade(get, secure);
-      const count = (n: number) => h('span', { class: 'num' }, new Intl.NumberFormat(lang()).format(n));
+      const count = (n: number) => h('span', { class: 'num' }, new Intl.NumberFormat(numberLocale()).format(n));
       render(summary, ...tn(pluralKey('armour-summary', of), { ok: count(ok), n: count(of) }));
       if (!secure) summary.append(' ', T('summary-http'));
       parts.push(table(checks), h('p', { class: 'source' }, T('head-src')));
@@ -223,6 +223,10 @@ const row = (label: string, value: Node | string) => h('div', null, h('dt', null
 function tlsCard(p: PromiseSettledResult<Proof>): HTMLElement {
   if (p.status === 'rejected') return card(T('tls-title'), h('p', null, T('tls-error', { reason: reason(p.reason) })));
   const tls = p.value.tls;
+  // HTTPS ended at the hosting edge: our server can't see the handshake, so it says so.
+  if (!tls && p.value.edge) {
+    return card(T('tls-title'), h('p', { class: 'arm-pq' }, badge('na', T('pq-badge-edge')), ' ', T('pq-edge')), h('p', { class: 'source' }, T('tls-src')));
+  }
   const kind = exchange(tls);
   return card(
     T('tls-title'),

@@ -2,22 +2,31 @@
 
 use crate::util::short_hash;
 use anyhow::{Context, Result};
-use proof::{CachePolicy, Encoding, Route, RouteKind};
+use proof::{CachePolicy, Encoding, Route, RouteKind, VariantFile};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 pub struct Dist {
     pub dir: PathBuf,
+    /// Route paths are relative to the site's URL prefix (`/assets/x.js`); links written into
+    /// pages carry it ([`Dist::link`]).
     pub routes: Vec<Route>,
+    /// The site's URL prefix (`/mintaka`), or empty.
+    pub base: String,
 }
 
 impl Dist {
-    pub fn create(dir: &Path) -> Result<Self> {
+    pub fn create(dir: &Path, base: &str) -> Result<Self> {
         if dir.exists() {
             std::fs::remove_dir_all(dir).with_context(|| format!("cleaning {}", dir.display()))?;
         }
         std::fs::create_dir_all(dir)?;
-        Ok(Self { dir: dir.to_owned(), routes: vec![] })
+        Ok(Self { dir: dir.to_owned(), routes: vec![], base: base.to_owned() })
+    }
+
+    /// A route path as a link: `/assets/x.js` → `/mintaka/assets/x.js`.
+    pub fn link(&self, path: &str) -> String {
+        format!("{}{path}", self.base)
     }
 
     /// Write a file without registering a route (e.g. curl-mode text, 404 pages).
@@ -41,36 +50,40 @@ impl Dist {
             encodings: vec![],
             lang: lang.map(str::to_owned),
             kind,
+            variants: vec![],
         });
         Ok(())
     }
 
-    /// Write a content-hashed asset: `/assets/{stem}.{HASH}.{ext}`. Returns its URL.
+    /// Write another A/B test variant of the page already added at `url` (whose own file is the
+    /// control's). The server serves one of them per request (docs/CONTRACTS.md §17).
+    pub fn add_variant(&mut self, url: &str, id: &str, rel: &str, bytes: &[u8]) -> Result<()> {
+        self.write(rel, bytes)?;
+        let route = self.routes.iter_mut().find(|r| r.path == url).with_context(|| format!("variant {id} of {url}, which has no route"))?;
+        route.variants.push(VariantFile { id: id.to_owned(), file: rel.to_owned(), encodings: vec![] });
+        Ok(())
+    }
+
+    /// Write a content-hashed asset: `/assets/{stem}.{HASH}.{ext}`. Returns its link (with the
+    /// URL prefix).
     pub fn add_hashed(&mut self, stem: &str, ext: &str, bytes: &[u8], content_type: &str) -> Result<String> {
         let name = format!("{stem}.{}.{ext}", short_hash(bytes));
         let rel = format!("assets/{name}");
-        let url = format!("/{rel}");
-        self.add(&url, &rel, bytes, content_type, CachePolicy::Immutable, RouteKind::Asset, None)?;
-        Ok(url)
+        let path = format!("/{rel}");
+        self.add(&path, &rel, bytes, content_type, CachePolicy::Immutable, RouteKind::Asset, None)?;
+        Ok(self.link(&path))
     }
 
-    /// Precompress every compressible route (brotli 11, gzip 9) when it saves at least 5 %.
+    /// Precompress every compressible route (brotli 11, gzip 9) when it saves at least 5 %; every
+    /// variant of an experiment page on its own.
     pub fn compress_all(&mut self) -> Result<()> {
         for route in &mut self.routes {
             if !compressible(&route.content_type) {
                 continue;
             }
-            let path = self.dir.join(&route.file);
-            let raw = std::fs::read(&path)?;
-            let br = brotli(&raw)?;
-            if (br.len() as f64) < raw.len() as f64 * 0.95 {
-                std::fs::write(path.with_file_name(format!("{}.br", file_name(&path))), &br)?;
-                route.encodings.push(Encoding::Br);
-            }
-            let gz = gzip(&raw)?;
-            if (gz.len() as f64) < raw.len() as f64 * 0.95 {
-                std::fs::write(path.with_file_name(format!("{}.gz", file_name(&path))), &gz)?;
-                route.encodings.push(Encoding::Gzip);
+            route.encodings = compress(&self.dir.join(&route.file))?;
+            for variant in &mut route.variants {
+                variant.encodings = compress(&self.dir.join(&variant.file))?;
             }
         }
         Ok(())
@@ -78,10 +91,32 @@ impl Dist {
 
     /// Size in bytes of a route's best encoding (brotli if present).
     pub fn wire_size(&self, route: &Route) -> u64 {
-        let path = self.dir.join(&route.file);
-        let br = path.with_file_name(format!("{}.br", file_name(&path)));
-        std::fs::metadata(if route.encodings.contains(&Encoding::Br) { br } else { path }).map(|m| m.len()).unwrap_or(0)
+        self.file_wire_size(&route.file, &route.encodings)
     }
+
+    /// The same for one file (an experiment variant's) and its encodings.
+    pub fn file_wire_size(&self, file: &str, encodings: &[Encoding]) -> u64 {
+        let path = self.dir.join(file);
+        let br = path.with_file_name(format!("{}.br", file_name(&path)));
+        std::fs::metadata(if encodings.contains(&Encoding::Br) { br } else { path }).map(|m| m.len()).unwrap_or(0)
+    }
+}
+
+/// Writes `file.br` and `file.gz` next to `path` where they save at least 5 %; returns which.
+fn compress(path: &Path) -> Result<Vec<Encoding>> {
+    let raw = std::fs::read(path)?;
+    let mut encodings = vec![];
+    let br = brotli(&raw)?;
+    if (br.len() as f64) < raw.len() as f64 * 0.95 {
+        std::fs::write(path.with_file_name(format!("{}.br", file_name(path))), &br)?;
+        encodings.push(Encoding::Br);
+    }
+    let gz = gzip(&raw)?;
+    if (gz.len() as f64) < raw.len() as f64 * 0.95 {
+        std::fs::write(path.with_file_name(format!("{}.gz", file_name(path))), &gz)?;
+        encodings.push(Encoding::Gzip);
+    }
+    Ok(encodings)
 }
 
 fn file_name(p: &Path) -> String {

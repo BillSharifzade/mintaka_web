@@ -47,20 +47,62 @@ const islands: Record<string, () => Promise<Island>> = {
   loadsim: () => import('./instruments/loadsim/index.ts'),
 };
 
+// Keyboard focus mounts an island too: an instrument frame is a tab stop in the HTML, so Tab reaches
+// instruments the visitor hasn't scrolled near. Once mounted and left, the frame leaves the tab
+// order to the island's own controls.
 for (const root of $$('[data-island]')) {
   const name = root.dataset['island'] ?? '';
   const load = islands[name];
   if (!load) continue;
+  let started = false;
   const mount = (): void => {
+    if (started) return;
+    started = true;
     withStyles(load)
-      .then((m) => m.mount(root))
+      .then((m) => {
+        m.mount(root);
+        if (root.classList.contains('instrument')) {
+          const drop = () => root.removeAttribute('tabindex');
+          if (document.activeElement === root) root.addEventListener('blur', drop, { once: true });
+          else drop();
+        }
+      })
       .catch((err: unknown) => {
+        started = false;
         // Offline before this island's code was ever stored: say so in its frame, retry when back.
         if (offline()) void import('./offline/index.ts').then((o) => o.unavailable(root, mount));
         else console.error(`[mintaka] island "${name}" failed`, err);
       });
   };
+  root.addEventListener('focusin', mount);
   whenNear(root, mount);
+}
+
+// The hero's pause button appears once the particle engine draws, says what pressing it does
+// next, and goes away again if the engine falls back to the still poster (tier D).
+const motion = $('[data-action="motion"]');
+if (motion) {
+  on('sky', (running) => {
+    motion.hidden = false;
+    const [pause, play] = motion.children as HTMLCollectionOf<HTMLElement>;
+    pause!.hidden = !running;
+    play!.hidden = running;
+  });
+  on('tier', (tier) => tier === 'D' && (motion.hidden = true));
+}
+
+// The header's section menu (<details>): Escape closes it and gives focus back to its button;
+// choosing a section, clicking elsewhere or tabbing away closes it. (Lab pages have no scripts and
+// keep the plain <details>.)
+for (const menu of $$<HTMLDetailsElement>('details.menu')) {
+  const close = (focus?: boolean) => {
+    if (!menu.open) return;
+    menu.open = false;
+    if (focus) $('summary', menu)?.focus();
+  };
+  menu.addEventListener('keydown', (e) => e.key === 'Escape' && (e.preventDefault(), close(true)));
+  menu.addEventListener('click', (e) => (e.target as Element).closest('a[href]') && close());
+  for (const type of ['focusin', 'pointerdown']) document.addEventListener(type, (e) => menu.contains(e.target as Node) || close());
 }
 
 const canvas = $<HTMLCanvasElement>('#hero-canvas');
@@ -106,6 +148,9 @@ document.addEventListener('click', (e) => {
       break;
     case 'terminal':
       emit('terminal:open', undefined);
+      break;
+    case 'motion':
+      emit('sky:toggle', undefined);
       break;
     case 'shortcuts': {
       const next = !shortcutsEnabled();

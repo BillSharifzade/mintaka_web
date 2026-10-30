@@ -8,9 +8,10 @@ const O = 'https://mintaka.tj';
 const SHELL: Shell = {
   build: '2026-10-29.42870d86',
   pages: {
-    '/en/': { lang: 'en', etag: 'aa11' },
-    '/en/privacy/': { lang: 'en', etag: 'bb22' },
-    '/ru/': { lang: 'ru', etag: 'cc33' },
+    // An A/B test on the home pages: one hash per variant, the control's first.
+    '/en/': { lang: 'en', etags: ['aa11', 'aa12', 'aa13'] },
+    '/en/privacy/': { lang: 'en', etags: ['bb22'] },
+    '/ru/': { lang: 'ru', etags: ['cc33', 'cc34', 'cc35'] },
   },
   core: ['/assets/main.A.js', '/assets/chunk.D.js', '/assets/islands.C.css', '/assets/hero.H.js'],
   fonts: { en: ['/assets/fonts/space-grotesk-latin.F.woff2'], ru: ['/assets/fonts/onest-cyrillic.R.woff2'] },
@@ -117,6 +118,12 @@ test('a stored page is current when its ETag is this build’s, whatever the cod
   assert.ok(!current(SHELL, '/en/', null));
   assert.ok(current(SHELL, '/', '"cc33-br"'), '`/` is some language’s home page');
   assert.ok(!current(SHELL, '/', '"ffff"'));
+});
+
+test('a stored page is current as whichever A/B test variant the server sent', () => {
+  for (const etag of ['"aa11"', '"aa12-br"', 'W/"aa13-gz"']) assert.ok(current(SHELL, '/en/', etag), etag);
+  assert.ok(!current(SHELL, '/en/', '"cc34"'), 'a variant of another page');
+  assert.ok(current(SHELL, '/', '"cc35"'));
 });
 
 test('stored copies keep every security header and drop the server’s timings', () => {

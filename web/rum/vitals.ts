@@ -21,6 +21,14 @@ export const EVENT_KEYS: readonly string[] = [
   'render_tier:D',
 ];
 
+/** A page view's part in the A/B test (docs/CONTRACTS.md §17), from `<html data-variant data-converts>`. */
+export interface Test {
+  /** The variant our server sent this page view. */
+  variant: string;
+  /** The events that count as its conversions (the test's metric, then the secondary ones) and haven't happened yet. */
+  metrics: string[];
+}
+
 /** The server's ranges: times up to 60 s, CLS up to 10. */
 const MAX: Record<Metric, number> = { ttfb: 60_000, fcp: 60_000, lcp: 60_000, cls: 10, inp: 60_000 };
 
@@ -51,8 +59,10 @@ export function route(canonical: string | undefined, fallback: string): string {
 /**
  * A beacon: times rounded to 0.1 ms and CLS to 0.0001, anything unmeasured or out of range left
  * out, events filtered to known keys with counts of 1–20. `view` marks the page view's first.
+ * With `test`, it names the variant, and each metric the first time it is counted: once per page
+ * view, so it is taken off `test.metrics` then.
  */
-export function beacon(path: string, view: boolean, metrics: Partial<Record<Metric, number | undefined>>, events: Record<string, number>): RumBeacon {
+export function beacon(path: string, view: boolean, metrics: Partial<Record<Metric, number | undefined>>, events: Record<string, number>, test?: Test): RumBeacon {
   const out: RumBeacon = { route: path };
   if (view) {
     out.view = true;
@@ -68,6 +78,12 @@ export function beacon(path: string, view: boolean, metrics: Partial<Record<Metr
   const e: Record<string, number> = {};
   for (const [key, n] of Object.entries(events)) if (EVENT_KEYS.includes(key) && n >= 1) e[key] = Math.min(20, Math.round(n));
   if (Object.keys(e).length) out.events = e;
+  if (test) {
+    out.variant = test.variant;
+    const converted = test.metrics.filter((m) => e[m]);
+    test.metrics = test.metrics.filter((m) => !e[m]);
+    if (converted.length) out.converted = converted;
+  }
   return out;
 }
 

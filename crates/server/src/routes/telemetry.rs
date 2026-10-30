@@ -11,7 +11,7 @@ use axum::extract::{Request, State};
 use axum::response::Response;
 use bytes::Bytes;
 use http::header::{CACHE_CONTROL, CONTENT_TYPE, RETRY_AFTER};
-use http::{HeaderValue, StatusCode};
+use http::{HeaderName, HeaderValue, StatusCode};
 use tokio::sync::watch;
 
 use super::{GET_HEAD, Handled, RouteName, is_read, mark, method_not_allowed, no_store};
@@ -27,7 +27,8 @@ pub(crate) async fn handler(State(app): State<Arc<AppState>>, req: Request) -> R
     if !is_read(req.method()) {
         return mark(method_not_allowed(GET_HEAD), name, routed);
     }
-    let Some(permit) = app.streams.try_acquire() else {
+    let Some(ctx) = super::ctx(&req) else { return mark(super::internal_error(), name, routed) };
+    let Some(permit) = app.streams.try_acquire(ctx.client_net) else {
         let mut response = no_store(StatusCode::SERVICE_UNAVAILABLE, "text/plain; charset=utf-8", "too many telemetry streams, try again shortly\n");
         response.headers_mut().insert(RETRY_AFTER, HeaderValue::from_static("15"));
         return mark(response, name, routed);
@@ -46,7 +47,10 @@ pub(crate) async fn handler(State(app): State<Arc<AppState>>, req: Request) -> R
     let mut response = Response::new(Body::from_stream(body));
     let h = response.headers_mut();
     h.insert(CONTENT_TYPE, HeaderValue::from_static("text/event-stream"));
-    h.insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    // `no-transform`: proxies in front (a compressing Caddy) must not hold frames back to
+    // compress them; `X-Accel-Buffering: no` asks nginx-style proxies not to buffer the stream.
+    h.insert(CACHE_CONTROL, HeaderValue::from_static("no-store, no-transform"));
+    h.insert(HeaderName::from_static("x-accel-buffering"), HeaderValue::from_static("no"));
     response.extensions_mut().insert(Handled { route: name, routed, long_lived: true });
     response
 }

@@ -6,7 +6,7 @@ use std::time::Instant;
 use axum::extract::{Request, State};
 use axum::response::Response;
 use http::{StatusCode, Version};
-use proof::{ConnectionFacts, HttpFacts, PrivacyFacts, Proof, ServerFacts, TlsFacts};
+use proof::{ConnectionFacts, EdgeFacts, HttpFacts, PrivacyFacts, Proof, ServerFacts, TlsFacts};
 
 use super::{GET_HEAD, RouteName, alt_svc, ctx, internal_error, is_read, json, mark, method_not_allowed};
 use crate::app::{AppState, SOFTWARE};
@@ -75,6 +75,7 @@ pub(crate) fn collect(app: &AppState, ctx: &ReqCtx, version: Version) -> Proof {
             .chain(alt_svc(app, ctx).map(|_| "alt-svc"))
             .map(str::to_owned)
             .collect(),
+        edge: ctx.edge.map(|e| EdgeFacts { proto: e.proto.map(str::to_owned) }),
     }
 }
 

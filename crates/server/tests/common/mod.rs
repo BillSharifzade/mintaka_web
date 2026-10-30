@@ -51,6 +51,7 @@ pub fn config(name: &str) -> Config {
         data_dir: temp_dir(name),
         contact_recipient: None,
         pow_difficulty: 12,
+        proxy: None,
         telegram: None,
         max_telemetry_streams: 64,
         shutdown_grace: Duration::from_secs(2),

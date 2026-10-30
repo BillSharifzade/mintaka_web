@@ -50,7 +50,7 @@ async fn receive(app: &AppState, req: Request) -> Response {
     if declared.is_some_and(|n| n > RUM_BODY_LIMIT as u64) {
         return refuse(app, StatusCode::PAYLOAD_TOO_LARGE, "beacon refused: larger than 2 KiB\n");
     }
-    if !app.rum.admit(ctx.conn.client_net) {
+    if !app.rum.admit(ctx.client_net) {
         let mut response = no_store(StatusCode::TOO_MANY_REQUESTS, TEXT, "beacon refused: too many from your network, try again later\n");
         response.headers_mut().insert(RETRY_AFTER, HeaderValue::from_static("60"));
         return response;

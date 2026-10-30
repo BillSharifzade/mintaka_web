@@ -2,15 +2,19 @@
 # The published benchmark, as one command on the machine being measured (see bench/README.md).
 #
 #   bench/run.sh [--label NAME] [--rates "20000 50000"] [--seconds 10] [--conns 64] [--dist DIR]
+#                [--server BIN]
 #
 # Builds the release server (and, without --dist, the release site), serves it on loopback, and
 # drives GET /en/ at fixed request rates with oha's latency correction — over plain HTTP/1.1 and
 # over TLS 1.3 + HTTP/2 — while recording the server's own /_telemetry ticks. Writes
 # bench/results/<date>-<label>.md with the machine's facts, the commands and both views.
+# On a machine without the toolchain (a production host), pass a server binary built elsewhere with
+# --server and a built site with --dist: nothing is compiled there. A site built for a URL prefix
+# (manifest.json `base`) is measured under it.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
-label="local" rates="20000 50000" seconds=10 conns=64 dist=""
+label="local" rates="20000 50000" seconds=10 conns=64 dist="" server=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --label) label="$2"; shift 2 ;;
@@ -18,6 +22,7 @@ while [[ $# -gt 0 ]]; do
     --seconds) seconds="$2"; shift 2 ;;
     --conns) conns="$2"; shift 2 ;;
     --dist) dist="$2"; shift 2 ;;
+    --server) server="$(realpath "$2")"; shift 2 ;;
     *) echo "unknown option $1" >&2; exit 2 ;;
   esac
 done
@@ -26,11 +31,18 @@ oha="$(command -v oha || echo "$HOME/.cargo/bin/oha")"
 [[ -x "$oha" ]] || { echo "needs oha (cargo install oha)" >&2; exit 1; }
 
 cd "$root"
-cargo build --quiet --release -p server
+if [[ -z "$server" ]]; then
+  cargo build --quiet --release -p server
+  server="./target/release/mintaka-server"
+  built="$(rustc -V), release profile (\`lto = \"fat\"\`, \`codegen-units = 1\`, \`panic = \"abort\"\`)"
+else
+  built="$("$server" --version) (built elsewhere, release profile)"
+fi
 if [[ -z "$dist" ]]; then
   cargo xtask build --release >/dev/null
   dist="dist"
 fi
+base="$(python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1])).get("base", ""))' "$dist/manifest.json")"
 
 work="$(mktemp -d)"
 cleanup() { kill $(jobs -p) 2>/dev/null || true; wait 2>/dev/null || true; rm -rf "$work"; }
@@ -38,10 +50,10 @@ trap cleanup EXIT
 
 free_port() { python3 -I -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])'; }
 http_port="$(free_port)" tls_port="$(free_port)"
-RUST_LOG=info ./target/release/mintaka-server --dist "$dist" --listen "127.0.0.1:$http_port" \
+RUST_LOG=info "$server" --dist "$dist" --listen "127.0.0.1:$http_port" \
   --tls-self-signed --tls-listen "127.0.0.1:$tls_port" --data-dir "$work/data" >"$work/server.log" 2>&1 &
-for _ in $(seq 50); do curl -sf -o /dev/null "http://127.0.0.1:$http_port/_ping" && break; sleep 0.1; done
-curl -sN "http://127.0.0.1:$http_port/_telemetry" >"$work/telemetry.txt" &
+for _ in $(seq 50); do curl -sf -o /dev/null "http://127.0.0.1:$http_port$base/_ping" && break; sleep 0.1; done
+curl -sN "http://127.0.0.1:$http_port$base/_telemetry" >"$work/telemetry.txt" &
 sleep 2
 
 # A browser-like User-Agent matters: curl/… would get the curl-mode text instead of the page.
@@ -50,9 +62,9 @@ runs=()
 for scenario in h1 h2tls; do
   for rate in $rates; do
     if [[ "$scenario" == h1 ]]; then
-      url="http://127.0.0.1:$http_port/en/" extra=()
+      url="http://127.0.0.1:$http_port$base/en/" extra=()
     else
-      url="https://127.0.0.1:$tls_port/en/" extra=(--http2 --insecure)
+      url="https://127.0.0.1:$tls_port$base/en/" extra=(--http2 --insecure)
     fi
     start="$(date +%s)"
     "$oha" -z "${seconds}s" -q "$rate" -c "$conns" --latency-correction --no-tui --output-format json \
@@ -64,9 +76,9 @@ done
 
 mkdir -p bench/results
 out="bench/results/$(date -u +%F)-$label.md"
-python3 -I - "$work" "$out" "$seconds" "$conns" "$oha" "$dist" "${runs[@]}" <<'PY'
+python3 -I - "$work" "$out" "$seconds" "$conns" "$oha" "$dist" "$built" "$base" "${runs[@]}" <<'PY'
 import json, os, platform, re, subprocess, sys
-work, out, seconds, conns, oha, dist, *runs = sys.argv[1:]
+work, out, seconds, conns, oha, dist, built, base, *runs = sys.argv[1:]
 
 def sh(*cmd):
     try:
@@ -118,7 +130,7 @@ page = json.load(open(os.path.join(work, f"{first_run[0]}-{first_run[1]}.json"))
 cpu = first(r"^Model name:\s*(.+)$", lscpu)
 cpus = first(r"^CPU\(s\):\s*(.+)$", lscpu)
 ram_gib = int(first(r"^MemTotal:\s*(\d+)", meminfo, "0")) / 1048576
-rustc, oha_version, title = sh("rustc", "-V"), sh(oha, "--version"), os.path.basename(out)[:-3]
+oha_version, title = sh(oha, "--version"), os.path.basename(out)[:-3]
 report = f"""# Benchmark run · {title}
 
 Written by `bench/run.sh`; method and how to read it in `bench/README.md`. The load generator ran
@@ -131,9 +143,9 @@ on the **same machine** as the server, so both compete for the same cores.
 | CPU | {cpu} ({cpus} logical CPUs), governor {governor} |
 | RAM | {ram_gib:.1f} GiB (MemTotal) |
 | OS | {platform.system()} {platform.release()} |
-| Toolchain | {rustc}, release profile (`lto = "fat"`, `codegen-units = 1`, `panic = "abort"`) |
+| Server | {built} |
 | Load generator | {oha_version}, {conns} connections, {seconds} s per rate, latency correction on |
-| Page | `GET /en/` from `{dist}`, brotli, {page:,} B per response |
+| Page | `GET {base}/en/` from `{dist}`, brotli, {page:,} B per response |
 
 ## Client view (oha, end to end over loopback)
 

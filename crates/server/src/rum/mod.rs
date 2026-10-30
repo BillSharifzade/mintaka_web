@@ -3,9 +3,11 @@
 //!
 //! What a beacon becomes: one increment per counter and one sample per histogram, in memory.
 //! No address, user agent, cookie or timestamp of a single beacon is kept anywhere, and nothing is
-//! written to disk; the only per-client state is the rate limiter's bucket per /24 or /48.
+//! written to disk; the only per-client state is the rate limiter's bucket per /24 or /48. While
+//! an A/B test runs, a beacon that names its variant also adds to that variant's counts (§17).
 
 mod beacon;
+mod experiment;
 mod limit;
 mod stats;
 
@@ -30,18 +32,27 @@ fn unix_now() -> u64 {
 pub(crate) struct Rum {
     limiter: limit::Limiter,
     stats: Mutex<stats::Stats>,
+    /// The site's URL prefix, which beacons' routes carry and the counts don't.
+    base: String,
 }
 
 impl Rum {
-    /// Counts for `/`, `404` and every page route of the manifest.
-    pub fn new<'a>(pages: impl Iterator<Item = &'a str>) -> anyhow::Result<Rum> {
+    /// Counts for `/`, `404` and every page route of the manifest, and for the A/B test (with the
+    /// paths that serve its variants) if one runs.
+    pub fn new<'a>(base: &str, pages: impl Iterator<Item = &'a str>, experiment: Option<(&proof::Experiment, &[String])>) -> anyhow::Result<Rum> {
         let mut routes: Vec<String> = EXTRA_ROUTES.map(str::to_owned).to_vec();
         for page in pages {
             if !routes.iter().any(|r| r == page) {
                 routes.push(page.to_owned());
             }
         }
-        Ok(Rum { limiter: limit::Limiter::default(), stats: Mutex::new(stats::Stats::new(routes, unix_now())?) })
+        let test = experiment
+            .map(|(spec, paths)| {
+                let pages = routes.iter().enumerate().filter(|(_, r)| paths.contains(r)).map(|(i, _)| i).collect();
+                experiment::Test::new(spec.clone(), pages)
+            })
+            .transpose()?;
+        Ok(Rum { limiter: limit::Limiter::default(), stats: Mutex::new(stats::Stats::new(routes, unix_now(), test)?), base: base.to_owned() })
     }
 
     fn stats(&self) -> std::sync::MutexGuard<'_, stats::Stats> {
@@ -60,7 +71,7 @@ impl Rum {
     /// Parses and counts one beacon.
     pub fn receive(&self, body: &[u8]) -> Result<(), Refusal> {
         let mut stats = self.stats();
-        let parsed = beacon::parse(body, stats.routes()).and_then(|b| {
+        let parsed = beacon::parse(body, &self.base, stats.routes(), stats.test()).and_then(|b| {
             stats.record(&b, unix_now()).map_err(|e| {
                 tracing::error!(target: "rum", "recording a beacon failed: {e}");
                 Refusal::Shape

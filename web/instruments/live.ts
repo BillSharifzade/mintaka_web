@@ -7,8 +7,9 @@
 import { $, h, render, s } from '../shared/dom.ts';
 import { reducedMotion } from '../shared/env.ts';
 import { bytes, duration, type Formatted } from '../shared/format.ts';
-import { lang, t, tp } from '../shared/i18n.ts';
+import { numberLocale, t, tp } from '../shared/i18n.ts';
 import type { TelemetryHello, TelemetryTick } from '../shared/proof.ts';
+import { at } from '../shared/base.ts';
 
 /** The last `cap` values of one metric, oldest first; null marks a second without data. */
 export class Ring {
@@ -80,9 +81,9 @@ const TRAVEL_S = 2.4;
 type State = 'connecting' | 'live' | 'reconnecting' | 'offline' | 'paused';
 const BADGE: Record<State, string> = { connecting: 'plain', live: 'live', reconnecting: 'warn', offline: 'bad', paused: 'plain' };
 
-const count = (v: number): Formatted => ({ value: new Intl.NumberFormat(lang()).format(Math.round(v)), unit: '' });
+const count = (v: number): Formatted => ({ value: new Intl.NumberFormat(numberLocale()).format(Math.round(v)), unit: '' });
 const micro = (v: number): Formatted => duration(v / 1000);
-const pct = (v: number): Formatted => ({ value: new Intl.NumberFormat(lang(), { maximumFractionDigits: 1 }).format(v), unit: '%' });
+const pct = (v: number): Formatted => ({ value: new Intl.NumberFormat(numberLocale(), { maximumFractionDigits: 1 }).format(v), unit: '%' });
 const said = (f: Formatted): string => (f.unit === '%' ? f.value + f.unit : f.unit ? `${f.value} ${f.unit}` : f.value);
 
 interface Metric {
@@ -222,12 +223,20 @@ export function mount(root: HTMLElement): void {
   const server = h('p', { class: 'source' });
   const announce = h('p', { class: 'visually-hidden', 'aria-live': 'polite' });
   const flow = stream(canvas);
+  // The numbers change every second and the dots keep moving: both can be paused (WCAG 2.2.2).
+  let held = false;
+  const hold: HTMLButtonElement = h(
+    'button',
+    { type: 'button', class: 'btn btn--ghost btn--sm live-hold', onclick: () => ((held = !held), (hold.textContent = t(held ? 'live-resume' : 'live-pause')), update()) },
+    t('live-pause'),
+  );
 
   render(
     body,
     h(
       'div',
       { class: 'live' },
+      hold,
       h(
         'dl',
         { class: 'kv live-kv' },
@@ -343,7 +352,7 @@ export function mount(root: HTMLElement): void {
     if (es || !active()) return;
     if (!navigator.onLine) return setState('offline'); // the 'online' event brings us back
     setState(tries ? 'reconnecting' : 'connecting');
-    const source = new EventSource('/_telemetry');
+    const source = new EventSource(at('/_telemetry'));
     es = source;
     source.addEventListener('hello', (e) => {
       try {
@@ -369,7 +378,7 @@ export function mount(root: HTMLElement): void {
     arm();
   }
 
-  const active = () => inView && document.visibilityState === 'visible';
+  const active = () => inView && !held && document.visibilityState === 'visible';
 
   const update = () => {
     if (active()) {

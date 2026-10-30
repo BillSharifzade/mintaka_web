@@ -1,6 +1,8 @@
 #!/bin/sh
 # Regenerates tests/fixtures/dist: a tiny site in the shape the generator writes (docs/CONTRACTS.md §3),
 # with real brotli/gzip siblings and a real CSP hash for the inline style. Needs brotli, gzip, openssl.
+# en/index.hero-title-*.html are A/B test variants of /en/ (§17): the manifest here leaves them out,
+# and tests/experiment.rs adds them, with the experiment, to a copy.
 set -eu
 cd "$(dirname "$0")"
 rm -rf dist
@@ -14,7 +16,10 @@ page() { # lang title body
     "$1" "$2" "$1" "$style" "$2" "$3"
 }
 
-page en "Software at the edge of physics." '<p>Fast by proof. Secure by attack. Scaled to the metal. Intuitive by experiment.</p><p>Fixture page: the server only moves these bytes around; padding follows so compression is visible. Mintaka, Alnitak and Alnilam form the belt of Orion. Mintaka, Alnitak and Alnilam form the belt of Orion. Mintaka, Alnitak and Alnilam form the belt of Orion.</p>' > dist/en/index.html
+padding='<p>Fast by proof. Secure by attack. Scaled to the metal. Intuitive by experiment.</p><p>Fixture page: the server only moves these bytes around; padding follows so compression is visible. Mintaka, Alnitak and Alnilam form the belt of Orion. Mintaka, Alnitak and Alnilam form the belt of Orion. Mintaka, Alnitak and Alnilam form the belt of Orion.</p>'
+page en "Software at the edge of physics." "$padding" > dist/en/index.html
+page en "As fast as the hardware allows." "$padding" > dist/en/index.hero-title-hardware.html
+page en "Engineered to the last cycle." "$padding" > dist/en/index.hero-title-cycle.html
 page ru "Программы на пределе физики." '<p>Быстро — доказано. Тестовая страница.</p>' > dist/ru/index.html
 page en "Your message is on its way." '<p id="e-name-required">Add your name.</p><p id="e-rate-limited">Too many messages from your network.</p>' > dist/en/sent/index.html
 page en "This page drifted out of orbit." '<p>The closest star: <!--mintaka:suggest--></p><p><a href="/en/">Navigate by the stars</a></p>' > dist/en/404.html
@@ -31,12 +36,14 @@ printf '  efficiency   fast by proof\n  security     secure by attack\n  (served
 printf '  curl -d name=You -d email=you@example.com https://mintaka.tj/api/contact\n  {{tls}}\n' > dist/text/en/contact.ansi
 printf '  mintaka - программы на пределе физики · {{server_time}} · {{tls}}\n' > dist/text/ru/index.ansi
 
-for f in dist/en/index.html dist/assets/main.3F2A1B9C.js; do brotli -q 11 -k -f "$f"; gzip -9 -k -n -f "$f"; done
+for f in dist/en/index.html dist/en/index.hero-title-hardware.html dist/en/index.hero-title-cycle.html dist/assets/main.3F2A1B9C.js; do
+  brotli -q 11 -k -f "$f"; gzip -9 -k -n -f "$f"
+done
 gzip -9 -k -n -f dist/ru/index.html
 
 cat > dist/manifest.json <<EOF
 {
-  "version": 1,
+  "version": 2,
   "build": "2026-10-27.f1x7ure0",
   "origin": "https://mintaka.tj",
   "default_lang": "en",
@@ -55,6 +62,13 @@ cat > dist/manifest.json <<EOF
   "text": {
     "en": { "/": "text/en/index.ansi", "/pillars": "text/en/pillars.ansi", "/contact": "text/en/contact.ansi" },
     "ru": { "/": "text/ru/index.ansi" }
+  },
+  "bot": {
+    "en": {
+      "bot-linked": "Linked to brief {brief}.", "bot-again": "Already linked to brief {brief}.", "bot-taken": "Taken by another chat.",
+      "bot-expired": "This link has expired.", "bot-stopped": "Disconnected from brief {brief}.", "bot-hello": "Send a brief on the site first."
+    },
+    "ru": { "bot-linked": "Чат связан с брифом {brief}." }
   }
 }
 EOF

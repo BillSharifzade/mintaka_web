@@ -19,6 +19,8 @@ the landing-page concept and build spec, kept outside this repository (referred 
 | Proof console, terminal, console greeting, S2 physics, S5 armour | `web/hud/`, `web/terminal/`, `web/console/`, `web/instruments/{physics,armour}.ts`, `web/instruments/tz/`, matching `web/styles/islands/*.css` and `content/en/islands/*.ftl` | worker B |
 | S6 follow one request, S6 live load, S7 laws you can feel, S13 contact | `web/instruments/{trace,live,contact,pow.worker}.ts`, `web/instruments/laws/`, matching CSS and FTL | worker C |
 | Real-user measurements (§14), offline mode (§15) | `crates/proof/src/rum.rs`, `crates/server/src/{rum/,routes/rum.rs}`, `crates/site/src/sw.rs`, `web/rum/`, `web/sw/`, `web/offline/`, `web/shared/rum.ts`, `web/hud/visitors.ts`, `content/en/islands/offline.ftl` | main |
+| Telegram bot (§19): notifications, links, the relay, its memory | `crates/server/src/telegram/`, `crates/server/src/secret.rs`, `bot-*` and `pv-telegram*` in `content/en/page.ftl`, `contact-bot*` in `contact.ftl` | main |
+| A/B test (§17): plan and statistics, variant pages, serving, counting, results | `crates/proof/src/experiment.rs`, `crates/server/src/rum/experiment.rs`, `[experiment]` in `content/site.toml` (with `config::Experiment` in `crates/site/src/config.rs`), `web/hud/experiment.ts`, `hero-title-*` and `pv-ab*` in `content/en/page.ftl`, `hud-ab-*` in `hud.ftl` | main |
 
 Only edit files you own. If you need a change in someone else's file (a new bus event, a token,
 a DOM hook), make the smallest possible change and list it in your final report.
@@ -45,10 +47,21 @@ loads every listed route **into memory at startup**, including precompressed sib
 (`file.br`, `file.gz`) named in `encodings`, and never touches the file system per request.
 `manifest.json` itself is not served.
 
+While an A/B test runs (§17), `manifest.experiment` describes it, and each page of the test lists
+its variants after the control (whose file is `file`) in `variants`:
+`[{ "id": "hero-title-hardware", "file": "en/index.hero-title-hardware.html", "encodings": ["br", "gzip"] }, …]`,
+in `experiment.variants` order, each with its own precompressed siblings. `MANIFEST_VERSION` is 2
+since then: a server that ignored `variants` would serve only the control and refuse every beacon
+that names a variant.
+
+`manifest.bot` is what the Telegram bot writes to clients (§19): `lang -> (message id -> text)` for
+every id in `proof::BOT_MESSAGES`, rendered from the page strings, with `{brief}` left for the server.
+
 ```
 dist/
   manifest.json
   en/index.html  en/index.html.br  en/index.html.gz     → /en/
+  en/index.hero-title-hardware.html (+ .br/.gz) …      → /en/ as well, while an A/B test runs (§17)
   en/404.html                                          → not_found["en"], status 404
   en/sent/index.html                                   → /en/sent/   (contact, no-JS result)
   en/lab/index.html  en/lab/<slug>/index.html (+ .br/.gz) → /en/lab/, /en/lab/<slug>/   (§9.2)
@@ -60,6 +73,26 @@ dist/
   sw.js sw.js.br sw.js.gz                               → /sw.js (service worker, §15; policy `document`)
   text/en/index.ansi text/en/pillars.ansi text/en/contact.ansi   → curl mode
 ```
+
+### 3.1 A URL prefix (`manifest.base`)
+
+The site can live under a path of someone else's host, e.g. `https://dchr.koinotinav.com/mintaka/`:
+`content/site.toml` `base = "/mintaka"` (or `MINTAKA_BASE` for one build; empty = the root).
+`base` is empty or `/segment[/segment…]` without a trailing `/`.
+
+- **Route paths in the manifest never carry it** (`/en/`, `/assets/x.js`). Everything the
+  generator *writes as a link* does: `href`/`src`, `@font-face` URLs, `#mintaka-assets`, the web
+  manifest (`start_url`, `scope`, icons), sitemap, robots, security.txt, the Atom feed, curl-mode
+  text and the service worker's file list — through `SiteConfig::url`/`abs` and `Dist::link`.
+- **The server strips it** before routing (`conn::respond`): `{base}/x` is routed as `/x`; the bare
+  `{base}` gets `301` to `{base}/`; any path outside it gets a plain `404` (another application
+  may share the host). Every `Location` a handler sends (`/en/sent/`, the slash redirect) gets the
+  prefix back in `routes::finish`; 404 suggestions are written with it.
+- **Islands** build URLs with `at('/path')` from `web/shared/base.ts` (`BASE` is the esbuild
+  constant `MINTAKA_BASE`, §11). Beacons name their page by its URL path, prefix and all; the
+  server takes the prefix off before matching it (`/_rum` counts by route path).
+  The service worker registers at `{base}/sw.js` with scope `{base}/`, and treats only paths under
+  the prefix as its own.
 
 ## 4. HTTP
 
@@ -75,6 +108,9 @@ dist/
 | `GET /api/pow`, `POST /api/contact` | §8 |
 | curl / Wget / HTTPie User-Agent | §4.6 |
 | Anything else | `404` with `not_found[lang]` (lang from the path prefix, else negotiated). The page contains the literal marker `<!--mintaka:suggest-->`; replace it with `<a href="{route}">{route}</a>` for the closest page route by edit distance, or with nothing. Never echo the requested path. |
+
+A page of the A/B test (and `/` in front of it) answers each `GET` and `HEAD` with one of its
+variants, drawn uniformly at random for that request (§17).
 
 Methods other than GET/HEAD on static routes → `405` with `Allow: GET, HEAD`.
 Request bodies are only accepted on `POST /api/contact` (limit 32 KiB) and `POST /_rum` (2 KiB).
@@ -115,6 +151,12 @@ Alt-Svc: h3=":443"; ma=86400                                                 (TL
 
 `/_proof`, `/_telemetry`, `/_ping`, `/_rum`, `/api/*`: `Cache-Control: no-store`.
 
+A page served as one of several A/B test variants (§17) sends `Cache-Control: private, no-cache`:
+the browser may keep the variant it got and revalidate it, but no shared cache may keep one variant
+and hand it to everybody. Each variant has its own ETags (per coding), and the variant is drawn
+**before** `If-None-Match` is compared, so a `304` comes only when the draw lands on the variant the
+browser already has — a cached copy never makes a variant stick.
+
 `/sw.js` has a fixed, unhashed URL and the `document` policy: `no-cache` + ETag is exactly what a
 service worker script needs (revalidated on every use, `304` when unchanged). The policy names
 how a route is revalidated, not what it contains, so no new policy was added.
@@ -142,6 +184,10 @@ When available, also:
 | `tls;dur=1.83;desc="TLS handshake"` | Server-side handshake duration. Only on the **first** request of a TLS connection (TCP or QUIC). |
 | `krtt;dur=48.21;desc="kernel RTT"` | `TCP_INFO.tcpi_rtt` of this connection (Linux). Every response over TCP; never over HTTP/3. |
 | `qrtt;dur=0.852;desc="QUIC RTT"` | HTTP/3 only: QUIC's own smoothed RTT for this connection (quinn's RFC 9002 estimator, from acknowledgements of our packets), once it rests on a sample. Every response over HTTP/3. A different measurement from `krtt`, so a different name. |
+| `edge;desc="TLS at the hosting edge"` | No duration: the request came through the `--trusted-proxy` (§18), so the visitor's TCP and TLS ended there. Then there is never a `krtt` (it would be the proxy hop's) nor a `tls`. |
+
+Islands that need the network round trip (S2 physics, S6 trace, the terminal) take `krtt`, else
+`qrtt`, else measure it themselves from Navigation/Resource Timing.
 
 ### 4.6 curl mode
 
@@ -211,6 +257,11 @@ Browsers asking for these paths get the normal 404.
   `TCP_INFO` is unavailable. `id` is a process-local counter, never derived from the client.
 - `headers` lists only headers actually sent on this response (so no HSTS over plain HTTP), in the
   order above, then `alt-svc` when it is sent.
+- `edge` is `{ "proto": "https" }` when the request came through the `--trusted-proxy` (§18):
+  `proto` is the proxy's `X-Forwarded-Proto` (`https` or `http`, else `null`). Then `tls` is
+  `null` (this server did no TLS), `http.version` and `connection` describe the proxy's hop, and
+  `kernel_rtt_us` is `null`. Islands say "HTTPS at the hosting edge" rather than "plain HTTP" and
+  never present the hop's facts as the visitor's. `edge` is `null` for direct connections.
 
 ## 6. `GET /_telemetry` (Server-Sent Events)
 
@@ -276,7 +327,8 @@ At least one of `email` / `telegram` is required. Validation lives in Rust newty
 `email-invalid`, `telegram-invalid`, `contact-required`, `message-too-long`, `company-too-long`,
 `choice-invalid`, `pow-invalid`, `pow-expired`, `rate-limited`, `too-large`, `server-error`.
 
-**Responses — JSON request:** `200 {"ok":true}` · `422 {"ok":false,"errors":[{"field":"email","code":"email-invalid"}]}` ·
+**Responses — JSON request:** `200 {"ok":true}` — with `"bot_link": "https://t.me/<bot>?start=<code>"`
+while the server runs the Telegram bot (§19) · `422 {"ok":false,"errors":[{"field":"email","code":"email-invalid"}]}` ·
 `429 {"ok":false,"errors":[{"field":"form","code":"rate-limited"}]}` · `400` for malformed bodies.
 
 **Responses — form request:** `303 See Other` to `/{lang}/sent/` on success, or to
@@ -285,12 +337,13 @@ At least one of `email` / `telegram` is required. Validation lives in Rust newty
 **Rate limits** (in memory only, keyed by IPv4 /24 or IPv6 /48 prefix, never written to disk or
 logs): 10 per hour with a valid proof of work, 3 per hour without.
 
-**Storage:** each accepted message is one file in `{data-dir}/contact/`, mode `0600`, named
-`{unix-ms}-{random}.json.age`, encrypted with `age` to the configured X25519 recipient. The server
-holds only the public key; without a configured recipient it creates a development identity in
-`{data-dir}/dev-identity.txt` and logs a loud warning. **Notification** (optional, env-configured
-Telegram bot): "New brief · kinds · timeline · id" ("New application (console challenge solved) · …"
-with a valid pass) — never the message body.
+**Storage:** each accepted message is one file in `{data-dir}/contact/`, named
+`{unix-ms}-{random}.json.age`, encrypted with `age` to the configured X25519 recipient: mode `0640`
+in a `0750` directory, so a deploy account in the server's group can fetch the ciphertext. The
+server holds only the public key; without a configured recipient it creates a development identity in
+`{data-dir}/dev-identity.txt` and logs a loud warning. **Notification** (optional, the Telegram
+bot of §19): "New brief · kinds · timeline · id" ("New application (console challenge solved) · …"
+with a valid pass) in the team chat — never the message body.
 
 ### 8.3 The console challenge: `POST /api/ctf/start|puzzle|flag`
 
@@ -329,7 +382,7 @@ yields a pass for the application form.
 ## 9. The page (DOM contract)
 
 ```html
-<html lang="en" data-shortcuts-off?>
+<html lang="en" data-shortcuts-off? data-variant? data-converts?>
 <body>
   <a class="skip-link" href="#main">…</a>
   <header class="site-header">… <a class="btn btn--primary" href="#contact">Start a project</a></header>
@@ -361,11 +414,17 @@ yields a pass for the application form.
 - **Instrument containers** use the frame from `web/styles/components.css`
   (`.instrument` › `.instrument__bar` / `.instrument__body` / `.instrument__foot`). The page renders
   the frame and a static fallback inside `.instrument__body`; the island replaces the body's
-  children (`render(body, …)`) and may update `.instrument__status`. Never remove the frame.
+  children (`render(body, …)`) and may update `.instrument__status`. Never remove the frame. The
+  frame carries `tabindex="0"` until its island has mounted and focus has left it (`web/main.ts`),
+  so Tab can reach an instrument before it has scrolled near (docs/ACCESSIBILITY.md).
 - **The contact form** is complete, working HTML without JS (labels, `name`s matching §8.2,
   `required`, `type="email"`, honeypot field `website` inside a visually hidden wrapper with
   `tabindex="-1"` and `autocomplete="off"`). The island enhances it; it never replaces it.
 - `data-action="proof" | "terminal" | "shortcuts"` clicks are handled in `web/main.ts`.
+- **A page rendered as an A/B test variant** (§17) says so on its root element:
+  `<html lang="en" dir="ltr" data-variant="hero-title-hardware" data-converts="cta_start_project contact_submit">`
+  — the variant's id and the event keys its beacons report as conversions. Read by `web/rum/` and
+  the proof console; pages outside the test have neither attribute.
 - **The team grid** comes from `[[team]]` in `content/site.toml` (id, GitHub name, site); name,
   role, line and an optional alt text are strings (`team-<id>-name|role|line|photo`), the
   portrait is `assets/team/<id>.avif` + `.webp` (square, 224 px). `#careers` is where the console
@@ -429,7 +488,7 @@ of `page.css`; its hash is a second entry in `manifest.csp.style_src`. In `pages
   `console`: `greet()`; `hero`: `start(canvas)`; `nav`: `start()`). `open()` must be idempotent
   and must work before or after `mount()`.
 - `web/main.ts` loads instrument islands when their container comes within one screen of the
-  viewport; HUD/console/nav, the real-user collector (`web/rum/`, §14) and offline mode
+  viewport, or as soon as keyboard focus enters it; HUD/console/nav, the real-user collector (`web/rum/`, §14) and offline mode
   (`web/offline/`, §15) on idle; the terminal on first use.
 - **Offline.** Anything that asks our server checks `offline()` (`web/shared/env.ts`) when it
   fails and then says so in words — "You're offline, …" — instead of showing the browser's error,
@@ -461,15 +520,15 @@ of `page.css`; its hash is a second entry in `manifest.csp.style_src`. In `pages
    signal; honour `prefers-reduced-motion` (`reducedMotion()` in `web/shared/env.ts`).
 6. **Performance.** Do nothing until mounted; pause animation when off screen
    (IntersectionObserver) or when the tab is hidden; no layout thrash in rAF loops; no polling.
-   Budgets (minified, before compression): HUD ≤ 6 kB, terminal ≤ 8 kB, each instrument ≤ 15 kB
+   Budgets (minified, before compression): HUD ≤ 6.2 kB, terminal ≤ 8 kB, each instrument ≤ 15 kB
    (data tables excluded, loaded lazily).
 7. **Strings** come from `content/en/islands/<island>.ftl` and are read with `t('<island>-key')`.
    Message ids are prefixed with the island name. Variables (`{ $ms }`) and at most **one selector
    per message** on a variable, for plurals: `x-requests = { $n -> [one] { $n } request *[other] { $n } requests }`.
    The generator exports each variant as `id[key]` (plus the default as `id`); read counts with
    `tp('x-requests', n)`, which picks by `Intl.PluralRules` for the page language.
-   English is the source; Russian and Tajik are written natively by the team later — never
-   machine-translate. Long text read only after an explicit action (the console challenge) goes in
+   English is the source; Russian and Tajik were drafted by Claude at the founder's request and
+   are reviewed by native speakers (docs/TRANSLATION.md). Long text read only after an explicit action (the console challenge) goes in
    `content/{lang}/islands/lazy/<name>.ftl`: it is not inlined but exported as
    `/assets/strings/<name>.<lang>.<hash>.json` (named `strings/<name>.<lang>`) and fetched with
    `await loadStrings('<name>')`. Keep the line that reports a failed fetch inline.
@@ -516,6 +575,9 @@ track('instrument_start', 'security');     // 'physics' | 'efficiency' | 'securi
   lab run by themselves and are not counted. `ctf_stage:n` counts stage n of the console challenge solved (`web/console/ctf.ts`, §8.3).
 
 ## 11. Build-time flags
+
+`MINTAKA_BASE` (esbuild `--define`) is the site's URL prefix as a string literal (`"/mintaka"`
+or `""`, §3.1); read it only through `web/shared/base.ts`, which falls back to `""` in unit tests.
 
 `MINTAKA_DEV` (esbuild `--define`) is `true` in `cargo xtask build`/`dev` and `false` with
 `--release`, where dead code behind it is removed. Development-only hooks live behind it — e.g.
@@ -578,7 +640,8 @@ wasm-bindgen = "=0.2.128"  # MUST equal the installed wasm-bindgen CLI (Arch pac
   `WebAssembly.RuntimeError` and reads the panic message the hook saved in atomics. Its TS tests
   load the built module from `web/wasm/fuzzer/`, so run `cargo xtask build` before `node --test`.
 - **Budgets:** each `.wasm` ≤ 250 kB (checked by the build), each island ≤ 15 kB minified — except
-  `fuzzer` at 21 kB (three chapters, the coverage sky, a crash minimiser and a hand-input panel).
+  `fuzzer` at 21.5 kB (three chapters, the coverage sky, a crash minimiser, a hand-input panel and
+  the code that fetches its run-time text, a lazy string bundle; raised from 21 kB on 2026-10-30).
 - CSP already allows WebAssembly (`'wasm-unsafe-eval'`); nothing else changes.
 
 ## 14. Real-user measurements: `/_rum`
@@ -598,6 +661,8 @@ if the visitor comes back and does more, each later hide sends only the counts s
 { "route": "/en/", "view": true,
   "metrics": { "ttfb": 92.4, "fcp": 640.2, "lcp": 812.6, "cls": 0.0012, "inp": 48 },
   "events": { "proof_open": 1, "instrument_start:highload": 2, "render_tier:B": 1 } }
+{ "route": "/en/", "view": true, "variant": "hero-title-hardware",
+  "events": { "cta_start_project": 1, "render_tier:B": 1 }, "converted": ["cta_start_project"] }
 ```
 
 | Field | Rule |
@@ -606,6 +671,8 @@ if the visitor comes back and does more, each later hide sends only the counts s
 | `view` | `true` on the first beacon of a page view. |
 | `metrics` | Optional each, only with `view: true`. Milliseconds from navigation start minus `activationStart`, 0–60 000: `ttfb` (`responseStart`), `fcp` and `lcp` (only while the page was visible from the start), `inp` (the slowest interaction, ignoring one per 50; absent without interactions). `cls`: largest session window, 0–10. Times rounded to 0.1 ms, CLS to 0.0001. |
 | `events` | `EVENTS` key → count 1–20. Keys: `cta_start_project`, `proof_open`, `instrument_start:{physics,efficiency,security,highload,design}`, `instrument_complete:{…}`, `terminal_open`, `ctf_stage:{1,2,3,4}`, `contact_submit`, `lang_switch`, `render_tier:{A,B,C,D}` (§10.2). |
+| `variant` | Only while an A/B test runs (§17), only for a page of the test, and only from a page view our server sent (`data-variant`; never from an offline copy): the variant's id, on every beacon of that page view. The one with `view: true` is the exposure. An id the test doesn't have, or a page outside it → `400`. |
+| `converted` | The test's metrics (`data-converts`) this page view reached for the first time: each at most once per page view, each also counted in `events` of the same beacon, and only with `variant`. Anything else → `400`. |
 
 Unknown fields anywhere → `400`. A beacon with neither `view` nor an event → `400`.
 
@@ -656,7 +723,17 @@ traffic and rotated lazily (no timer).
     "events": { "proof_open": 31, "instrument_start:highload": 12, "render_tier:B": 280 }
   },
   "day": { "from": 1793254800, "…": "same shape" },
-  "rejected": { "invalid": 3, "rate_limited": 0 }
+  "rejected": { "invalid": 3, "rate_limited": 0 },
+  "experiment": {
+    "id": "hero-headline", "metric": "cta_start_project", "secondary": ["contact_submit"],
+    "plan": { "baseline": 0.05, "mde": 0.3, "alpha": 0.05, "power": 0.8, "sample_size": 4578 },
+    "variants": [
+      { "id": "hero-title", "views": 1204, "conversions": 61, "secondary": { "contact_submit": 3 } },
+      { "id": "hero-title-hardware", "views": 1185, "conversions": 70, "secondary": { "contact_submit": 2 } },
+      { "id": "hero-title-cycle", "views": 1210, "conversions": 52, "secondary": { "contact_submit": 1 } }
+    ],
+    "result": null
+  }
 }
 ```
 
@@ -667,6 +744,10 @@ traffic and rotated lazily (no timer).
 - `routes` and `events` list only keys with at least one count.
 - The proof console (`web/hud/visitors.ts`) shows the `start` window: "Since {date}: N page views
   measured", then LCP, INP, CLS, FCP, TTFB.
+- `experiment`: the A/B test of this build since the process started (no 24-hour window: a test is
+  judged on all its data), `null` when none runs. `variants` control first; `result` stays `null`
+  until every variant has `plan.sample_size` page views (§17). A beacon's page view and events are
+  counted in `start` and `day` as well, whatever the test does with them.
 
 ## 15. Offline mode: `/sw.js`
 
@@ -677,8 +758,8 @@ the one `self.__MINTAKA_SHELL__` in it with this build's file list and serves it
 `navigator.serviceWorker.register(scriptURL('/sw.js'), { scope: '/', updateViaCache: 'none' })`;
 the `mintaka` Trusted Types policy (`web/shared/tt.ts`) approves `/assets/*` and exactly `/sw.js`.
 
-**The file list** (`Shell`): `build`; `pages` (path → language and the hash the server's ETag is
-made of); `core` (main.js, islands.css and the hero core, each with its static imports from
+**The file list** (`Shell`): `build`; `pages` (path → language and the hashes the server's ETags
+are made of: one per A/B test variant, control first, any of which the server may send — §17); `core` (main.js, islands.css and the hero core, each with its static imports from
 esbuild's metafile); `fonts` (language → the fonts its pages preload); `renderers` (render tier
 A/B/C → its chunk with imports; D needs none); `assets` (every `/assets/` file of the build — the
 only assets ever stored). Any change to a shipped file changes the worker's bytes, so browsers
@@ -692,7 +773,9 @@ and every page an earlier build had stored, each with its language's fonts; `/` 
 the fonts of the language it was served in (`Content-Language`). After that, each page view posts
 `{ type: "warm", page, lang, tier, used }` (on `ready`, on every `tier` event, on
 `controllerchange`): the worker adds the page, its fonts, the renderer of its tier and the
-`/assets/` files it used, skipping what it already has and pages whose stored ETag is current.
+`/assets/` files it used, skipping what it already has and pages whose stored ETag is current —
+for a page of the A/B test, that of any of its variants. The worker keeps one copy per page: the
+variant its own request drew, which an offline view then shows (and doesn't count, §17).
 
 **Strategies:**
 
@@ -788,3 +871,182 @@ WebAssembly or data was never stored; any island whose code was never stored.
   10 min at most.
 - **Logs** (target `acme`): the CA, the names, dates, the account URL, and the CA's problem
   documents. Never keys, tokens or key authorizations.
+
+## 17. A/B tests
+
+Spec §12: A/B tests on the landing page itself — hero headline, button wording, order of the
+pillars — with variants assigned per page load on the server (no cookie), one test at a time, and
+a sample size decided in advance. Shared types and formulas: `crates/proof/src/experiment.rs`
+(plan, statistics) and `crates/proof/src/rum.rs` (beacon fields, `/_rum` shape).
+
+### 17.1 Declaring a test
+
+`[experiment]` in `content/site.toml` (published, like every value there):
+
+| Key | Meaning |
+|---|---|
+| `id` | Names the test (`hero-headline`): lower-case letters, digits, `-`. |
+| `control` | The page string that varies (`hero-title`); the control shows it as it is. |
+| `variants` | The strings shown in its place by the others (`hero-title-hardware`, `hero-title-cycle`). Every enabled language needs them; ids also name files. |
+| `metric` | The primary metric, an `EVENTS` key: a page view **converts** when it happens at least once (`cta_start_project`: a link to `#contact` was followed). |
+| `secondary` | Event keys counted per variant the same way and **never tested** (`contact_submit`, a guardrail: a headline that wins clicks but loses briefs is no win). The sample size is planned for `metric` alone; at a brief's rate a test of `contact_submit` would be badly underpowered, and every extra test raises the chance of a false positive. |
+| `baseline`, `mde`, `alpha`, `power` | The planning assumptions: the control's expected conversion rate per page view, the smallest relative lift worth finding (0.3 = +30 % of the baseline), the family-wise false-positive rate (two-sided) and the chance of finding a true lift of `mde`. |
+| `sample_size` | Page views per variant — the stopping point. The build computes it from the four above and **fails if this number disagrees**, so it is the one written down before the test began. |
+
+**The plan:** each variant is compared with the control by a two-sided two-proportion z-test with
+pooled variance; `alpha` is split evenly over the k − 1 comparisons (Bonferroni). Per variant,
+n = ⌈(z₁₋ₐ⁄₂·√(2p̄(1−p̄)) + z_power·√(p₁(1−p₁) + p₂(1−p₂)))² ⁄ (p₂ − p₁)²⌉ with p₁ = `baseline`,
+p₂ = `baseline`·(1 + `mde`), p̄ = (p₁ + p₂)/2 and a = `alpha`/(k − 1) — the equation R's
+`power.prop.test` solves (tested against its documented `p1 = .50, p2 = .75, power = .90` → 76.7).
+The first test: baseline 5 %, lift to 6.5 %, alpha 0.05 (0.025 per comparison), power 0.8 →
+**4,578 page views per variant**, 13,734 in all. The baseline is a placeholder until two weeks of
+`/_rum` give a real one (spec §2.3); changing it means a new `sample_size`, which the build asks for.
+
+To end a test, remove the table (adopting a winner means changing the control's text); a new test
+gets a new `id`.
+
+### 17.2 Building it
+
+The home page of every enabled language is rendered once per variant: `Strings::as_variant(control,
+variant, …)` makes every read of the control's message read the variant's instead. The control is
+the route's own file (`{lang}/index.html`), the others sit beside it (`{lang}/index.{variant}.html`),
+listed in the route's `variants` (§3) and precompressed one by one. Variant pages carry
+`<html data-variant data-converts>` (§9) and are otherwise identical: same stylesheet, so the CSP's
+hashes cover them (the build checks every inline `<style>` of every page and variant against the
+CSP), and each is budgeted on its own (first screen ≤ 14 kB, whole page ≤ 32 kB; the first view
+counts the largest). The privacy page gains `pv-ab` while a test runs. curl mode has no variants.
+
+### 17.3 Serving it
+
+For a page of the test — and `/` in front of it — the server draws one variant per request,
+uniformly at random from the thread's generator (`assets::Arms`), for `GET` and `HEAD`, and only then
+compares `If-None-Match` with that variant's ETag (§4.3). Nothing about the request or the visitor
+goes into the draw, and nothing about it is kept or logged: the access log names the route, never
+the variant. A returning visitor may get another variant; that is acceptable for copy tests.
+Responses are `Cache-Control: private, no-cache`.
+
+### 17.4 Counting it
+
+- **Exposure:** the beacon with `view: true` of a page view our server sent with a variant (§14.1:
+  every beacon of that page view names it; an offline copy was never drawn, so it names none).
+- **Conversion:** `converted` — the first time a page view reaches the test's metric, or one of its
+  secondary ones; the collector reports each once per page view, in the first beacon that counts
+  it (the page view's first, or a later one if the visitor came back and then did it).
+- **Per variant**, in memory, since the process started: page views, conversions, and the same per
+  secondary metric. Each variant stops counting once it has `sample_size` page views; a conversion
+  reported after that isn't counted either (it can't be told from one of a page view after the
+  stop). Beacons are still counted in the `/_rum` totals as usual.
+- **Restarts reset it** like the rest of `/_rum`: a deploy during a test starts its count over.
+- Global Privacy Control and Do Not Track: nothing is sent (§14.1), so such a page view is neither
+  an exposure nor a conversion. No cookie, no storage, no identifier: per variant there are only
+  totals.
+
+### 17.5 The result
+
+Once every variant has its `sample_size` page views, the server compares each variant after the
+control with the control, once: the z statistic, the two-sided p-value and `significant` (p below
+`alpha`/(k − 1)), in `/_rum` → `experiment.result`. Before that, `result` is `null` — no interim
+p-values, because stopping on an early lucky streak is how A/B tests mislead. The result is final:
+nothing is counted after it. The proof console's "Real visitors" row (`web/hud/visitors.ts`, which
+loads `web/hud/experiment.ts` while a test runs) shows each variant's page views out of the plan,
+conversions and their rate, marks the control and the variant of this page view, and shows the
+verdicts only when the test is complete (it checks the page views again before showing one).
+
+## 18. Behind a reverse proxy (`--trusted-proxy`)
+
+For a host where another server owns ports 80/443 and ends visitors' TLS (production today: the
+provider's OpenResty edge → the host's Caddy → us, plain HTTP on the docker gateway).
+
+| Flag | Meaning |
+|---|---|
+| `--trusted-proxy CIDR` | Repeatable. Connections from these addresses are proxied. |
+| `--client-ip-header NAME` | Where the proxy names the visitor (default `x-forwarded-for`); the **last** address in it counts — the one the proxy itself saw or appended. Production: Caddy sets `X-Mintaka-Client-Ip` from the edge's `X-Forwarded-For`, overwriting anything a client sent. |
+
+- One proxy connection carries many visitors, so the visitor's /24 or /48 is taken **per
+  request** (`ReqCtx.client_net`) and used only by the rate limiters; never logged or stored.
+  An unreadable header falls back to the proxy's own network (everyone shares one bucket —
+  stricter, never looser).
+- Connections from anywhere else ignore the header (an untrusted client can't pick its bucket).
+- Proxied requests get no kernel RTT, a Server-Timing `edge` flag (§4.5) and `/_proof.edge` (§5);
+  HSTS is not sent (this server didn't serve TLS, and a host-wide policy belongs to the host).
+- `/_telemetry` sends `Cache-Control: no-store, no-transform` and `X-Accel-Buffering: no`, so a
+  compressing or buffering proxy passes ticks through as they happen.
+
+## 19. The Telegram bot
+
+The reply-time promise made true where it can be: with the bot configured, a client who sends the
+form can continue in Telegram, where the bot answers at once, in the brief's language, and the
+team's replies reach them in the same chat. Server side: `crates/server/src/telegram/` (`api`
+client, `link` codes, `chats` memory, `relay` logic).
+
+### 19.1 Configuration
+
+| Variable | Meaning |
+|---|---|
+| `MINTAKA_TELEGRAM_BOT_TOKEN` | The bot's token (@BotFather). Environment only (a flag would show in the process list); never logged. |
+| `MINTAKA_TELEGRAM_CHAT_ID` | The team chat's **numeric** id (a group's looks like `-1001234567890`): notifications, headers and the clients' messages go there. |
+| `MINTAKA_TELEGRAM_API_BASE` | Tests only: where the Bot API is (default `https://api.telegram.org`); `https://`, or `http://` to this machine — the token travels in the URL. |
+
+Both of the first two, or neither. At startup the server asks `getMe` (at most 5 s) for the bot's
+username, then one task long-polls `getUpdates` (`timeout` 50 s, `allowed_updates: ["message"]`).
+Errors back off from 1 s, doubling, to 5 minutes (or `retry_after` on `429`); `409` means a webhook
+is set or another server polls with the same token — only one may; a refused token (`401`/`404`)
+stops the bot. On shutdown the poll is dropped and the memory written. The manifest must hold every
+`proof::BOT_MESSAGES` id for the default language (§3), or startup fails: rebuild `dist/`.
+
+### 19.2 The link
+
+- A successful **JSON** submission answers `"bot_link": "https://t.me/<bot>?start=<code>"` — only
+  while the bot is reachable (`getMe` answered, and Telegram answered within the last 120 s),
+  because the success screen then says the bot answers right away. Without the bot, or while it
+  can't reach Telegram, the answer is `{"ok":true}` as before.
+- `<code>` = `b1` + base64url(`ms[6] ‖ random[8] ‖ len[1] ‖ lang[len] ‖ tag[12]`): the brief id's
+  two parts (`{ms}-{16 hex digits}`, the stored file's name), its language, and the first 12 bytes
+  of HMAC-SHA256(`{data-dir}/telegram.key`, `"mintaka-bot/start/v1"` ‖ the bytes before). At most
+  64 characters of `A–Z a–z 0–9 _ -` (Telegram's limit for start parameters). Nothing is stored to
+  issue it. It connects a chat for **7 days** after the brief; deleting the key invalidates every
+  unused link (chats already connected stay connected).
+- A honeypot submission (§8.2) answers like success with a decoy of the same shape, MAC'd under
+  `"mintaka-bot/decoy/v1"`, which the bot ignores like a forgery.
+- The no-JS form gets no link: its `303` would have to carry the code in a URL, and the proxy in
+  front of the server (§18) may log URLs.
+- The client (`web/instruments/contact.ts`) shows "Continue in Telegram — our bot answers right
+  away" (`contact-bot`, `contact-bot-note`) only when the answer has a link, and only a link of
+  exactly that shape. The static copy (`ct-lead`, `sent-body`) promises the team's reply time, never
+  an immediate answer.
+
+### 19.3 What the bot does
+
+| Message | What happens |
+|---|---|
+| `/start <code>` in a private chat, valid | The chat is connected to the brief (a chat's earlier link is replaced); the bot answers at once with `bot-linked` in the brief's language and posts a header in the team chat: "Brief {id} continues in Telegram…". Already connected to this chat: `bot-again`. Connected to another chat: `bot-taken`. |
+| `/start <code>`, expired | `bot-expired` |
+| `/start <code>`, forged, damaged or a decoy | Nothing |
+| `/start` alone, from a chat not connected | `bot-hello` (a pointer to the site) |
+| Anything else from a connected chat | `copyMessage` into the team chat, as a reply to the brief's header (no "forwarded from"); files and photos too |
+| A team-chat message that replies to a brief's header, a copy, or a reply already sent on | `copyMessage` to the client, as the bot's own message. Refused (the client blocked the bot): a note in the team chat. |
+| `/stop` from a connected chat | The link is forgotten; `bot-stopped`; a note under the header in the team chat |
+| Everything else | Nothing: other groups and channels, bots, edited messages (not even asked for), chats not connected |
+
+**Limits**, per chat, in memory: a connected chat 30 messages an hour (burst 30), any other private
+chat 5; past that, messages are dropped. Team replies aren't limited. The team chat can stay in
+Telegram's privacy mode: the bot only needs replies to its own messages.
+
+### 19.4 Memory
+
+`{data-dir}/telegram.json`, mode 0600, replaced atomically (temporary file, fsync, rename):
+`{"version": 1, "offset": <next getUpdates offset>, "links": [{"chat", "brief", "lang", "linked",
+"seen", "header", "team": [message ids]}]}` — chat ids, brief ids and languages, team-chat message
+numbers (at most 200 per link) and Unix times. Never a message, a name or a username. A link is
+forgotten 30 days after its last message in either direction, or at once on `/stop`; at most
+10,000 links. Written after every batch of updates, so a restart neither forgets a link nor
+handles an update twice. Logs name brief ids and what happened, never chat ids or text. The
+privacy page (`pv-telegram`) says the same.
+
+### 19.5 Copy
+
+What the bot writes to clients is page copy: `bot-*` in `content/{lang}/page.ftl`, rendered per
+language into `manifest.bot` (`$within` is `site.toml`'s reply time and `$site` the language's home
+page, at build time; `{brief}` is filled by the server), falling back to the default language
+message by message. Notes for the team (header, `/stop`, not delivered) are English in the server,
+like the new-brief notification.

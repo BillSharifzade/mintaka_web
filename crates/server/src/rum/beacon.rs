@@ -1,10 +1,12 @@
 //! A `POST /_rum` body → a [`Beacon`], or a [`Refusal`]. Parse, don't validate: once a `Beacon`
 //! exists, its route is one of ours, every metric is in range and every event is a known key with
-//! a sane count. Nothing in it can name a path, a person or a browser.
+//! a sane count, and a variant of the A/B test is one that page serves. Nothing in it can name a
+//! path, a person or a browser.
 
 use proof::RumBeacon;
 use proof::rum::{EVENTS, METRICS, RUM_MAX_EVENT_COUNT};
 
+use super::experiment::Test;
 use super::stats::SCALE;
 
 /// One accepted beacon, in the aggregator's own units.
@@ -18,6 +20,9 @@ pub(crate) struct Beacon {
     pub metrics: [Option<u64>; METRICS.len()],
     /// Per [`EVENTS`] entry: how many times it happened (0 = not reported).
     pub events: [u32; EVENTS.len()],
+    /// The A/B test variant the page view showed (an index into the test's variants), with the
+    /// test's metrics it reached for the first time (indexes into the test's metrics).
+    pub variant: Option<(usize, Vec<usize>)>,
 }
 
 /// Why a beacon was refused. The reason goes back to the sender as fixed text; nothing from the
@@ -34,6 +39,9 @@ pub(crate) enum Refusal {
     Event,
     /// Neither a page view nor any event: nothing to count.
     Empty,
+    /// A variant no running test has on that page, or a conversion without its variant or its
+    /// event (or twice).
+    Variant,
 }
 
 impl Refusal {
@@ -44,14 +52,17 @@ impl Refusal {
             Refusal::Metric => "beacon refused: metric out of range\n",
             Refusal::Event => "beacon refused: unknown event or count\n",
             Refusal::Empty => "beacon refused: nothing to count\n",
+            Refusal::Variant => "beacon refused: unknown experiment variant or conversion\n",
         }
     }
 }
 
-/// Parses `body` against the routes the aggregator knows.
-pub(crate) fn parse(body: &[u8], routes: &[String]) -> Result<Beacon, Refusal> {
+/// Parses `body` against the routes the aggregator knows and the A/B test it counts, if any. Pages
+/// name themselves by their URL path; under a URL prefix (`base`) it comes off first.
+pub(crate) fn parse(body: &[u8], base: &str, routes: &[String], test: Option<&Test>) -> Result<Beacon, Refusal> {
     let raw: RumBeacon = serde_json::from_slice(body).map_err(|_| Refusal::Shape)?;
-    let route = routes.iter().position(|r| *r == raw.route).ok_or(Refusal::Route)?;
+    let name = raw.route.strip_prefix(base).filter(|r| !base.is_empty() && r.starts_with('/')).unwrap_or(&raw.route);
+    let route = routes.iter().position(|r| r == name).ok_or(Refusal::Route)?;
 
     let mut metrics = [None; METRICS.len()];
     for (i, value) in raw.metrics.values().into_iter().enumerate() {
@@ -74,7 +85,25 @@ pub(crate) fn parse(body: &[u8], routes: &[String]) -> Result<Beacon, Refusal> {
     if !raw.view && events.iter().all(|&n| n == 0) {
         return Err(Refusal::Empty);
     }
-    Ok(Beacon { route, view: raw.view, metrics, events })
+
+    let variant = match (raw.variant, test) {
+        (None, _) if raw.converted.is_empty() => None,
+        (None, _) | (Some(_), None) => return Err(Refusal::Variant),
+        (Some(id), Some(test)) => {
+            let v = test.variant(&id).filter(|_| test.serves(route)).ok_or(Refusal::Variant)?;
+            let mut converted = Vec::with_capacity(raw.converted.len());
+            for key in &raw.converted {
+                // A first time is also an event of this beacon, and happens once.
+                let (m, e) = test.metric(key).ok_or(Refusal::Variant)?;
+                if events[e] == 0 || converted.contains(&m) {
+                    return Err(Refusal::Variant);
+                }
+                converted.push(m);
+            }
+            Some((v, converted))
+        }
+    };
+    Ok(Beacon { route, view: raw.view, metrics, events, variant })
 }
 
 #[cfg(test)]
@@ -86,11 +115,60 @@ mod tests {
     }
 
     fn ok(json: &str) -> Beacon {
-        parse(json.as_bytes(), &routes()).unwrap_or_else(|e| panic!("{json}: {e:?}"))
+        parse(json.as_bytes(), "", &routes(), None).unwrap_or_else(|e| panic!("{json}: {e:?}"))
     }
 
     fn refused(json: &str) -> Refusal {
-        parse(json.as_bytes(), &routes()).expect_err(json)
+        parse(json.as_bytes(), "", &routes(), None).expect_err(json)
+    }
+
+    /// The test serves its variants on `/` and `/en/` (route indexes 0 and 1).
+    fn test() -> Test {
+        Test::new(crate::rum::experiment::tests::spec(100), vec![0, 1]).unwrap()
+    }
+
+    #[test]
+    fn routes_under_a_url_prefix() {
+        let under = |json: &str| parse(json.as_bytes(), "/mintaka", &routes(), None);
+        assert_eq!(under(r#"{"route":"/mintaka/en/","view":true}"#).unwrap().route, ok(r#"{"route":"/en/","view":true}"#).route);
+        assert_eq!(under(r#"{"route":"/mintaka/","view":true}"#).unwrap().route, ok(r#"{"route":"/","view":true}"#).route);
+        assert!(under(r#"{"route":"404","view":true}"#).is_ok(), "the not-found page names no path");
+        for outside in [r#"{"route":"/mintakax/en/"}"#, r#"{"route":"/other/en/"}"#] {
+            assert!(matches!(under(outside), Err(Refusal::Route)), "{outside}");
+        }
+    }
+
+    #[test]
+    fn variants_and_conversions() {
+        let t = test();
+        let ok = |json: &str| parse(json.as_bytes(), "", &routes(), Some(&t)).unwrap_or_else(|e| panic!("{json}: {e:?}"));
+        let refused = |json: &str| parse(json.as_bytes(), "", &routes(), Some(&t)).expect_err(json);
+        let exposure = ok(r#"{"route":"/en/","view":true,"variant":"hero-title-hardware"}"#);
+        assert_eq!(exposure.variant, Some((1, vec![])));
+        let both = ok(r#"{"route":"/en/","view":true,"variant":"hero-title","events":{"cta_start_project":3,"contact_submit":1},"converted":["contact_submit","cta_start_project"]}"#);
+        assert_eq!(both.variant, Some((0, vec![1, 0])), "metrics by the test's order, as listed");
+        let later = ok(r#"{"route":"/en/","variant":"hero-title-cycle","events":{"contact_submit":1},"converted":["contact_submit"]}"#);
+        assert_eq!((later.view, later.variant), (false, Some((2, vec![1]))));
+        assert_eq!(ok(r#"{"route":"/en/","view":true}"#).variant, None, "a page view without the test (an offline copy)");
+        assert_eq!(ok(r#"{"route":"/","view":true,"variant":"hero-title"}"#).variant, Some((0, vec![])));
+        let again = ok(r#"{"route":"/en/","variant":"hero-title","events":{"cta_start_project":1}}"#);
+        assert_eq!(again.variant, Some((0, vec![])), "a later beacon: neither an exposure nor a conversion");
+
+        for (json, why) in [
+            (r#"{"route":"/en/","view":true,"variant":"hero-title-bold"}"#, "unknown variant"),
+            (r#"{"route":"/en/privacy/","view":true,"variant":"hero-title"}"#, "a page outside the test"),
+            (r#"{"route":"/en/","view":true,"events":{"cta_start_project":1},"converted":["cta_start_project"]}"#, "a conversion without its variant"),
+            (r#"{"route":"/en/","view":true,"variant":"hero-title","converted":["cta_start_project"]}"#, "a conversion without its event"),
+            (r#"{"route":"/en/","view":true,"variant":"hero-title","events":{"proof_open":1},"converted":["proof_open"]}"#, "not one of the test's metrics"),
+            (r#"{"route":"/en/","view":true,"variant":"hero-title","events":{"cta_start_project":1},"converted":["cta_start_project","cta_start_project"]}"#, "twice"),
+            (r#"{"route":"/en/","view":true,"variant":"Hero-Title"}"#, "ids are exact"),
+        ] {
+            assert_eq!(refused(json), Refusal::Variant, "{why}");
+        }
+        assert_eq!(refused(r#"{"route":"/en/","view":true,"variant":["hero-title"]}"#), Refusal::Shape);
+        // No test running: any variant is unknown.
+        let none = parse(br#"{"route":"/en/","view":true,"variant":"hero-title"}"#, "", &routes(), None);
+        assert_eq!(none, Err(Refusal::Variant));
     }
 
     #[test]

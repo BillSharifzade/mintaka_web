@@ -43,11 +43,13 @@ armour-pq-badge-pq = post-quantum
 armour-pq-badge-classical = classical
 armour-pq-badge-unknown = not reported
 armour-pq-badge-plain = no TLS
+armour-pq-badge-edge = at the hosting edge
 armour-pq-hybrid = Your connection used { $group } — a hybrid of classical and post-quantum key exchange.
 armour-pq-pq = Your connection used { $group } — post-quantum key exchange.
 armour-pq-classical = Your browser negotiated { $group } (classical). We offer post-quantum key exchange to every browser that supports it.
 armour-pq-unknown = Our server could not read which key exchange this connection used, so it reports none rather than guess.
 armour-pq-plain = Development server: plain HTTP, no TLS.
+armour-pq-edge = HTTPS for this address ends at our hosting provider's edge proxy, so our server can't see which TLS version, cipher or key exchange your browser negotiated, and won't guess. Your browser's site information panel shows them.
 armour-tls-src = From /_proof: what our server negotiated with your browser for this connection.
 armour-tls-error = Couldn't reach /_proof ({ $reason }), so the connection details are missing. Reload to try again.
 

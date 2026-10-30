@@ -192,6 +192,20 @@
     padding-inline-start: calc(0.85rem + var(--s-2));
   }
 
+  /* The A/B test under "Real visitors" (web/hud/experiment.ts): a block of its own, each variant
+     on one item with its numbers on a second line. */
+  .hud-ab {
+    margin-block-start: var(--s-3);
+  }
+
+  .hud-ab .hud-list > li {
+    display: block;
+  }
+
+  .hud-ab .hud-list + .hud-sub {
+    margin-block-start: var(--s-2);
+  }
+
   .hud-foot {
     display: grid;
     gap: var(--s-2);

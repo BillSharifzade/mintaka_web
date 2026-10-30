@@ -11,7 +11,7 @@ import { assetUrl } from '../../shared/assets.ts';
 import { $, h, render } from '../../shared/dom.ts';
 import { offline, reducedMotion } from '../../shared/env.ts';
 import { track } from '../../shared/rum.ts';
-import { lang, t, tp } from '../../shared/i18n.ts';
+import { lang, loadStrings, t, tp } from '../../shared/i18n.ts';
 import { ascii, count, hex, parseInput, rate, seconds, splitPanic } from './format.ts';
 import { FuzzRun, Probe, compile, minimize, randomSeed } from './host.ts';
 import type { Build, Crash, Discovery, Mode } from './host.ts';
@@ -182,8 +182,16 @@ class FuzzerIsland {
 
   // ── flow ────────────────────────────────────────────────────────────────
 
-  private onPrimary(): void {
-    if (this.run) return;
+  /**
+   * What the fuzzer says once it runs (the log, results, coverage points, the try panel) is a lazy
+   * string bundle, fetched on the first start: most visitors never press the button. Offline before
+   * it was ever fetched, the instrument says so in words and starts once the text arrives.
+   */
+  private readonly text = (): Promise<boolean> =>
+    loadStrings('fuzzer').then((ok) => ok || (render(this.result, h('p', { class: 'fz__note', role: 'status' }, t(offline() ? 'offline-island' : 'fuzzer-status-failed'))), false));
+
+  private async onPrimary(): Promise<void> {
+    if (this.run || !(await this.text()) || this.run) return;
     if (this.state === 'done') {
       if (this.chapter === CHAPTERS.length - 1) {
         this.chapter = 0;
@@ -311,8 +319,12 @@ class FuzzerIsland {
     const running = this.state === 'running';
     const next = this.state === 'done' ? CHAPTERS[this.chapter + 1] : this.spec;
     this.primary.textContent = t(next ? NEXT[next.id] : 'fuzzer-again');
+    // The button just pressed hides; keyboard focus moves to the one that takes its place.
+    const had = document.activeElement;
     this.primary.hidden = running;
     this.stopButton.hidden = !running;
+    if (had === this.primary && running) this.stopButton.focus();
+    else if (had === this.stopButton && !running) this.primary.focus();
     for (const pace of ['watch', 'full'] as const) this.paceButtons[pace].setAttribute('aria-pressed', String(this.pace === pace));
     this.paceGroup.hidden = !running;
     this.paceHint.hidden = !(running && this.pace === 'watch');
@@ -413,7 +425,19 @@ class FuzzerIsland {
 
   // ── try it yourself ─────────────────────────────────────────────────────
 
+  /** "Try to crash it yourself": a closed <details> whose body is built (with its text) when it first opens. */
   private buildTry(): HTMLElement {
+    const details = h('details', { class: 'fz__try' }, h('summary', null, t('fuzzer-try-title')));
+    let built = false;
+    details.addEventListener('toggle', async () => {
+      if (!details.open || built || !(await this.text()) || built) return;
+      built = true;
+      details.append(...this.tryBody());
+    });
+    return details;
+  }
+
+  private tryBody(): HTMLElement[] {
     const input = h('input', { id: 'fz-try-input', class: 'fz__try-input', type: 'text', spellcheck: 'false', autocomplete: 'off', value: EXAMPLES.valid });
     const out = h('p', { class: 'fz__try-out', 'aria-live': 'polite' });
     const radios = (['buggy', 'fixed'] as const).map((b) => {
@@ -453,10 +477,7 @@ class FuzzerIsland {
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') go();
     });
-    return h(
-      'details',
-      { class: 'fz__try' },
-      h('summary', null, t('fuzzer-try-title')),
+    return [
       h('p', { class: 'fz__try-lead' }, t('fuzzer-try-lead')),
       h('p', { class: 'fz__try-format' }, t('fuzzer-try-format')),
       h('label', { class: 'fz__try-label', for: 'fz-try-input' }, t('fuzzer-try-label')),
@@ -469,6 +490,6 @@ class FuzzerIsland {
       ),
       h('div', { class: 'fz__try-examples' }, example('fuzzer-try-example-valid', EXAMPLES.valid), example('fuzzer-try-example-betelgeuse', EXAMPLES.betelgeuse)),
       out,
-    );
+    ];
   }
 }

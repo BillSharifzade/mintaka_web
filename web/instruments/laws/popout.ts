@@ -5,7 +5,7 @@
 // Enter). Timed from the animation frame that painted the field to the answer's event.timeStamp.
 
 import { h, render, s } from '../../shared/dom.ts';
-import { avg, fill, fmt, foreperiod, frame, L, num, P, slot, type Experiment, type Item } from './kit.ts';
+import { avg, fill, fmt, foreperiod, frame, L, MS, num, P, slot, type Experiment, type Item } from './kit.ts';
 import { bars, plotBox } from './plot.ts';
 import { shuffle } from './stats.ts';
 
@@ -136,7 +136,7 @@ export const popout: Experiment = (panel, api) => {
     bars(
       svg,
       CONDS.map((c) => ({ label: short[c], value: avg(rts[c]), mark: (x: number, y: number) => star(x, y, 5, ...MARK[c]) })),
-      'ms',
+      MS,
     );
   };
 
@@ -182,7 +182,7 @@ export const popout: Experiment = (panel, api) => {
     start.textContent = L('again');
     const items: Item[] = CONDS.map((c) => {
       const m = avg(rts[c]);
-      return [L(`pop-${c}`), m === null ? '—' : fmt(m), m === null ? '' : 'ms'];
+      return [L(`pop-${c}`), m === null ? '—' : fmt(m), m === null ? '' : MS];
     });
     const colour = avg(rts.colour);
     const both = avg(rts.both);

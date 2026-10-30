@@ -21,7 +21,7 @@ use axum::body::Body;
 use axum::response::Response;
 use axum::routing::any;
 use bytes::Bytes;
-use http::header::{ALLOW, ALT_SVC, CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE};
+use http::header::{ALLOW, ALT_SVC, CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE, LOCATION};
 use http::{HeaderValue, Method, StatusCode};
 
 use crate::app::AppState;
@@ -88,6 +88,10 @@ pub(crate) fn finish(app: &AppState, ctx: &ReqCtx, method: &Method, response: &m
     if let Some(alt_svc) = alt_svc(app, ctx) {
         headers.insert(ALT_SVC, alt_svc.clone());
     }
+    // Handlers redirect within the site (`/en/sent/`); the visitor's URL has the prefix.
+    if let Some(location) = headers.get(LOCATION).and_then(|l| prefixed(&app.site.base, l)) {
+        headers.insert(LOCATION, location);
+    }
 
     let ready = Instant::now();
     let total = ready.saturating_duration_since(ctx.t0);
@@ -102,7 +106,7 @@ pub(crate) fn finish(app: &AppState, ctx: &ReqCtx, method: &Method, response: &m
         None => (total, Duration::ZERO, RouteName::Named("(router)"), false),
     };
     let tls = if ctx.seq == 1 { ctx.conn.tls.as_ref().and_then(|t| t.handshake) } else { None };
-    if let Some(value) = server_timing(total, route, render, tls, ctx.rtt, ctx.quic_rtt) {
+    if let Some(value) = server_timing(total, route, render, tls, ctx.rtt, ctx.quic_rtt, ctx.edge.is_some()) {
         headers.insert(SERVER_TIMING, value);
     }
 
@@ -118,6 +122,41 @@ pub(crate) fn finish(app: &AppState, ctx: &ReqCtx, method: &Method, response: &m
         status = status.as_u16(),
         us = crate::headers::micros(total),
     );
+}
+
+/// `/en/sent/` → `/mintaka/en/sent/` under a URL prefix; `None` when there is none, or for
+/// absolute and scheme-relative (`//host`) locations.
+fn prefixed(base: &str, location: &HeaderValue) -> Option<HeaderValue> {
+    let l = location.as_bytes();
+    if base.is_empty() || !l.starts_with(b"/") || l.starts_with(b"//") {
+        return None;
+    }
+    let mut out = Vec::with_capacity(base.len() + l.len());
+    out.extend_from_slice(base.as_bytes());
+    out.extend_from_slice(l);
+    HeaderValue::from_bytes(&out).ok()
+}
+
+/// `301` to a path within the site (prefixed on the way out, see [`finish`]).
+pub(crate) fn moved(location: &str) -> Response {
+    let Ok(location) = HeaderValue::try_from(location) else { return internal_error() };
+    let mut response = Response::new(Body::empty());
+    *response.status_mut() = StatusCode::MOVED_PERMANENTLY;
+    response.headers_mut().insert(LOCATION, location);
+    response.headers_mut().insert(CACHE_CONTROL, HeaderValue::from_static("public, max-age=3600"));
+    response
+}
+
+/// A plain `400` for requests the protocol itself forbids.
+pub(crate) fn bad_request(why: &'static str) -> Response {
+    mark(no_store(StatusCode::BAD_REQUEST, "text/plain; charset=utf-8", why), RouteName::Named("(bad request)"), Instant::now())
+}
+
+/// A plain `404` for paths outside the site's URL prefix: they belong to whatever else shares
+/// the host, so no page of ours (nor a suggestion) is offered.
+pub(crate) fn outside_base() -> Response {
+    let response = no_store(StatusCode::NOT_FOUND, "text/plain; charset=utf-8", "not found\n");
+    mark(response, RouteName::Named("(outside the URL prefix)"), Instant::now())
 }
 
 /// `Alt-Svc` goes on TLS responses (TCP and HTTP/3) when HTTP/3 is on; never over plain HTTP,

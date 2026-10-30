@@ -8,6 +8,7 @@ import { lastValue, on } from '../shared/bus.ts';
 import { whenOnline } from '../shared/env.ts';
 import { t } from '../shared/i18n.ts';
 import { scriptURL } from '../shared/tt.ts';
+import { at } from '../shared/base.ts';
 
 let started = false;
 
@@ -16,7 +17,7 @@ function used(): string[] {
   const out: string[] = [];
   for (const e of performance.getEntriesByType('resource')) {
     const url = new URL(e.name);
-    if (url.origin === location.origin && url.pathname.startsWith('/assets/')) out.push(url.pathname);
+    if (url.origin === location.origin && url.pathname.startsWith(at('/assets/'))) out.push(url.pathname);
   }
   return out;
 }
@@ -27,7 +28,7 @@ export function start(): void {
   started = true;
   const warm = (to: ServiceWorker | null | undefined) =>
     to?.postMessage({ type: 'warm', page: location.pathname, lang: document.documentElement.lang, tier: lastValue('tier') ?? null, used: used() });
-  sw.register(scriptURL('/sw.js') as string, { scope: '/', updateViaCache: 'none' }).catch((err: unknown) => {
+  sw.register(scriptURL(at('/sw.js')) as string, { scope: at('/'), updateViaCache: 'none' }).catch((err: unknown) => {
     if (MINTAKA_DEV) console.info('[mintaka] offline mode unavailable:', err);
   });
   void sw.ready.then((reg) => {

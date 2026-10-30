@@ -66,7 +66,8 @@ test('display: µs below 1 ms, else ms with one decimal', () => {
   assert.deepEqual(msText(48.21, 'en'), { value: '48.2', unit: 'ms' });
   assert.deepEqual(msText(53, 'en'), { value: '53.0', unit: 'ms' });
   assert.deepEqual(msText(1234.56, 'en'), { value: '1,234.6', unit: 'ms' });
-  assert.deepEqual(msText(48.21, 'ru'), { value: '48,2', unit: 'ms' });
+  assert.deepEqual(msText(48.21, 'ru'), { value: '48,2', unit: 'мс' });
+  assert.deepEqual(msText(0.021, 'ru'), { value: '21', unit: 'мкс' });
 });
 
 test('display: floor + detours, as shown, add up to the round trip as shown', () => {
@@ -124,8 +125,10 @@ const nav = (fields: Record<string, number>, timings: Record<string, number> = {
     serverTiming: Object.entries(timings).map(([name, duration]) => ({ name, duration, description: '' })),
   }) as unknown as PerformanceNavigationTiming;
 
-test('round trip from the navigation entry: kernel first, then the browser, never a cache hit', () => {
+test('round trip from the navigation entry: kernel first, then QUIC, then the browser, never a cache hit', () => {
   assert.deepEqual(fromNavigation(nav({}, { app: 0.4, krtt: 48.21 })), { rtt: 48.21, server: 0.4, source: 'kernel' });
+  assert.deepEqual(fromNavigation(nav({}, { app: 0.4, qrtt: 47.9 })), { rtt: 47.9, server: 0.4, source: 'quic' });
+  assert.equal(fromNavigation(nav({}, { app: 0.4, krtt: 48.21, qrtt: 47.9 }))?.source, 'kernel');
   const browser = fromNavigation(nav({}, { app: 0.4 }));
   assert.equal(browser?.source, 'navigation');
   near(browser!.rtt, 53, 1e-9);

@@ -24,6 +24,7 @@ use crate::pow::Pow;
 use crate::quic::{self, QuicListener};
 use crate::routes::{self, RedirectTarget};
 use crate::rum::Rum;
+use crate::telegram::{Chats, Telegram};
 use crate::telemetry::{self, Metrics, StreamLimit};
 use crate::tls::{self, SelfSigned, TcpTls};
 
@@ -40,6 +41,8 @@ pub struct Server {
     redirect: Option<(TcpListener, RedirectTarget)>,
     self_signed: Option<SelfSigned>,
     acme: Option<Arc<Acme>>,
+    /// The Telegram bot's memory, handed to its task when the server runs.
+    chats: Option<Chats>,
 }
 
 impl Server {
@@ -49,7 +52,15 @@ impl Server {
         let security = SecurityHeaders::new(&site.csp).context("manifest `csp`")?;
         let cores = std::thread::available_parallelism().map_or(1, |n| u32::try_from(n.get()).unwrap_or(u32::MAX));
         let tls_setup = config.tls.as_ref().map(tls::setup).transpose()?;
-        let contact = Contact::new(&config.data_dir, config.contact_recipient.as_deref(), config.telegram.as_ref())?;
+        let (telegram, chats) = match &config.telegram {
+            Some(settings) => {
+                let (telegram, chats) = Telegram::new(settings, &config.data_dir, &site.bot, &site.default_lang)?;
+                telegram.hello().await;
+                (Some(Arc::new(telegram)), Some(chats))
+            }
+            None => (None, None),
+        };
+        let contact = Contact::new(&config.data_dir, config.contact_recipient.as_deref(), telegram)?;
         let ctf = Ctf::open(&config.data_dir)?;
         let hello = telemetry::hello_frame(&TelemetryHello {
             build: site.build.clone(),
@@ -73,11 +84,20 @@ impl Server {
         tracing::info!(
             recipient = %contact.store.recipient(),
             dir = %config.data_dir.join("contact").display(),
-            telegram = contact.notifier.is_some(),
+            telegram = contact.telegram.is_some(),
             "contact briefs are age-encrypted at rest"
         );
 
-        let rum = Rum::new(site.page_paths())?;
+        let rum = Rum::new(&site.base, site.page_paths(), site.experiment())?;
+        if let Some((e, paths)) = site.experiment() {
+            tracing::info!(
+                experiment = %e.id,
+                variants = e.variants.len(),
+                sample_size = e.plan.sample_size,
+                "A/B test on {}: one variant per page load, drawn at random",
+                paths.join(", ")
+            );
+        }
         let http = match config.listen {
             Some(addr) => Some(listen(addr, "--listen").await?),
             None => None,
@@ -131,12 +151,21 @@ impl Server {
             rum,
             hello,
             alt_svc,
+            proxy: config.proxy.clone(),
             shutdown: shutdown_rx,
         });
 
 
         if let Some(l) = &http {
-            tracing::info!("listening on http://{} (plain HTTP: development)", l.local_addr()?);
+            match &config.proxy {
+                Some(p) => tracing::info!(
+                    "listening on http://{} (plain HTTP behind the trusted proxy {}; visitor address from {})",
+                    l.local_addr()?,
+                    p.from.iter().map(ToString::to_string).collect::<Vec<_>>().join(", "),
+                    p.client_ip_header
+                ),
+                None => tracing::info!("listening on http://{} (plain HTTP: development)", l.local_addr()?),
+            }
         }
         if let (Some((l, _)), Some(settings)) = (&https, &config.tls) {
             let versions = if settings.allow_tls12 { "TLS 1.3 + 1.2" } else { "TLS 1.3 only" };
@@ -167,7 +196,7 @@ impl Server {
         if let Some((l, target)) = &redirect {
             tracing::info!("redirecting http://{} to https (port {})", l.local_addr()?, target.https_port);
         }
-        Ok(Server { app, shutdown, grace: config.shutdown_grace, http, https, quic, redirect, self_signed, acme })
+        Ok(Server { app, shutdown, grace: config.shutdown_grace, http, https, quic, redirect, self_signed, acme, chats })
     }
 
     /// Address of the plain-HTTP listener.
@@ -197,9 +226,13 @@ impl Server {
 
     /// Serves until `signal` completes, then shuts down gracefully.
     pub async fn run(self, signal: impl Future<Output = ()>) -> anyhow::Result<()> {
-        let Server { app, shutdown, grace, http, https, quic, redirect, acme, .. } = self;
+        let Server { app, shutdown, grace, http, https, quic, redirect, acme, chats, .. } = self;
         let sampler = tokio::spawn(telemetry::run_sampler(Arc::clone(&app), app.shutdown.clone()));
         let renewal = acme.map(|acme| tokio::spawn(acme.run(app.shutdown.clone())));
+        let bot = match (app.contact.telegram.clone(), chats) {
+            (Some(telegram), Some(chats)) => Some(tokio::spawn(telegram.run(chats, app.shutdown.clone()))),
+            _ => None,
+        };
         let builder = Arc::new(conn::http_builder());
         let graceful = GracefulShutdown::new();
         let site = routes::site(Arc::clone(&app));
@@ -261,6 +294,9 @@ impl Server {
             endpoint.close(quic::H3_NO_ERROR, b"server shutting down");
             let flush = deadline.max(tokio::time::Instant::now() + Duration::from_millis(50));
             let _ = tokio::time::timeout_at(flush, endpoint.wait_idle()).await;
+        }
+        if let Some(bot) = bot {
+            let _ = bot.await;
         }
         if let Some(renewal) = renewal {
             let _ = renewal.await;

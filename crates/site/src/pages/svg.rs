@@ -116,7 +116,8 @@ pub fn orion_nav(s: &Strings) -> Markup {
     let belt: Vec<(f64, f64, f64)> = ["alnitak", "alnilam", "mintaka"].iter().map(|id| pos(id)).collect();
     html! {
         nav class="orion-nav" aria-label=(s.t("orion-label")) {
-            svg viewBox=(format!("0 0 76 {height:.0}")) focusable="false" {
+            // The links name themselves; the drawing around them is not a graphic of its own.
+            svg viewBox=(format!("0 0 76 {height:.0}")) focusable="false" role="none" {
                 g class="orion-nav__lines" aria-hidden="true" { (PreEscaped(lines)) }
                 (link("betelgeuse", "orion-betelgeuse", "#highload"))
                 (link("meissa", "orion-meissa", "#design"))

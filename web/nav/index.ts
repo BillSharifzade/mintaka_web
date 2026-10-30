@@ -6,7 +6,8 @@ import { $, $$, h } from '../shared/dom.ts';
 
 export function start(): void {
   const nav = $('.orion-nav');
-  const headerLinks = $$<HTMLAnchorElement>('.site-nav a, .menu__panel a');
+  // Section links only: the menu also holds the language switch, whose aria-current is the page's.
+  const headerLinks = $$<HTMLAnchorElement>('.site-nav a, .menu__panel > nav:not(.lang) a');
   const stars = $$<SVGAElement>('.orion-nav__star');
   const ids = ['efficiency', 'security', 'highload', 'design', 'process', 'team'];
   const sections = ids.map((id) => document.getElementById(id)).filter((s): s is HTMLElement => !!s);

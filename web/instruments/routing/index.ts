@@ -9,7 +9,7 @@ import { $, h, num, render } from '../../shared/dom.ts';
 import { offline, reducedMotion } from '../../shared/env.ts';
 import { track } from '../../shared/rum.ts';
 import { duration } from '../../shared/format.ts';
-import { lang, t, tn } from '../../shared/i18n.ts';
+import { numberLocale, t, tn } from '../../shared/i18n.ts';
 import { median } from './stats.ts';
 
 const ALGOS = [
@@ -132,9 +132,9 @@ async function boot(body: HTMLElement, status: HTMLElement | null): Promise<void
     summary,
     live,
     h('p', { class: 'rt-graph source' }, ...tn('routing-graph', {
-      n: num({ value: router.nodes().toLocaleString(lang()), unit: '' }),
-      arcs: num({ value: router.arcs().toLocaleString(lang()), unit: '' }),
-      shortcuts: num({ value: router.shortcuts().toLocaleString(lang()), unit: '' }),
+      n: num({ value: router.nodes().toLocaleString(numberLocale()), unit: '' }),
+      arcs: num({ value: router.arcs().toLocaleString(numberLocale()), unit: '' }),
+      shortcuts: num({ value: router.shortcuts().toLocaleString(numberLocale()), unit: '' }),
     })),
   );
   if (status) {
@@ -293,20 +293,20 @@ async function boot(body: HTMLElement, status: HTMLElement | null): Promise<void
       }
       ms[i] = median(samples);
       const p = panels[i]!;
-      render(p.count, num({ value: p.settled.toLocaleString(lang()), unit: '' }));
+      render(p.count, num({ value: p.settled.toLocaleString(numberLocale()), unit: '' }));
       render(p.time, num(duration(ms[i]!)));
     }
     for (const [i, p] of panels.entries()) {
       const x = ms[0]! / ms[i]!;
-      render(p.speed, i === 0 ? t('routing-baseline') : num({ value: x >= 10 ? Math.round(x).toLocaleString(lang()) : x.toFixed(1), unit: '×' }));
+      render(p.speed, i === 0 ? t('routing-baseline') : num({ value: x >= 10 ? Math.round(x).toLocaleString(numberLocale()) : x.toLocaleString(numberLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 }), unit: '×' }));
     }
     const less = panels[0]!.settled / Math.max(1, panels[2]!.settled);
-    render(summary, ...tn('routing-summary', { less: num({ value: Math.round(less).toLocaleString(lang()), unit: '×' }) }));
+    render(summary, ...tn('routing-summary', { less: num({ value: Math.round(less).toLocaleString(numberLocale()), unit: '×' }) }));
   }
 
   function announce(metres: number): void {
     live.textContent = t('routing-announce', {
-      km: (metres / 1000).toLocaleString(lang(), { maximumFractionDigits: 1 }),
+      km: (metres / 1000).toLocaleString(numberLocale(), { maximumFractionDigits: 1 }),
       d: panels[0]!.settled,
       c: panels[2]!.settled,
     });

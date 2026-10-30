@@ -36,7 +36,7 @@ async fn guarded(
         return method_not_allowed("POST");
     }
     let Some(ctx) = ctx(&req) else { return internal_error() };
-    if !limiter(app).admit(ctx.conn.client_net, Instant::now()) {
+    if !limiter(app).admit(ctx.client_net, Instant::now()) {
         return error(StatusCode::TOO_MANY_REQUESTS, "rate-limited");
     }
     handle(req).await

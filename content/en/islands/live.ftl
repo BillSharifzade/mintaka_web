@@ -7,6 +7,9 @@ live-live = live
 live-reconnecting = reconnecting
 live-offline = offline
 live-paused = paused
+# The button that stops and restarts the live updates.
+live-pause = Pause
+live-resume = Resume
 live-unsupported = This browser can't open a Server-Sent Events stream, so live load isn't available here.
 live-rps = Requests per second
 live-p50 = Latency, median

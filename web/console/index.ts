@@ -2,7 +2,7 @@
 // small frozen `window.mintaka` API for the curious — including the console challenge (ctf.ts,
 // loaded on first use).
 
-import { t } from '../shared/i18n.ts';
+import { loadStrings, t } from '../shared/i18n.ts';
 import { emit } from '../shared/bus.ts';
 import { getProof, type Proof } from '../shared/proof.ts';
 
@@ -38,8 +38,9 @@ export function greet(): void {
     () => {},
   );
   const api = {
-    /** List what `window.mintaka` can do. */
-    help(): void {
+    /** List what `window.mintaka` can do (its lines are a lazy string bundle, fetched on the first call). */
+    async help(): Promise<void> {
+      await loadStrings('console');
       console.log(
         [
           ['mintaka.help()', T('help-help')],

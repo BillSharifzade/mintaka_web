@@ -1,5 +1,6 @@
 # Mintaka — page copy. English is the source language.
-# Russian and Tajik are written natively by the team, never machine-translated.
+# Russian and Tajik were drafted by Claude at the founder's request (2026-10-30), for native review
+# (docs/TRANSLATION.md).
 # Inline syntax understood by the generator: `code` and **strong**.
 # Rule: no invented numbers. Numbers on the page are measured live or computed from a cited source.
 
@@ -36,10 +37,17 @@ orion-rigel = Rigel — Efficiency
 
 hero-eyebrow = Rust-first software engineering · Dushanbe
 hero-title = Software at the edge of physics.
+# A/B test alternatives to hero-title (spec §S1; content/site.toml [experiment]). Each enabled
+# language needs them while the test runs.
+hero-title-hardware = As fast as the hardware allows.
+hero-title-cycle = Engineered to the last cycle.
 hero-sub = Fast by proof. Secure by attack. Scaled to the metal. Intuitive by experiment.
 hero-cta = Start a project
 hero-proof = See the proof ↓
 hero-note = This page measures itself. Press **P** for the proof console.
+# The button that pauses the hero's particle animation, and starts it again.
+hero-motion-pause = Pause the animation
+hero-motion-play = Play the animation
 
 ## Instruments
 
@@ -261,6 +269,8 @@ lab-lead = Where we write down what we learn: the problem, the method, the mathe
 # Post titles and summaries live in each post's front matter: content/{lang}/lab/*.md
 lab-description = Long-form notes from Mintaka: the problem, the method, the mathematics, the code, and a benchmark you can reproduce.
 lab-all = All posts in the Lab
+# Shown in a language that has no posts of its own yet, above the default language's posts.
+lab-untranslated = The Lab's posts are in English only, for now:
 lab-feed = Atom feed
 lab-feed-title = The Lab — Mintaka
 lab-feed-follow = Follow the Lab with an Atom feed
@@ -291,7 +301,7 @@ team-photo-alt = Portrait of { $name }
 # rewrite them. An optional team-<id>-photo replaces the portrait's generic alt text.
 team-bilol-name = Sharifzoda Bilol
 team-bilol-role = Founder
-team-bilol-line = I build high-load backends in Rust, and break them on purpose before production does.
+team-bilol-line = I architect high-load Rust backends for fintech, telecom and government, and tune them for low-end phones on unstable networks.
 team-amirhamza-name = Amirhamza Sayfiddinzoda
 team-amirhamza-role = Co-founder
 team-amirhamza-line = I take web products from architecture to release, in React, Node.js, Python and Go, and teach others to do the same.
@@ -375,15 +385,34 @@ pv-measure-title = Page speed and feature counts
 pv-measure = When you leave a page or switch away from it, your browser sends our server one small message. It says which of our pages it was, from a fixed list; five speed measurements of that visit (time to first byte, first and largest contentful paint, layout shift and the slowest interaction); how many times you opened the proof console or the terminal, followed a link to the contact form, sent the form, switched language, started or finished an instrument and solved a stage of the console challenge; and which of the four ways your device drew the opening animation. It carries no cookie, identifier, IP address, browser details or anything you typed. The server adds it to totals in memory (counts, and 75th percentiles since it started and for the last 24 hours) and keeps nothing else: nothing is written to disk, and the totals start again from zero when the server restarts. To stop one network from flooding the totals, it counts messages per network (the first three parts of the address), in memory only. Anyone can read the totals in the proof console or at /_rum. If your browser sends Global Privacy Control or Do Not Track, it measures and sends nothing.
 pv-contact-title = When you write to us
 pv-contact = Your message is encrypted the moment it reaches our server and is read only by the team, to reply to you. Spam protection uses a small calculation your browser solves and a short-lived counter per network, kept in memory only.
+pv-telegram-title = If you continue in Telegram
+pv-telegram = After you send the form, its last screen may offer a link to our Telegram bot. If you follow it, the bot connects that chat to your brief, and our server keeps, in a file only it can read: the chat's numeric id, your brief's number and language, when the chat was connected and when it was last used, and the numbers of that conversation's messages in our team's Telegram chat. It keeps that for 30 days after the last message in either direction; sending /stop to the bot deletes it at once. Our server doesn't store or log your messages: the bot copies them into the team's chat on Telegram, where they stay like any chat history, and copies the team's answers back to you. Anything sent through Telegram is also covered by Telegram's own privacy policy.
 pv-physics-title = The speed-of-light measurement
 pv-physics = It estimates your location from your device's time zone, inside your browser. Nothing about it is sent to us.
 pv-experiments-title = The experiments
 pv-experiments = The Fitts, Hick–Hyman and pop-out experiments measure your clicks and reaction times inside your browser. The measurements never leave it; only the fact that you started or finished one is counted, as described above.
+# Shown while content/site.toml has an [experiment]; describes that test, so update it with each new one.
+pv-ab-title = Testing the home page
+pv-ab = We are testing { $versions } versions of the headline at the top of the home page. Each time our server sends that page, it picks one of them at random — with no cookie and no record of who got which, so you may see another one next time. While the test runs, the message described above also names the version you saw, and says, once per visit, whether you followed a link to the contact form and whether you sent the form. The server adds that to totals per version, in memory like the rest: page views, and how many of them did each of those two things. Once every version has { $views } page views counted, a number fixed before the test began, the counting stops and the proof console shows whether the difference between the versions is larger than chance.
 pv-storage-title = What your browser keeps
 pv-storage = If you switch the keyboard shortcuts off, your browser remembers that choice in its own storage. After your first visit it also keeps a copy of the pages you opened and their files, so the site opens without a connection (a service worker; clearing this site's data in your browser removes it). If you press Send on the contact form while offline, your draft stays in that tab's storage until it is sent or the tab is closed. If you start the console challenge, your browser keeps your progress (a token our server issued) until you start over or clear this site's data; it goes to our server only when you ask for a puzzle or check an answer. Nothing else here is sent to us.
 pv-data-title = Map data
 pv-data = Time zone locations come from the IANA time zone database (public domain).
+pv-hosting-title = Where this site runs
+pv-hosting = Our server runs in { $city }, { $country }, on a machine operated by { $provider }. Messages sent through the contact form are stored there, encrypted.
+pv-hosting-edge = Your browser's encrypted connection ends at the hosting provider's edge proxy, which passes your request to our server together with your network address — used only for the short-lived counters described above. That proxy belongs to { $provider } and may keep its own connection logs. Other applications share this domain; any cookies they set are theirs, and our server ignores them.
 pv-contact-us = Questions about privacy: { $email }
+
+## Telegram bot (crates/server/src/telegram): what it writes to a client who continues in
+## Telegram after sending the form, in the brief's language (docs/CONTRACTS.md §19). Rendered at
+## build time: { $within } is the reply time from site.toml, { $site } this language's home page;
+## { $brief } is the brief's number, which the server fills in.
+bot-linked = Thank you — your brief has reached us. Its number is { $brief }. This chat is now connected to it: write here to add anything, files included, and the team will answer you here within { $within }. Send /stop to disconnect this chat.
+bot-again = This chat is already connected to your brief { $brief }. Write here, and the team will answer you here.
+bot-taken = This brief is already connected to another Telegram chat. If that wasn't you, send us a new brief at { $site }.
+bot-expired = This link has expired. Send us a new brief at { $site } — it takes a minute.
+bot-stopped = Done: this chat is no longer connected to your brief, and nothing more goes to the team from here. To connect it again, open the link from the site.
+bot-hello = This bot answers briefs sent from our site. Send yours at { $site }, then follow the Telegram link on the screen that confirms it.
 
 ## curl mode (plain-text pages for terminals)
 
@@ -394,6 +423,8 @@ curl-fast = fast by proof
 curl-secure = secure by attack
 curl-scaled = scaled to the metal
 curl-intuitive = intuitive by experiment
+curl-cookies = 0 cookies
+curl-build = build
 
 ## Footer
 

@@ -107,7 +107,8 @@ async fn pow_solved_brief_is_stored_encrypted_and_single_use() {
     let name = file.file_name().unwrap().to_str().unwrap();
     let (ms, rest) = name.split_once('-').unwrap();
     assert!(ms.parse::<u64>().is_ok() && rest.ends_with(".json.age") && rest.len() == 16 + 9, "{name}");
-    assert_eq!(std::fs::metadata(file).unwrap().permissions().mode() & 0o777, 0o600);
+    // At most 0640: ciphertext the deploy account may fetch through the server's group.
+    assert_eq!(std::fs::metadata(file).unwrap().permissions().mode() & 0o777 & !0o640, 0);
     let raw = std::fs::read(file).unwrap();
     assert!(raw.starts_with(b"age-encryption.org/v1\n"), "age format");
     assert!(!raw.windows(4).any(|w| w == b"Bill"), "not plaintext");

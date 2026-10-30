@@ -2,7 +2,8 @@
 //!
 //! Order of checks for a submission: method and size → parse → honeypot (answers exactly like
 //! success, stores nothing) → field types → rate limit → proof of work → encrypt and store →
-//! notify. JSON requests get JSON answers; form posts get `303` to `/{lang}/sent/[#e-{code}]`.
+//! notify. JSON requests get JSON answers — on success with the Telegram bot's link for the brief
+//! while the bot runs (§19); form posts get `303` to `/{lang}/sent/[#e-{code}]`.
 
 use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
@@ -17,9 +18,9 @@ use proof::{
     CONTACT_BODY_LIMIT, ContactRequest, ContactResponse, ErrorCode, Field, FieldError, StoredBrief,
 };
 
-use super::{GET_HEAD, RouteName, ctx, internal_error, is_read, json, mark, method_not_allowed};
+use super::{GET_HEAD, RouteName, ctx, internal_error, is_read, json, mark, method_not_allowed, no_store};
 use crate::app::AppState;
-use crate::contact::{Brief, new_id};
+use crate::contact::{Brief, new_id, notification_text};
 use crate::pow::PowError;
 
 fn unix_now() -> u64 {
@@ -58,6 +59,12 @@ pub(crate) async fn submit(State(app): State<Arc<AppState>>, req: Request) -> Re
 async fn receive(app: &AppState, req: Request) -> Response {
     let default_lang = app.site.default_lang.as_str();
     let Some(ctx) = ctx(&req) else { return internal_error() };
+    // A plain HTML form can be posted from any site, by the visitor's own browser (and network,
+    // past its rate limit). Browsers say where a request comes from: only this site's own pages
+    // may send a brief. (Clients that send no `Sec-Fetch-Site` — curl, old browsers — still can.)
+    if req.headers().get("sec-fetch-site").is_some_and(|v| v.as_bytes() != b"same-origin") {
+        return no_store(StatusCode::FORBIDDEN, "text/plain; charset=utf-8", "refused: send the form from this site's own pages\n");
+    }
     let content_type = req.headers().get(CONTENT_TYPE).and_then(|v| v.to_str().ok()).unwrap_or("");
     let mime = content_type.split(';').next().unwrap_or("").trim().to_ascii_lowercase();
     let flavor = match mime.as_str() {
@@ -89,10 +96,12 @@ async fn receive(app: &AppState, req: Request) -> Response {
     };
     let lang = raw.lang.as_deref().and_then(|l| app.site.lang(l.trim())).unwrap_or(default_lang);
 
-    // Honeypot: indistinguishable from success, nothing stored.
+    // Honeypot: indistinguishable from success (a bot link included, which leads nowhere),
+    // nothing stored.
     if raw.website.as_deref().is_some_and(|w| !w.trim().is_empty()) {
         tracing::info!(target: "contact", "honeypot filled; answered as success, stored nothing");
-        return accepted(flavor, lang);
+        let decoy = app.contact.telegram.as_ref().and_then(|t| t.decoy_link(lang));
+        return accepted(flavor, lang, decoy);
     }
 
     let brief = match Brief::parse(&raw) {
@@ -101,7 +110,7 @@ async fn receive(app: &AppState, req: Request) -> Response {
     };
 
     let with_pow = pow_malformed || raw.pow_challenge.is_some() || raw.pow_counter.is_some();
-    if !app.contact.limiter.admit(ctx.conn.client_net, with_pow, Instant::now()) {
+    if !app.contact.limiter.admit(ctx.client_net, with_pow, Instant::now()) {
         return refuse(flavor, lang, StatusCode::TOO_MANY_REQUESTS, Field::Form, ErrorCode::RateLimited);
     }
     if with_pow {
@@ -141,10 +150,11 @@ async fn receive(app: &AppState, req: Request) -> Response {
     match saved {
         Ok(Ok(_)) => {
             tracing::info!(target: "contact", id = %id, "brief stored");
-            if let Some(notifier) = &app.contact.notifier {
-                notifier.brief_received(&id, &kinds, timeline, ctf_solved);
-            }
-            accepted(flavor, lang)
+            let link = app.contact.telegram.as_ref().and_then(|telegram| {
+                telegram.notify(notification_text(&id, &kinds, timeline, ctf_solved));
+                telegram.link(&id, lang)
+            });
+            accepted(flavor, lang, link)
         }
         Ok(Err(e)) => {
             tracing::error!(target: "contact", "storing a brief failed: {e}");
@@ -196,9 +206,11 @@ fn parse_form(body: &[u8]) -> (ContactRequest, bool) {
     (raw, pow_malformed)
 }
 
-fn accepted(flavor: Flavor, lang: &str) -> Response {
+/// Success. Only the JSON answer carries the bot link: the no-JS flow's redirect would have to put
+/// it in a URL, which a proxy in front of the server may log.
+fn accepted(flavor: Flavor, lang: &str, bot_link: Option<String>) -> Response {
     match flavor {
-        Flavor::Json => json(StatusCode::OK, &ContactResponse::ok()),
+        Flavor::Json => json(StatusCode::OK, &ContactResponse::ok_with(bot_link)),
         Flavor::Form => see_other(&format!("/{lang}/sent/")),
     }
 }

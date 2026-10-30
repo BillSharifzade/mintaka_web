@@ -33,3 +33,7 @@ ctf-apply-work-hint = A link to code you are proud of, and a few lines about it.
 ctf-apply-send = Send application
 ctf-apply-sending = Sending…
 ctf-apply-sent = Sent. We read every application and answer each one.
+ctf-star-rigel = Rigel
+ctf-star-saiph = Saiph
+ctf-star-betelgeuse = Betelgeuse
+ctf-star-meissa = Meissa

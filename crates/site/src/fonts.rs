@@ -25,12 +25,14 @@ struct FaceDef {
     weight: &'static str,
     range: &'static str,
     role: Role,
-    /// Languages whose pages preload this file.
+    /// Languages whose pages preload this file: the two (spec §10.1) their first screen is drawn
+    /// in. A Tajik first screen needs both Onest files for its own letters, and Latin only for
+    /// "Rust" and "English", which the metric-matched fallback holds until the file arrives.
     preload: &'static [&'static str],
 }
 
 const FACES: &[FaceDef] = &[
-    FaceDef { family: "Space Grotesk", file: "space-grotesk-latin-wght-normal.woff2", weight: "300 700", range: LATIN, role: Role::Sans, preload: &["en", "ru", "tg"] },
+    FaceDef { family: "Space Grotesk", file: "space-grotesk-latin-wght-normal.woff2", weight: "300 700", range: LATIN, role: Role::Sans, preload: &["en", "ru"] },
     FaceDef { family: "Space Grotesk", file: "space-grotesk-latin-ext-wght-normal.woff2", weight: "300 700", range: LATIN_EXT, role: Role::Sans, preload: &[] },
     FaceDef { family: "Onest", file: "onest-cyrillic-wght-normal.woff2", weight: "100 900", range: CYRILLIC, role: Role::Sans, preload: &["ru", "tg"] },
     FaceDef { family: "Onest", file: "onest-cyrillic-ext-wght-normal.woff2", weight: "100 900", range: CYRILLIC_EXT, role: Role::Sans, preload: &["tg"] },

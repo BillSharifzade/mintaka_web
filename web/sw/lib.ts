@@ -1,12 +1,13 @@
 // The service worker's decisions as pure functions (offline mode, spec §7.9, docs/CONTRACTS.md
 // §15). sw.ts wires them to the worker's events; lib.test.ts tests them in Node.
+import { at, within } from '../shared/base.ts';
 
 /** What the generator writes into sw.js for this build (crates/site/src/sw.rs). */
 export interface Shell {
   /** The build id: the cache is named after it. */
   build: string;
-  /** Page path → its language and the hash of its bytes (the server's ETag, unquoted). */
-  pages: Record<string, { lang: string; etag: string }>;
+  /** Page path → its language and the hash of its bytes (the server's ETag, unquoted): one per A/B test variant, any of which the server may send. */
+  pages: Record<string, { lang: string; etags: string[] }>;
   /** Language-independent shell: main.js, islands.css, the hero core, with their imports. */
   core: string[];
   /** Language → the fonts its pages preload. */
@@ -23,6 +24,9 @@ export type Strategy = 'network' | 'asset' | 'page';
 /** Never cached, never answered by the worker: live measurements, APIs, the worker itself. */
 const LIVE = /^\/(_|api\/|sw\.js$)/;
 
+/** A hashed `/assets/` file of this site (a URL path, with the site's prefix). */
+export const isAsset = (path: string): boolean => path.startsWith(at('/assets/'));
+
 /**
  * How the worker treats a request. Hashed `/assets/` files come from the cache once stored. A page
  * goes to the network untouched while the browser is online — answering it from the worker would
@@ -32,8 +36,10 @@ const LIVE = /^\/(_|api\/|sw\.js$)/;
 export function strategy(req: { method: string; mode: string; url: string }, origin: string, online: boolean): Strategy {
   if (req.method !== 'GET') return 'network';
   const url = new URL(req.url);
-  if (url.origin !== origin || LIVE.test(url.pathname)) return 'network';
-  if (url.pathname.startsWith('/assets/')) return 'asset';
+  // Paths outside the site's URL prefix belong to whatever else shares the origin.
+  const own = within(url.pathname);
+  if (url.origin !== origin || own === null || LIVE.test(own)) return 'network';
+  if (own.startsWith('/assets/')) return 'asset';
   return req.mode === 'navigate' && !online ? 'page' : 'network';
 }
 
@@ -46,7 +52,7 @@ export const staleCaches = (names: readonly string[], build: string): string[] =
 
 /** May this path be stored: a page of this build, `/`, or an asset of this build. */
 export function storable(shell: Shell, path: string): boolean {
-  return path === '/' || path in shell.pages || shell.assets.includes(path);
+  return path === at('/') || path in shell.pages || shell.assets.includes(path);
 }
 
 /** Stored paths that don't belong to this build (pruned on activation). */
@@ -88,12 +94,12 @@ export function installList(shell: Shell, pages: readonly string[]): string[] {
   return [...new Set([...shell.core, ...pages.flatMap((p) => shellFor(shell, { page: p, lang: '', tier: null, used: [] }))])];
 }
 
-/** Is a stored page this build's? Compares its ETag (`"hash"`, `"hash-br"`, `"hash-gz"`). */
+/** Is a stored page this build's (any of its variants)? Compares its ETag (`"hash"`, `"hash-br"`, `"hash-gz"`). */
 export function current(shell: Shell, path: string, etag: string | null): boolean {
   const hash = etag?.replace(/^(W\/)?"|"$/g, '').replace(/-(br|gz)$/, '');
   if (!hash) return false;
   const page = shell.pages[path];
-  return page ? page.etag === hash : Object.values(shell.pages).some((p) => p.etag === hash);
+  return (page ? [page] : Object.values(shell.pages)).some((p) => p.etags.includes(hash));
 }
 
 /** Replaces the server's Server-Timing on a stored copy: what it measured was another request. */

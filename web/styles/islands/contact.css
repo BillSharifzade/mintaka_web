@@ -43,4 +43,10 @@
   .contact-done__title + p {
     color: var(--text-2);
   }
+
+  /* Under the Telegram link (only when the server runs the bot): small print, not a measurement */
+  .contact-done__note {
+    font-size: var(--fs-sm);
+    color: var(--text-2);
+  }
 }

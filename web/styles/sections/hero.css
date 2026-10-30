@@ -44,6 +44,11 @@
     .hero__sep {
       display: none;
     }
+
+    /* One part per line, and a part may wrap: at 320 px it is wider than the column (1.4.10). */
+    .hero__part {
+      white-space: normal;
+    }
   }
 
   .hero__sub {
@@ -67,6 +72,10 @@
 
   .hero__note kbd {
     font-size: var(--fs-xs);
+  }
+
+  .hero__motion {
+    justify-self: start;
   }
 
   /* No keyboard, or shortcuts switched off: the hint would be noise. */

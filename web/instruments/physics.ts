@@ -8,12 +8,12 @@
 // No IP lookup and no geolocation API: nothing about the visitor's location leaves the browser.
 
 import { $, h, num, render } from '../shared/dom.ts';
-import { lang, t, tn, tp } from '../shared/i18n.ts';
+import { lang, numberLocale, t, tn, tp } from '../shared/i18n.ts';
 import { getProof } from '../shared/proof.ts';
 import { navEntry, offlineCopy, ping, serverTiming } from '../shared/timing.ts';
 import { offline } from '../shared/env.ts';
 import { track } from '../shared/rum.ts';
-import { duration, km, type Formatted } from '../shared/format.ts';
+import { duration, km, unit, type Formatted } from '../shared/format.ts';
 import { locate, type Place } from './tz/tzdb.ts';
 
 /** Light in optical fibre, km per ms: c ÷ 1.468 (group index of standard single-mode fibre). */
@@ -41,7 +41,7 @@ export const reach = (rttMs: number): number => (rttMs / 2) * FIBRE;
 /** The shortest round trip light in fibre allows over a distance, ms. */
 export const lightFloor = (km: number): number => (2 * km) / FIBRE;
 
-export type Source = 'kernel' | 'navigation' | 'ping';
+export type Source = 'kernel' | 'quic' | 'navigation' | 'ping';
 
 export interface Trip {
   /** Network round trip, ms (our server's time already taken out). */
@@ -57,6 +57,9 @@ export function fromNavigation(nav: PerformanceNavigationTiming | undefined): Tr
   const server = serverTiming('app', nav);
   const krtt = serverTiming('krtt', nav);
   if (krtt !== undefined && krtt > 0) return { rtt: krtt, server, source: 'kernel' };
+  // Over HTTP/3 there is no kernel TCP state; QUIC keeps its own RTT estimate from its ACKs.
+  const qrtt = serverTiming('qrtt', nav);
+  if (qrtt !== undefined && qrtt > 0) return { rtt: qrtt, server, source: 'quic' };
   const wait = nav.responseStart - nav.requestStart - (server ?? 0);
   const fromCache = nav.transferSize === 0 && nav.decodedBodySize > 0;
   if (nav.requestStart > 0 && wait > 0 && !fromCache) return { rtt: wait, server, source: 'navigation' };
@@ -107,7 +110,7 @@ export function ceilKm(x: number): number {
  */
 export function msText(x: number, locale?: string): Formatted {
   if (x < 1) return duration(x, locale);
-  return { value: new Intl.NumberFormat(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(x), unit: 'ms' };
+  return { value: new Intl.NumberFormat(numberLocale(locale), { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(x), unit: unit('ms', locale) };
 }
 
 /** Round a lower bound down to the precision msText() shows, so "at least" stays true. */
@@ -150,8 +153,10 @@ export function mount(root: HTMLElement): void {
 
   let measured = false;
   button.addEventListener('click', async () => {
+    // aria-disabled, not disabled: a disabled button drops keyboard focus to the top of the page.
+    if (button.getAttribute('aria-disabled')) return;
     track('instrument_start', 'physics');
-    button.disabled = true;
+    button.setAttribute('aria-disabled', 'true');
     button.textContent = T('measuring');
     try {
       // This page view's own measurement first (kernel, then browser); fresh pings on "again".
@@ -179,7 +184,7 @@ export function mount(root: HTMLElement): void {
       render(more);
       render(say, h('p', null, offline() ? T('offline') : T('error', { reason: err instanceof Error ? err.message : String(err) })));
     } finally {
-      button.disabled = false;
+      button.removeAttribute('aria-disabled');
       button.textContent = T(measured ? 'again' : 'measure');
     }
   });

@@ -1,6 +1,10 @@
 //! `cargo xtask build [--release]` — Rust → WebAssembly (instruments), TypeScript (esbuild),
 //! then the site generator → dist/.
 //! `cargo xtask dev` — build, run the server, rebuild and restart on every change.
+//! `cargo xtask keygen <file>` / `cargo xtask briefs <identity> <dir>` — the contact briefs' key
+//! pair, and reading what the server stored (briefs.rs).
+
+mod briefs;
 
 use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
@@ -15,8 +19,12 @@ fn main() -> Result<()> {
         Some("build") => build(&root, release).map(|_| ()),
         Some("dev") => dev(&root),
         Some("graph") => graph(&root, args.iter().any(|a| a == "--fetch")),
+        Some("keygen") if args.len() == 2 => briefs::keygen(Path::new(&args[1])),
+        Some("briefs") if args.len() == 3 => briefs::read(Path::new(&args[1]), Path::new(&args[2])),
         _ => {
-            eprintln!("usage: cargo xtask build [--release]\n       cargo xtask dev\n       cargo xtask graph [--fetch]");
+            eprintln!(
+                "usage: cargo xtask build [--release]\n       cargo xtask dev\n       cargo xtask graph [--fetch]\n       cargo xtask keygen <identity file>\n       cargo xtask briefs <identity file> <dir of *.json.age>"
+            );
             std::process::exit(2);
         }
     }
@@ -183,6 +191,9 @@ fn esbuild(root: &Path, release: bool) -> Result<PathBuf> {
     ]);
     cmd.arg(format!("--outdir={}", out.display())).arg(format!("--metafile={}", out.join("meta.json").display()));
     cmd.arg(format!("--define:MINTAKA_DEV={}", !release));
+    // The site's URL prefix (`"/mintaka"` or `""`), as a string literal; checked by site::base.
+    let base = format!("--define:MINTAKA_BASE=\"{}\"", site::base(root)?);
+    cmd.arg(&base);
     if !release {
         cmd.arg("--sourcemap=linked");
     }
@@ -190,20 +201,21 @@ fn esbuild(root: &Path, release: bool) -> Result<PathBuf> {
     if !status.success() {
         bail!("esbuild failed");
     }
-    service_worker(root, &bin, &out, release)?;
+    service_worker(root, &bin, &out, release, &base)?;
     Ok(out)
 }
 
 /// `web/sw/sw.ts` → `target/web/sw.js`: its own bundle, a classic script (no splitting, no hash —
 /// it lives at the fixed URL `/sw.js`). Not in `meta.json`; the generator fills in this build's
 /// file list and serves it (crates/site/src/sw.rs).
-fn service_worker(root: &Path, esbuild: &Path, out: &Path, release: bool) -> Result<()> {
+fn service_worker(root: &Path, esbuild: &Path, out: &Path, release: bool, base: &str) -> Result<()> {
     let status = Command::new(esbuild)
         .current_dir(root)
         .args(["web/sw/sw.ts", "--bundle", "--format=iife", "--target=es2022,chrome111,firefox115,safari16.4"])
         .args(["--minify", "--legal-comments=none", "--charset=utf8", "--log-level=warning"])
         .arg(format!("--outfile={}", out.join("sw.js").display()))
         .arg(format!("--define:MINTAKA_DEV={}", !release))
+        .arg(base)
         .status()
         .context("running esbuild for the service worker")?;
     if !status.success() {

@@ -3,9 +3,10 @@
 //!
 //! For every route and every precompressed variant the complete `200` and `304` header maps are
 //! built up front, so serving a static file is a hash lookup, an `Accept-Encoding` parse and two
-//! clones (header map, body handle).
+//! clones (header map, body handle). A page of the A/B test (§17) holds all of that once per
+//! variant, and each request draws one of them at random.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Component, Path};
 
 use anyhow::{Context, bail, ensure};
@@ -14,7 +15,8 @@ use http::header::{
     CACHE_CONTROL, CONTENT_ENCODING, CONTENT_LANGUAGE, CONTENT_LENGTH, CONTENT_TYPE, ETAG, VARY,
 };
 use http::{HeaderMap, HeaderValue};
-use proof::{CachePolicy, Csp, Encoding, MANIFEST_VERSION, Manifest, RouteKind};
+use proof::{CachePolicy, Csp, Encoding, Experiment, MANIFEST_VERSION, Manifest, RouteKind};
+use rand::Rng;
 use sha2::{Digest, Sha256};
 
 use crate::headers::static_value;
@@ -59,10 +61,30 @@ impl Variants {
     }
 }
 
+/// What a route serves: one [`Variants`] per arm. An arm is one variant of the running A/B test
+/// (docs/CONTRACTS.md §17) — "arm" here because [`Variant`] already names one encoding of a file.
+/// Pages outside the test, and every other route, have exactly one.
+pub(crate) struct Arms(Vec<Variants>);
+
+impl Arms {
+    /// The arm for this request: uniformly at random when there are several. Nothing about the
+    /// request or the visitor goes into the choice, and nothing about it is kept.
+    pub fn pick(&self) -> &Variants {
+        self.pick_with(&mut rand::thread_rng())
+    }
+
+    fn pick_with(&self, rng: &mut impl Rng) -> &Variants {
+        match self.0.as_slice() {
+            [one] => one,
+            arms => &arms[rng.gen_range(0..arms.len())],
+        }
+    }
+}
+
 /// A route from `manifest.routes`.
 pub(crate) struct StaticRoute {
     pub path: String,
-    pub variants: Variants,
+    pub arms: Arms,
 }
 
 /// A 404 page, split at its suggestion marker.
@@ -171,16 +193,23 @@ fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 pub(crate) struct Site {
     pub build: String,
     pub origin: String,
+    /// URL prefix of the whole site (`/mintaka`), or empty: requests arrive with it, routes are
+    /// matched without it.
+    pub base: String,
     pub default_lang: String,
     pub langs: Vec<String>,
     pub csp: Csp,
     routes: Vec<StaticRoute>,
     index: HashMap<String, usize>,
     /// `GET /` for each language: the `/{lang}/` bytes with `Vary: Accept-Language`.
-    roots: HashMap<String, Variants>,
+    roots: HashMap<String, Arms>,
+    /// The A/B test and the paths that serve its variants (`/` among them when it does).
+    experiment: Option<(Experiment, Vec<String>)>,
     pages: Vec<PageLink>,
     not_found: HashMap<String, NotFoundPage>,
     text: HashMap<String, HashMap<String, TextTemplate>>,
+    /// What the Telegram bot writes to clients, by language (`manifest.bot`, §19).
+    pub bot: BTreeMap<String, BTreeMap<String, String>>,
     /// Bytes held in memory for bodies (all variants).
     pub memory_bytes: usize,
 }
@@ -209,12 +238,17 @@ impl Site {
             ensure!(is_lang_tag(lang), "`langs`: {lang:?} is not a language tag");
         }
         ensure!(m.langs.contains(&m.default_lang), "`default_lang` {:?} is not in `langs`", m.default_lang);
+        ensure!(is_base(&m.base), "`base` {:?}: empty, or `/` and path segments without a trailing `/`", m.base);
 
+        if let Some(e) = &m.experiment {
+            ensure!(e.variants.len() >= 2, "`experiment` {:?} needs a control and at least one other variant", e.id);
+        }
         let mut memory_bytes = 0;
         let mut routes = Vec::with_capacity(m.routes.len());
         let mut index = HashMap::with_capacity(m.routes.len());
         let mut pages = Vec::new();
-        let mut loaded: HashMap<String, Files> = HashMap::new();
+        let mut tested = Vec::new();
+        let mut loaded: HashMap<String, Vec<Files>> = HashMap::new();
         for route in &m.routes {
             ensure!(is_route_path(&route.path), "route {:?}: not an absolute URL path", route.path);
             if route.path == "/" {
@@ -222,28 +256,54 @@ impl Site {
                 continue;
             }
             ensure!(!index.contains_key(&route.path), "route {:?} is listed twice", route.path);
-            let files = Files::read(dist, &route.file, &route.encodings)
-                .with_context(|| format!("route {:?}", route.path))?;
-            memory_bytes += files.len();
+            let mut files = vec![
+                Files::read(dist, &route.file, &route.encodings).with_context(|| format!("route {:?}", route.path))?,
+            ];
+            if !route.variants.is_empty() {
+                let Some(e) = &m.experiment else {
+                    bail!("route {:?} lists variants, but the manifest has no `experiment`", route.path);
+                };
+                ensure!(
+                    route.kind == RouteKind::Page && route.cache == CachePolicy::Document,
+                    "route {:?}: only `document` pages can have variants",
+                    route.path
+                );
+                ensure!(
+                    route.variants.iter().map(|v| v.id.as_str()).eq(e.variants[1..].iter().map(String::as_str)),
+                    "route {:?}: variants must be the experiment's after its control, in order ({:?})",
+                    route.path,
+                    &e.variants[1..]
+                );
+                for v in &route.variants {
+                    let arm = Files::read(dist, &v.file, &v.encodings)
+                        .with_context(|| format!("route {:?}, variant {:?}", route.path, v.id))?;
+                    files.push(arm);
+                }
+                tested.push(route.path.clone());
+            }
+            memory_bytes += files.iter().map(Files::len).sum::<usize>();
             let mut vary = Vec::new();
-            if !route.encodings.is_empty() {
+            if !route.encodings.is_empty() || route.variants.iter().any(|v| !v.encodings.is_empty()) {
                 vary.push("Accept-Encoding");
             }
             if is_curl_page(&m.langs, &route.path) {
                 vary.push("User-Agent");
             }
-            let variants = files
-                .variants(&route.content_type, route.cache, route.lang.as_deref(), &vary)
+            let cache_control = cache_control(route.cache, files.len());
+            let arms = files
+                .iter()
+                .map(|f| f.variants(&route.content_type, &cache_control, route.lang.as_deref(), &vary))
+                .collect::<anyhow::Result<Vec<_>>>()
                 .with_context(|| format!("route {:?}", route.path))?;
             if route.kind == RouteKind::Page {
                 pages.push(PageLink {
                     path: route.path.clone(),
                     lang: route.lang.clone(),
-                    html: Bytes::from(format!("<a href=\"{0}\">{0}</a>", escape_html(&route.path))),
+                    html: Bytes::from(format!("<a href=\"{0}\">{0}</a>", escape_html(&format!("{}{}", m.base, route.path)))),
                 });
             }
             index.insert(route.path.clone(), routes.len());
-            routes.push(StaticRoute { path: route.path.clone(), variants });
+            routes.push(StaticRoute { path: route.path.clone(), arms: Arms(arms) });
             loaded.insert(route.path.clone(), files);
         }
 
@@ -256,12 +316,25 @@ impl Site {
                 bail!("language {lang:?} has no {path:?} route (needed to serve `/`)");
             };
             let mut vary = vec!["Accept-Language", "User-Agent"];
-            if !route.encodings.is_empty() {
+            if !route.encodings.is_empty() || route.variants.iter().any(|v| !v.encodings.is_empty()) {
                 vary.insert(0, "Accept-Encoding");
             }
             let lang_header = route.lang.as_deref().unwrap_or(lang);
-            roots.insert(lang.clone(), files.variants(&route.content_type, route.cache, Some(lang_header), &vary)?);
+            let cache_control = cache_control(route.cache, files.len());
+            let arms = files
+                .iter()
+                .map(|f| f.variants(&route.content_type, &cache_control, Some(lang_header), &vary))
+                .collect::<anyhow::Result<Vec<_>>>()?;
+            if arms.len() > 1 && !tested.iter().any(|p| p == "/") {
+                tested.push("/".to_owned());
+            }
+            roots.insert(lang.clone(), Arms(arms));
         }
+        let experiment = match m.experiment {
+            Some(e) if tested.is_empty() => bail!("`experiment` {:?}: no route serves its variants", e.id),
+            Some(e) => Some((e, tested)),
+            None => None,
+        };
 
         let mut not_found = HashMap::new();
         ensure!(
@@ -308,17 +381,25 @@ impl Site {
         Ok(Site {
             build: m.build,
             origin: m.origin,
+            base: m.base,
             default_lang: m.default_lang,
             langs: m.langs,
             csp: m.csp,
             routes,
             index,
             roots,
+            experiment,
             pages,
             not_found,
             text,
+            bot: m.bot,
             memory_bytes,
         })
+    }
+
+    /// The A/B test this build runs, and the paths that serve its variants.
+    pub fn experiment(&self) -> Option<(&Experiment, &[String])> {
+        self.experiment.as_ref().map(|(e, paths)| (e, paths.as_slice()))
     }
 
     /// Number of static routes.
@@ -343,7 +424,7 @@ impl Site {
     }
 
     /// The representations of `/` for a language.
-    pub fn root(&self, lang: &str) -> Option<&Variants> {
+    pub fn root(&self, lang: &str) -> Option<&Arms> {
         self.roots.get(lang)
     }
 
@@ -426,16 +507,11 @@ impl Files {
     fn variants(
         &self,
         content_type: &str,
-        cache: CachePolicy,
+        cache_control: &HeaderValue,
         lang: Option<&str>,
         vary: &[&str],
     ) -> anyhow::Result<Variants> {
         let content_type = static_value(content_type.to_owned()).context("content_type")?;
-        let cache_control = HeaderValue::from_static(match cache {
-            CachePolicy::Document => "no-cache",
-            CachePolicy::Immutable => "public, max-age=31536000, immutable",
-            CachePolicy::Short => "public, max-age=3600",
-        });
         let language = lang.map(|l| static_value(l.to_owned())).transpose().context("lang")?;
         let vary = (!vary.is_empty()).then(|| static_value(vary.join(", "))).transpose()?;
         let variant = |body: &Bytes, coding: Option<&'static str>| -> anyhow::Result<Variant> {
@@ -472,6 +548,17 @@ impl Files {
     }
 }
 
+/// `Cache-Control` for a route's policy (§4.3). A page served as one of several A/B test variants
+/// is also `private`: a shared cache must never keep one variant and hand it to everybody.
+fn cache_control(cache: CachePolicy, arms: usize) -> HeaderValue {
+    HeaderValue::from_static(match cache {
+        CachePolicy::Document if arms > 1 => "private, no-cache",
+        CachePolicy::Document => "no-cache",
+        CachePolicy::Immutable => "public, max-age=31536000, immutable",
+        CachePolicy::Short => "public, max-age=3600",
+    })
+}
+
 /// Process-lifetime bytes: clones copy a pointer, with no shared reference count to contend on.
 fn leak(bytes: Vec<u8>) -> Bytes {
     Bytes::from_static(bytes.leak())
@@ -498,6 +585,14 @@ fn is_lang_tag(s: &str) -> bool {
 /// `/`-rooted, printable ASCII, no query or fragment.
 fn is_route_path(s: &str) -> bool {
     s.starts_with('/') && s.bytes().all(|b| b.is_ascii_graphic() && b != b'?' && b != b'#')
+}
+
+/// `` or `/mintaka`, `/a/b`: segments of letters, digits, `-`, `_` and `.`, no trailing `/`.
+fn is_base(s: &str) -> bool {
+    s.is_empty()
+        || s.strip_prefix('/').is_some_and(|rest| {
+            rest.split('/').all(|seg| !seg.is_empty() && seg != "." && seg != ".." && seg.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.')))
+        })
 }
 
 /// `/{lang}/`, `/{lang}/pillars`, `/{lang}/contact`: answered as text in curl mode.
@@ -543,6 +638,48 @@ fn edit_distance(a: &[u8], b: &[u8], row: &mut Vec<usize>) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::SeedableRng;
+
+    fn arm(tag: &'static str) -> Variants {
+        let variant = || Variant {
+            body: Bytes::from_static(tag.as_bytes()),
+            etag: HeaderValue::from_static(tag),
+            headers: HeaderMap::new(),
+            not_modified: HeaderMap::new(),
+        };
+        Variants { identity: variant(), br: None, gzip: None }
+    }
+
+    #[test]
+    fn arms_are_drawn_uniformly() {
+        let arms = Arms(vec![arm("a"), arm("b"), arm("c")]);
+        let mut rng = rand::rngs::StdRng::seed_from_u64(0x006d_696e_7461_6b61);
+        let draws = 30_000;
+        let mut counts = [0u32; 3];
+        for _ in 0..draws {
+            counts[usize::from(arms.pick_with(&mut rng).identity.body[0] - b'a')] += 1;
+        }
+        // Pearson's chi-square against 1/3 each, 2 degrees of freedom: 13.8 is its 99.9th percentile.
+        let expected = f64::from(draws) / 3.0;
+        let chi2: f64 = counts.iter().map(|&n| (f64::from(n) - expected).powi(2) / expected).sum();
+        assert!(chi2 < 13.8, "{counts:?}: chi-square {chi2}");
+        // The real thing: every arm comes up, from the thread's own generator.
+        let mut seen = [false; 3];
+        for _ in 0..200 {
+            seen[usize::from(arms.pick().identity.body[0] - b'a')] = true;
+        }
+        assert_eq!(seen, [true; 3]);
+        // One arm needs no draw.
+        let single = Arms(vec![arm("x")]);
+        assert_eq!(single.pick().identity.etag, "x");
+    }
+
+    #[test]
+    fn variant_pages_are_private() {
+        assert_eq!(cache_control(CachePolicy::Document, 1), "no-cache");
+        assert_eq!(cache_control(CachePolicy::Document, 3), "private, no-cache");
+        assert_eq!(cache_control(CachePolicy::Immutable, 1), "public, max-age=31536000, immutable");
+    }
 
     #[test]
     fn levenshtein() {
@@ -580,6 +717,12 @@ mod tests {
         assert!(!is_route_path("/a?b"));
         assert!(is_lang_tag("pt-BR"));
         assert!(!is_lang_tag("../x"));
+        for ok in ["", "/mintaka", "/a/b-c_d.e"] {
+            assert!(is_base(ok), "{ok:?}");
+        }
+        for bad in ["/", "mintaka", "/mintaka/", "/a//b", "/..", "/a/./b", "/a b", "/a?b"] {
+            assert!(!is_base(bad), "{bad:?}");
+        }
         assert!(read_file(Path::new("."), "../etc/passwd").is_err());
         assert!(read_file(Path::new("."), "/etc/passwd").is_err());
     }

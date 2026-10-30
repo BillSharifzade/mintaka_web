@@ -7,16 +7,24 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-/// Bumped whenever the shape below changes incompatibly.
-pub const MANIFEST_VERSION: u32 = 1;
+use crate::experiment::Experiment;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+/// Bumped whenever the shape below changes incompatibly. 2: experiment variants (a server that
+/// ignored them would serve only the control and refuse every beacon that names a variant).
+pub const MANIFEST_VERSION: u32 = 2;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Manifest {
     pub version: u32,
     /// Build identifier, e.g. `2026-10-27.3f2a1b9c` (date + content hash prefix).
     pub build: String,
     /// Canonical origin, e.g. `https://mintaka.tj`. Used for absolute URLs only.
     pub origin: String,
+    /// URL prefix the site lives under, e.g. `/mintaka`; empty at the root of the origin. Route
+    /// paths below are relative to it: the server strips it from requests before routing and puts
+    /// it back on the `Location`s it sends (docs/CONTRACTS.md §3.1).
+    #[serde(default)]
+    pub base: String,
     /// Language served at `/` when `Accept-Language` matches nothing we have.
     pub default_lang: String,
     /// Enabled languages, in display order. Each has `/{lang}/` and a 404 page.
@@ -28,6 +36,14 @@ pub struct Manifest {
     /// curl mode: `lang -> (url path -> file)`. Files are UTF-8 text with ANSI colour escapes and
     /// `{{placeholder}}` tokens the server fills per request (see docs/CONTRACTS.md §curl).
     pub text: BTreeMap<String, BTreeMap<String, String>>,
+    /// The A/B test this build runs (docs/CONTRACTS.md §17). Its pages list a file per variant.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub experiment: Option<Experiment>,
+    /// What the Telegram bot writes to clients (docs/CONTRACTS.md §19): `lang -> (message id ->
+    /// text)` for every id in [`crate::BOT_MESSAGES`], rendered from the page strings with `{brief}`
+    /// left for the server to fill.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub bot: BTreeMap<String, BTreeMap<String, String>>,
 }
 
 /// Hash sources for the Content-Security-Policy header, without quotes: `sha256-<base64>`.
@@ -53,6 +69,21 @@ pub struct Route {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lang: Option<String>,
     pub kind: RouteKind,
+    /// A page of the experiment: every variant after the control (which is `file`), in
+    /// `experiment.variants` order. The server picks one of all of them per request, at random.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub variants: Vec<VariantFile>,
+}
+
+/// One experiment variant of a page: its own file, with its own precompressed siblings.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct VariantFile {
+    /// The variant's id in `experiment.variants`.
+    pub id: String,
+    /// Relative to `dist/`, e.g. `en/index.hero-title-hardware.html`.
+    pub file: String,
+    #[serde(default)]
+    pub encodings: Vec<Encoding>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -117,6 +148,7 @@ mod tests {
             version: MANIFEST_VERSION,
             build: "2026-10-27.deadbeef".into(),
             origin: "https://mintaka.tj".into(),
+            base: "/mintaka".into(),
             default_lang: "en".into(),
             langs: vec!["en".into()],
             csp: Csp { style_src: vec!["sha256-abc=".into()], script_src: vec![] },
@@ -128,13 +160,17 @@ mod tests {
                 encodings: vec![Encoding::Br, Encoding::Gzip],
                 lang: Some("en".into()),
                 kind: RouteKind::Page,
+                variants: vec![],
             }],
             not_found: [("en".to_string(), "en/404.html".to_string())].into(),
             text: Default::default(),
+            experiment: None,
+            bot: Default::default(),
         };
         let json = serde_json::to_string(&m).unwrap();
         assert!(json.contains(r#""cache":"document""#));
         assert!(json.contains(r#""encodings":["br","gzip"]"#));
+        assert!(!json.contains("variants") && !json.contains("experiment"), "left out when there is no test");
         assert_eq!(serde_json::from_str::<Manifest>(&json).unwrap(), m);
     }
 }

@@ -3,7 +3,7 @@ slug = "serving-a-page-in-under-a-millisecond"
 title = "How this website serves a page in under a millisecond"
 pillar = "highload"
 date = 2026-10-29
-summary = "The server behind this site reads every file into memory at startup, with its compressed variants and complete response headers already built, so a request costs a lookup, a header parse and two clones of things built in advance. Under a fixed 20,000 requests per second on a laptop, its own time for the 28.8 kB home page was 4–5 µs at the median and 22–30 µs at p99. The load generator, on the same machine, saw 0.19 ms. This post is about both numbers, and why they differ."
+summary = "The server behind this site reads every file into memory at startup, with its compressed variants and complete response headers already built, so answering a request takes a lookup, a look at two request headers and copies of things built in advance. Under a fixed 20,000 requests per second on a laptop, its own time for the 28.8 kB home page was 4–5 µs at the median and 22–30 µs at p99. The load generator, on the same machine, saw 0.19 ms at the median. This post is about both numbers, and why they differ."
 repo = "crates/server"
 +++
 
@@ -11,7 +11,7 @@ repo = "crates/server"
 
 This site claims that every number on it is measured. The first number a visitor's browser can measure is how long our server takes to answer, because the server sends it in a `Server-Timing` header with every response. If that number is large, the claim is embarrassing. If it is small, it should be small for reasons we can explain line by line.
 
-The budget in our spec is one millisecond of server time per page. A millisecond is generous: light in fibre needs at least 47.1 ms for a round trip between Dushanbe and Frankfurt (the table in the physics section of the home page shows the calculation), so a server that answers in a millisecond already spends a fiftieth of the unavoidable delay. We wanted the server's share to be a rounding error, and we wanted to measure it honestly.
+The budget in our spec is one millisecond of server time per page. A millisecond is generous: light in fibre needs at least 47.1 ms for a round trip between Dushanbe and Frankfurt (the table in the physics section of the home page shows the calculation), so a server that answers in a millisecond already adds a fiftieth to that unavoidable delay. We wanted the server's share to be a rounding error, and we wanted to measure it honestly.
 
 ## Method
 
@@ -27,7 +27,7 @@ What is left for a request is small: find the route, read `Accept-Encoding` (bro
 
 The connection layer takes a timestamp at the moment hyper hands us a parsed request head. After the handler, `routes::finish` applies the security headers, takes a second timestamp, writes `app;dur=…` (that interval), `route` and `render` into `Server-Timing`, and records `app` in an HDR histogram. The histograms are sharded by worker thread so the cores don't share one lock, keep two significant figures (exact below 256 µs), and are folded once a second into a ten-second window that [`/_telemetry`](repo:crates/server/src/telemetry.rs) streams as p50, p99 and p99.9.
 
-Be precise about what `app` leaves out: reading and parsing the request head (before the first timestamp), writing the body to the socket, TLS encryption, and the kernel. It is the server's own decision time, nothing more. That is why the client sees a larger number, and why we report both.
+Be precise about what `app` leaves out: reading and parsing the request head (before the first timestamp), writing the body to the socket, TLS encryption, and the kernel's network stack. It is the server's own decision time, plus, on a direct connection, one system call that reads the connection's round-trip time from the kernel for `Server-Timing`. That is why the client sees a larger number, and why we report both.
 
 ### Load at a fixed rate
 
@@ -49,7 +49,7 @@ $$
 N = r W
 $$
 
-for an average time $W$ in it. With $r = 20000$ per second and oha's mean latency of 0.210 ms, there were about 4.2 requests in flight among 64 connections. Inside the server the same law gives a bound: if every request had taken the p99 time of 30 µs, there would be 0.6 requests in the server on average, so for at least 40 % of the time there would be none.
+for an average time $W$ in it. With $r = 20000$ per second and oha's mean latency of 0.210 ms, there were about 4.2 requests in flight among 64 connections. Inside the server the same law shows how idle it was: even if every request had taken as long as the p99, 30 µs, there would have been 0.6 requests in `app` on average, so for at least 40 % of the time there would have been none.
 
 ## The code
 
@@ -89,7 +89,7 @@ oha -z 10s -q 20000 -c 64 --latency-correction --no-tui \
     http://127.0.0.1:18880/en/
 ```
 
-The browser-like `User-Agent` matters: `curl/…` gets the plain-text curl mode. The page was the home page of that day's build: 28,773 bytes of brotli per response.
+We sent a browser's `User-Agent` to be sure of getting the HTML page: `curl/…` and a few other command-line clients get the plain-text curl mode instead. The page was the home page of that day's build: 28,773 bytes of brotli per response.
 
 | Run | Achieved | p50 | p99 | p99.9 | p99.99 |
 |---|---:|---:|---:|---:|---:|
@@ -107,12 +107,12 @@ Table: Client latency from oha, with latency correction, 10 s per run. All respo
 
 Table: Server time from the `/_telemetry` ticks of the steady seconds of the same runs (ranges over those ticks). CPU is user plus system time as a share of one core.
 
-The last row repeats the test page of our earlier notes, which measured 0.147 ms at p50 and 4 µs inside the server on 27 October; the machine behaved the same way two days later. Single requests with curl show the same picture: 12–21 µs of `app` on a fresh connection, then 18, 10, 4, 3 and 2 µs for five requests on one kept-alive connection, as caches warm up.
+The last row repeats the test page of [our earlier notes](repo:bench/README.md), which measured 0.147 ms at p50 and 4 µs inside the server on 27 October; the machine behaved much the same two days later. Single requests with curl show the same picture: 12–21 µs of `app` on a fresh connection, then 18, 10, 4, 3 and 2 µs for five requests on one kept-alive connection, as caches warm up.
 
-One run is missing from the tables, and it is the most instructive. Our first 20,000/s run on the home page measured a client p99 of 11.9 ms, twenty times the repeat, and the server's own p99.9 rose to 1.77 ms in one second. `app` is wall-clock time, so when another process takes the core in the middle of a request, the server's histogram shows it too. That is the value of measuring on both sides: they agreed that the stall was on the machine, not in the request path.
+One run is missing from the tables, and it is the most instructive. Our first 20,000/s run on the home page, right after the server started, measured a client p99 of 11.9 ms, twenty times the repeat. The server's own p99 in that run never went above 44 µs, so nearly all of those milliseconds were spent outside `app`: in the loopback, the scheduler or the load generator. Its p99.9 did rise to 1.77 ms in one second: `app` is wall-clock time, so a thread that loses its core in the middle of a request shows up in the histogram too. We did not find out what took the time, and the repeat did not show it. That is the value of measuring on both sides: the client alone would have blamed the server.
 
 ## Why the two medians differ
 
 At 20,000/s, the client's median was 187 µs and the server's was 4–5 µs. The difference is everything `app` leaves out: oha building and sending the request, two trips through the loopback TCP stack, hyper reading and parsing the head, copying 28.8 kB into a socket buffer and out again, oha parsing the response, and the context switches between them, with client and server on the same cores. The CPU column says the same thing another way: 58–100 % of a core at 20,000/s is 29–50 µs of process time per request, of which `app` accounts for 4–5. On a real network none of this matters next to the round trip; it matters here because it tells you where to look next.
 
-What this benchmark does not show: TLS (it ran over plain HTTP/1.1), HTTP/2, a real network, or production hardware. The numbers come from a laptop, and we say so.
+What this benchmark does not show: TLS (it ran over plain HTTP/1.1), HTTP/2, a real network, or production hardware. The numbers come from a laptop, and we say so. [`bench/run.sh`](repo:bench/run.sh) now runs the same kind of benchmark as one command, over HTTP/2 with TLS 1.3 as well; [its first run](repo:bench/results/2026-10-29-dev-laptop.md) measured a later, 30.2 kB build of the page on the same laptop.

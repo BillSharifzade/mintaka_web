@@ -54,7 +54,9 @@ pub fn sent(ctx: &Ctx) -> Markup {
 
 pub fn privacy(ctx: &Ctx) -> Markup {
     let s = ctx.s;
-    let parts = ["cookies", "logs", "measure", "contact", "physics", "experiments", "storage", "data"];
+    let parts = ["cookies", "logs", "measure", "contact", "telegram", "physics", "experiments", "storage", "data"];
+    let h = &ctx.cfg.hosting;
+    let host = [("provider", h.provider.as_str().into()), ("city", h.city.as_str().into()), ("country", h.country.as_str().into())];
     html! {
         article class="sec sec--small prose" aria-labelledby="privacy-title" {
             div class="wrap" {
@@ -63,8 +65,17 @@ pub fn privacy(ctx: &Ctx) -> Markup {
                 @for p in parts {
                     h2 { (s.t(&format!("pv-{p}-title"))) }
                     p { (s.t(&format!("pv-{p}"))) }
+                    // While an A/B test runs (spec §12): what it adds to the message above, and when it ends.
+                    @if let (true, Some(e)) = (p == "measure", &ctx.cfg.experiment) {
+                        h2 { (s.t("pv-ab-title")) }
+                        p { (s.ta("pv-ab", &[("versions", (e.variants.len() + 1).into()), ("views", s.int(e.sample_size).into())])) }
+                    }
                 }
-                p { (s.ta("pv-contact-us", &[("email", ctx.cfg.contact.email.as_str().into())])) }
+                h2 { (s.t("pv-hosting-title")) }
+                p { (s.ta("pv-hosting", &host)) }
+                @if h.edge { p { (s.ta("pv-hosting-edge", &host)) } }
+                // `$email` names whichever direct contact comes first (an email address or a phone).
+                p { (s.ta("pv-contact-us", &[("email", ctx.cfg.contact.primary().1.into())])) }
             }
         }
     }

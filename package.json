@@ -1,6 +1,7 @@
 {
   "name": "mintaka-web",
   "private": true,
+  "license": "(MIT OR Apache-2.0)",
   "type": "module",
   "description": "Front-end islands for mintaka.tj. Dev tooling only: the page ships zero third-party JavaScript.",
   "scripts": {

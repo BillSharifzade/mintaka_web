@@ -3,6 +3,7 @@ name = "fuzzer"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 description = "S5 Attack our code: a coverage-guided fuzzer attacking a small Rust parser of ours, for WebAssembly."
 
 [lib]

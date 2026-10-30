@@ -1,0 +1,12 @@
+# Restarts mintaka-prod when a deploy replaces its binary (rsync renames the new file into place)
+# or its settings change.
+[Unit]
+Description=Restart mintaka-prod after a deploy
+
+[Path]
+PathChanged=/home/dchradmin/mintaka-prod/bin/mintaka-prod
+PathChanged=/home/dchradmin/mintaka-prod/env
+Unit=mintaka-prod-reload.service
+
+[Install]
+WantedBy=multi-user.target

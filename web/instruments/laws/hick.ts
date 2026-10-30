@@ -5,7 +5,7 @@
 // a number key, arrow keys + Enter, or a click from assistive technology).
 
 import { h, render, s } from '../../shared/dom.ts';
-import { avg, fill, fmt, foreperiod, frame, L, num, P, slot, trials, type Experiment, type Item } from './kit.ts';
+import { avg, fill, fmt, foreperiod, frame, L, MS, num, P, slot, trials, type Experiment, type Item } from './kit.ts';
 import { plotBox, scatter } from './plot.ts';
 import { fit, hickBits, shuffle, type Pt } from './stats.ts';
 
@@ -87,7 +87,7 @@ export const hick: Experiment = (panel, api) => {
   const draw = (data: Pt[], by: Map<number, number[]>) => {
     const f = fit(data);
     const means: Pt[] = [...by].map(([n, xs]) => [hickBits(n), avg(xs) ?? 0]);
-    scatter(svg, { pts: data, means, fit: f, xMax: 4, x: L('hick-x'), y: 'ms' });
+    scatter(svg, { pts: data, means, fit: f, xMax: 4, x: L('hick-x'), y: MS });
     return f;
   };
 
@@ -151,12 +151,12 @@ export const hick: Experiment = (panel, api) => {
     side.replaceChildren(svg, trials([L('col-n'), L('col-ms')], rows));
     const items: Item[] = [
       [L('b'), fmt(f.b), 'ms/bit'],
-      [L('a'), fmt(f.a), 'ms'],
+      [L('a'), fmt(f.a), MS],
       [L('r2'), fmt(f.r2, 2), ''],
     ];
     api.report({
       items,
-      plain: f.b >= 1 ? fill('hick-plain', { b: num(fmt(f.b), 'ms') }) : undefined,
+      plain: f.b >= 1 ? fill('hick-plain', { b: num(fmt(f.b), MS) }) : undefined,
       line: L('hick-line'),
       note: f.b < 1 ? L('hick-flat') : undefined,
     });

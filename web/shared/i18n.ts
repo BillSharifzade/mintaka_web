@@ -24,6 +24,40 @@ export function lang(): string {
   return (typeof document !== 'undefined' && document.documentElement.lang) || 'en';
 }
 
+// Languages whose numbers are written exactly like another's (CLDR: grouping by a no-break space,
+// a decimal comma). Chrome ships no locale data for Tajik, so `Intl` would fall back to the
+// browser's own language there (1,234.5, "Oct 30").
+const SAME_NUMBERS: Record<string, string> = { tg: 'ru' };
+const known = new Map<string, boolean>();
+const supported = (l: string): boolean => {
+  let ok = known.get(l);
+  if (ok === undefined) known.set(l, (ok = Intl.NumberFormat.supportedLocalesOf(l).length > 0));
+  return ok;
+};
+
+/**
+ * The locale to format numbers in: the page language, or where this browser has no data for it,
+ * a language that writes numbers the same way (Tajik → Russian rules: 1 234,5). Only digits and
+ * separators are borrowed — never words, units or plural rules (those stay `lang()`'s).
+ */
+export function numberLocale(l: string = lang()): string {
+  const base = l.split('-')[0] ?? l;
+  const twin = SAME_NUMBERS[base];
+  return twin && !supported(l) ? twin : l;
+}
+
+/** A date and time in the page language: "30 окт. 2026 г., 12:40"; in figures where the browser has no words for the language. */
+export function dateTime(d: Date, l: string = lang()): string {
+  if (supported(l)) return new Intl.DateTimeFormat(l, { dateStyle: 'medium', timeStyle: 'short' }).format(d);
+  const numeric = { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' } as const;
+  return new Intl.DateTimeFormat(numberLocale(l), numeric).format(d);
+}
+
+/** "a, b and c" in the page language; plain commas where the browser has no data for it. */
+export function list(items: string[], l: string = lang()): string {
+  return supported(l) ? new Intl.ListFormat(l, { type: 'conjunction' }).format(items) : items.join(', ');
+}
+
 /** Look up a message; `{name}` placeholders are replaced from `vars` (numbers are localised). */
 export function t(key: string, vars?: Record<string, string | number>): string {
   const pattern = load()[key];
@@ -35,7 +69,7 @@ export function t(key: string, vars?: Record<string, string | number>): string {
   return pattern.replace(/\{([a-z0-9_-]+)\}/gi, (whole, name: string) => {
     const v = vars[name];
     if (v === undefined) return whole;
-    return typeof v === 'number' ? new Intl.NumberFormat(lang()).format(v) : v;
+    return typeof v === 'number' ? new Intl.NumberFormat(numberLocale()).format(v) : v;
   });
 }
 
@@ -50,7 +84,7 @@ export function tn(key: string, vars: Record<string, Node | string | number>): (
       if (i % 2 === 0) return part;
       const v = vars[part];
       if (v === undefined) return `{${part}}`;
-      return typeof v === 'number' ? new Intl.NumberFormat(lang()).format(v) : v;
+      return typeof v === 'number' ? new Intl.NumberFormat(numberLocale()).format(v) : v;
     });
 }
 
@@ -64,10 +98,16 @@ export function tp(key: string, n: number, vars: Record<string, string | number>
   return t(pluralKey(key, n), { n, ...vars });
 }
 
+// Chrome and Node ship no plural rules for Tajik, and Intl.PluralRules("tg") would quietly take
+// the browser's own language instead (Russian on many machines in Tajikistan: few, many). Use the
+// source language's one/other there, which Tajik messages are written for — a Tajik noun stays
+// singular after a numeral, so most need no variant at all.
+const pluralLocale = (l: string): string => (Intl.PluralRules.supportedLocalesOf(l).length > 0 ? l : 'en');
+
 /** The message id tp() picks for `n`; with tn() a count can keep its markup: `tn(pluralKey(k, n), { n: num(…) })`. */
 export function pluralKey(key: string, n: number): string {
   const d = load();
-  const category = new Intl.PluralRules(lang()).select(n);
+  const category = new Intl.PluralRules(pluralLocale(lang())).select(n);
   return [`${key}[${n}]`, `${key}[${category}]`].find((k) => k in d) ?? key;
 }
 

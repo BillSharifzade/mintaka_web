@@ -1120,15 +1120,6 @@
       opacity: 1;
     }
 
-    .sec--pillar,
-    .sec--process,
-    .sec--qualities,
-    .sec--wall,
-    .sec--team,
-    .sec--contact {
-      content-visibility: visible;
-    }
-
     a {
       color: var(--deep-blue);
     }

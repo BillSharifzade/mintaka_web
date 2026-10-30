@@ -9,7 +9,7 @@
 // connection they come from the cache. /_proof, /_telemetry, /_ping, /_rum, /api/* and /sw.js are
 // never stored or answered by the worker.
 
-import { cacheName, current, installList, isWarm, prune, shellFor, staleCaches, storable, storedHeaders, strategy, type Shell } from './lib.ts';
+import { cacheName, current, installList, isAsset, isWarm, prune, shellFor, staleCaches, storable, storedHeaders, strategy, type Shell } from './lib.ts';
 
 // The parts of ServiceWorkerGlobalScope used here (the project compiles against the DOM library).
 interface Extendable extends Event {
@@ -47,7 +47,7 @@ async function keep(paths: readonly string[]): Promise<void> {
   const cache = await caches.open(NAME);
   await Promise.all(
     paths.map(async (p) => {
-      const page = !p.startsWith('/assets/');
+      const page = !isAsset(p);
       const have = await cache.match(p, { ignoreVary: true });
       if (have && (!page || current(SHELL, p, have.headers.get('etag')))) return;
       try {
@@ -72,9 +72,9 @@ self.addEventListener('install', (e) => {
       const open = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       const earlier: string[] = [];
       for (const name of staleCaches(await caches.keys(), SHELL.build)) {
-        for (const req of await (await caches.open(name)).keys()) if (!path(req.url).startsWith('/assets/')) earlier.push(path(req.url));
+        for (const req of await (await caches.open(name)).keys()) if (!isAsset(path(req.url))) earlier.push(path(req.url));
       }
-      const pages = [...open.map((c) => path(c.url)), ...earlier].filter((p) => storable(SHELL, p) && !p.startsWith('/assets/'));
+      const pages = [...open.map((c) => path(c.url)), ...earlier].filter((p) => storable(SHELL, p) && !isAsset(p));
       await keep(installList(SHELL, pages));
       await self.skipWaiting();
     })(),

@@ -4365,8 +4365,11 @@ dependencies = [
 name = "xtask"
 version = "0.1.0"
 dependencies = [
+ "age",
  "anyhow",
+ "proof",
  "routing",
+ "serde",
  "serde_json",
  "site",
 ]

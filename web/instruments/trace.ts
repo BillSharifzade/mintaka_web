@@ -6,10 +6,11 @@
 
 import { $, h, render, s } from '../shared/dom.ts';
 import { offline, reducedMotion } from '../shared/env.ts';
-import { bytes, duration, type Formatted } from '../shared/format.ts';
-import { t, tn } from '../shared/i18n.ts';
+import { bytes, duration, unit, type Formatted } from '../shared/format.ts';
+import { loadStrings, t, tn } from '../shared/i18n.ts';
 import { navEntry, offlineCopy, serverTiming } from '../shared/timing.ts';
 import { track } from '../shared/rum.ts';
+import { at } from '../shared/base.ts';
 
 export type HopId = 'dns' | 'tcp' | 'tls' | 'net' | 'app' | 'ttfb' | 'down';
 /** Why a hop took no time — shown, never hidden. */
@@ -89,6 +90,10 @@ interface Server {
   render?: number | undefined;
   tls?: number | undefined;
   krtt?: number | undefined;
+  /** HTTP/3: QUIC's RTT estimate for the connection (Server-Timing `qrtt`). */
+  qrtt?: number | undefined;
+  /** The visitor's connection ended at the hosting edge's proxy (Server-Timing `edge`). */
+  edge?: boolean;
 }
 
 interface View {
@@ -112,7 +117,7 @@ const SOURCE: Record<HopId, string> = {
   down: 'responseEnd − responseStart',
 };
 
-const fmt = (ms: number): Formatted => (ms === 0 ? { value: '0', unit: 'ms' } : duration(ms));
+const fmt = (ms: number): Formatted => (ms === 0 ? { value: '0', unit: unit('ms') } : duration(ms));
 const text = (ms: number): string => {
   const f = fmt(ms);
   return `${f.value} ${f.unit}`;
@@ -121,7 +126,7 @@ const num = (f: Formatted): HTMLElement => h('span', { class: 'num' }, f.value, 
 
 function view(entry: PerformanceResourceTiming, secure: boolean, ping = false): View {
   const st = (name: string) => serverTiming(name, entry);
-  const server: Server = { app: st('app'), route: st('route'), render: st('render'), tls: st('tls'), krtt: st('krtt') };
+  const server: Server = { app: st('app'), route: st('route'), render: st('render'), tls: st('tls'), krtt: st('krtt'), qrtt: st('qrtt'), edge: st('edge') !== undefined };
   return {
     trace: hops(entry, server.app, secure),
     server,
@@ -133,7 +138,7 @@ function view(entry: PerformanceResourceTiming, secure: boolean, ping = false): 
 
 /** Time a fresh GET /_ping by its Resource Timing entry. Null when the browser reports none. */
 async function ping(): Promise<PerformanceResourceTiming | null> {
-  const url = new URL('/_ping', location.href).href;
+  const url = new URL(at('/_ping'), location.href).href;
   const since = performance.now() - 1;
   const pick = (list: PerformanceEntryList) =>
     (list.filter((e) => e.name === url && e.startTime >= since).pop() as PerformanceResourceTiming | undefined) ?? null;
@@ -194,12 +199,21 @@ function draw(svg: SVGSVGElement, v: View, width: number): SVGCircleElement {
   return dot;
 }
 
+/** Which explainer a hop gets: behind the hosting edge, the connection hops end at its proxy. */
+function about(v: View, id: HopId): string {
+  if (v.server.edge && (id === 'tcp' || id === 'tls' || id === 'net')) return '-edge';
+  return v.ping && (id === 'app' || id === 'down') ? '-ping' : '';
+}
+
 /** The ordered list mirroring the timeline, with an explainer per hop. */
 function list(v: View, secure: boolean): HTMLElement[] {
   const { server } = v;
   const extra: Partial<Record<HopId, (Node | string)[] | false>> = {
     tls: server.tls !== undefined && tn('trace-tls-server', { ms: num(fmt(server.tls)) }),
-    net: server.krtt !== undefined && tn('trace-krtt', { ms: num(fmt(server.krtt)) }),
+    net:
+      server.krtt !== undefined
+        ? tn('trace-krtt', { ms: num(fmt(server.krtt)) })
+        : server.qrtt !== undefined && tn('trace-qrtt', { ms: num(fmt(server.qrtt)) }),
     app:
       server.route !== undefined &&
       server.render !== undefined &&
@@ -226,7 +240,8 @@ function list(v: View, secure: boolean): HTMLElement[] {
           num(fmt(hop.ms)),
           (note || more) && [' ', h('span', { class: 'trace-hop__x' }, note, note && more && ' · ', more)],
         ),
-        h('p', { class: 'trace-hop__about' }, t(`trace-${hop.id}-about${v.ping && (hop.id === 'app' || hop.id === 'down') ? '-ping' : ''}`)),
+        // Filled when the hop is first opened: the explainers are a lazy string bundle.
+        h('p', { class: 'trace-hop__about', 'data-text': `trace-${hop.id}-about${about(v, hop.id)}` }),
         h('p', { class: 'source' }, source),
       ),
     );
@@ -262,6 +277,16 @@ export function mount(root: HTMLElement): void {
   const plot = h('div', { class: 'trace-plot' }, svg);
   const meta = h('p', { class: 'trace-meta' });
   const hopList = h('ol', { class: 'trace-hops', role: 'list' });
+  // A hop's explainer (lazy/trace.ftl) is fetched the first time someone opens one.
+  hopList.addEventListener(
+    'toggle',
+    async (e) => {
+      const note = e.target instanceof HTMLDetailsElement && e.target.open ? $<HTMLElement>('.trace-hop__about', e.target) : null;
+      if (!note || note.textContent) return;
+      note.textContent = (await loadStrings('trace')) ? t(note.dataset['text'] ?? '') : offline() ? t('offline-island') : '';
+    },
+    true,
+  );
   const gap = h('p', { class: 'trace-gap source' });
   const said = h('p', { class: 'trace-said', 'aria-live': 'polite' });
   const chips = [t('trace-page'), t('trace-latest')].map((label, i) =>

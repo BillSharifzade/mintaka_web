@@ -2,8 +2,9 @@
 // main.ts. Measures this page view with PerformanceObserver and Navigation Timing — no library —
 // and, when the page is first hidden, sends one beacon with navigator.sendBeacon('/_rum'): the
 // page's canonical route, TTFB, FCP, LCP, CLS and INP, and the counts of web/shared/rum.ts. If the
-// visitor comes back and does more, the next hide sends only the new counts. Under Global Privacy
-// Control or Do Not Track it measures and sends nothing.
+// visitor comes back and does more, the next hide sends only the new counts. While an A/B test
+// runs, a page our server sent with a variant names it, with the test's conversions (§17). Under
+// Global Privacy Control or Do Not Track it measures and sends nothing.
 
 import { lastValue, on } from '../shared/bus.ts';
 import { declined, take, track } from '../shared/rum.ts';
@@ -21,6 +22,10 @@ export function start(): void {
   // A copy the service worker served offline says nothing about this server: counts only.
   const ours = !!nav && !offlineCopy(nav);
   const activation = (nav as (PerformanceNavigationTiming & { activationStart?: number }) | undefined)?.activationStart ?? 0;
+  // Only a page view our server sent takes part in the A/B test (an offline copy was never drawn):
+  // `<html data-variant data-converts>` says which variant it shows and what counts as converting.
+  const { variant, converts } = document.documentElement.dataset;
+  const test = ours && variant ? { variant, metrics: converts?.split(' ') ?? [] } : undefined;
   const since = (t: number) => Math.max(0, t - activation);
   // Paint metrics count only while the page has been visible from the start (as CrUX does).
   let hiddenAt = document.visibilityState === 'hidden' ? 0 : Infinity;
@@ -76,9 +81,11 @@ export function start(): void {
       ? { ttfb: nav && nav.responseStart > 0 ? since(nav.responseStart) : undefined, fcp, lcp, cls: layout ? cls(shifts) : undefined, inp: inp(worst.values(), count) }
       : {};
     const canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]')?.href;
-    const b = beacon(route(canonical, location.pathname), view, metrics, counts);
+    const b = beacon(route(canonical, location.pathname), view, metrics, counts, test);
     first = false;
-    if (worthSending(b)) navigator.sendBeacon('/_rum', JSON.stringify(b));
+    // The site's URL prefix, inlined by esbuild as in web/shared/base.ts — importing that module would
+    // cost this 3 kB chunk a whole extra import.
+    if (worthSending(b)) navigator.sendBeacon(`${typeof MINTAKA_BASE === 'string' ? MINTAKA_BASE : ''}/_rum`, JSON.stringify(b));
   };
   // `pagehide` too: some browsers skip `visibilitychange` when the page is unloaded.
   document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && send());

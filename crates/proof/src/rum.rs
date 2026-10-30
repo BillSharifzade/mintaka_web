@@ -4,10 +4,13 @@
 //! [`RumBeacon`] is the *unparsed* shape a browser sends; the server checks every field against
 //! the closed vocabularies below ([`METRICS`], [`EVENTS`]) and the manifest's page routes before a
 //! single number is counted. What leaves the server is [`RumSummary`]: percentiles and counts,
-//! never a single beacon.
+//! never a single beacon. While an A/B test runs (§17), beacons also name the variant their page
+//! view showed, and the summary counts page views and conversions per variant ([`RumExperiment`]).
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+
+use crate::experiment::Plan;
 
 /// Largest accepted `POST /_rum` body. A full beacon (every metric, every event key) is ~1 kB.
 pub const RUM_BODY_LIMIT: usize = 2 * 1024;
@@ -67,9 +70,10 @@ pub const EVENTS: [&str; 23] = [
 /// `POST /_rum` body (sent with `navigator.sendBeacon`, so usually `text/plain`).
 ///
 /// ```json
-/// { "route": "/en/", "view": true,
+/// { "route": "/en/", "view": true, "variant": "hero-title-hardware",
 ///   "metrics": { "ttfb": 92.4, "fcp": 640.2, "lcp": 812.6, "cls": 0.0012, "inp": 48 },
-///   "events": { "proof_open": 1, "instrument_start:highload": 2, "render_tier:B": 1 } }
+///   "events": { "proof_open": 1, "cta_start_project": 1, "render_tier:B": 1 },
+///   "converted": ["cta_start_project"] }
 /// ```
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -84,6 +88,14 @@ pub struct RumBeacon {
     /// [`EVENTS`] key → times it happened since the previous beacon of this page view (1–20).
     #[serde(default)]
     pub events: BTreeMap<String, u32>,
+    /// The experiment variant this page view shows (§17), on every beacon of a page view our
+    /// server sent with one; the first (`view: true`) is the exposure.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub variant: Option<String>,
+    /// The experiment's metrics this page view reached for the first time, each at most once per
+    /// page view, each also among `events`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub converted: Vec<String>,
 }
 
 /// The page view's Web Vitals; absent when the browser couldn't measure one.
@@ -119,6 +131,8 @@ pub struct RumSummary {
     pub day: RumWindow,
     /// Beacons refused since the process started (not counted anywhere above).
     pub rejected: RumRejected,
+    /// The A/B test of this build since the process started; `null` when none runs.
+    pub experiment: Option<RumExperiment>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -143,6 +157,46 @@ pub struct RumPercentile {
     pub p75: Option<f64>,
 }
 
+/// `GET /_rum` → `experiment`: page views and conversions per variant, and — only once every
+/// variant has reached the planned sample size — each variant against the control.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RumExperiment {
+    pub id: String,
+    /// The primary metric (an [`EVENTS`] key).
+    pub metric: String,
+    /// Counted, never tested.
+    pub secondary: Vec<String>,
+    pub plan: Plan,
+    /// Control first, in the manifest's order.
+    pub variants: Vec<RumVariant>,
+    /// Each variant after the control against it, in the same order. `null` until every variant
+    /// has `plan.sample_size` page views (no peeking); final from then on, because counting stops.
+    pub result: Option<Vec<RumComparison>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RumVariant {
+    pub id: String,
+    /// Page views that showed this variant, up to `plan.sample_size`.
+    pub views: u64,
+    /// Of those, the page views that reached the primary metric at least once.
+    pub conversions: u64,
+    /// The same per secondary metric.
+    pub secondary: BTreeMap<String, u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RumComparison {
+    /// The variant compared with the control.
+    pub variant: String,
+    /// Two-proportion z statistic; positive when the variant converted more often.
+    pub z: f64,
+    /// Two-sided p-value.
+    pub p: f64,
+    /// `p` below `plan.alpha` split over the comparisons: not likely to be chance.
+    pub significant: bool,
+}
+
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RumRejected {
     /// Malformed, out of range, unknown names or routes, too large, cross-site.
@@ -165,6 +219,9 @@ mod tests {
         assert!(serde_json::from_str::<RumBeacon>(r#"{"route":"/en/","metrics":{"fid":3}}"#).is_err());
         assert!(serde_json::from_str::<RumBeacon>(r#"{"route":"/en/","events":{"x":-1}}"#).is_err());
         assert!(serde_json::from_str::<RumBeacon>(r#"{"view":true}"#).is_err(), "route is required");
+        let b: RumBeacon = serde_json::from_str(r#"{"route":"/en/","view":true,"variant":"hero-title","converted":["cta_start_project"]}"#).unwrap();
+        assert_eq!((b.variant.as_deref(), b.converted.as_slice()), (Some("hero-title"), &["cta_start_project".to_string()][..]));
+        assert!(serde_json::from_str::<RumBeacon>(r#"{"route":"/en/","variant":2}"#).is_err());
     }
 
     #[test]

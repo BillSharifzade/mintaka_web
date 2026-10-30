@@ -108,6 +108,15 @@
       color var(--t-micro) var(--ease-enter);
   }
 
+  /* On a phone-narrow screen a long label wraps instead of pushing the page sideways (1.4.10). */
+  @media (max-width: 24rem) {
+    .btn {
+      white-space: normal;
+      line-height: 1.2;
+      text-align: center;
+    }
+  }
+
   .btn--primary {
     background: var(--cta-bg);
     color: var(--cta-text);
@@ -189,6 +198,19 @@
     border-color: var(--mintaka);
     background: rgb(61 123 255 / 0.12);
     color: var(--text);
+  }
+
+  /* Selected is shown by a tick too, not by colour alone (WCAG 1.4.1). */
+  .chip[aria-pressed="true"]::before,
+  .chip[aria-selected="true"]::before,
+  .chip:has(input:checked)::before {
+    content: "";
+    width: 0.3em;
+    height: 0.6em;
+    margin-inline: 0.1em;
+    border: solid currentColor;
+    border-width: 0 2px 2px 0;
+    transform: translateY(-0.1em) rotate(45deg);
   }
 
   .chip:has(input:focus-visible) {
@@ -460,23 +482,25 @@
     color: var(--danger);
   }
 
+  /* Steel edge: 4.3:1 on Void, 4.0:1 on Ink — a field's boundary needs 3:1 (WCAG 1.4.11). */
   .input {
     width: 100%;
     min-height: 3rem;
     padding: var(--s-3) var(--s-4);
-    border: 1px solid var(--border-strong);
+    border: 1px solid var(--steel);
     border-radius: var(--r-control);
     background: var(--void);
     color: var(--text);
     transition: border-color var(--t-micro) var(--ease-enter);
   }
 
+  /* 5.8:1 on Void (Steel alone is 4.3:1, below the 4.5:1 that text needs). */
   .input::placeholder {
-    color: var(--steel);
+    color: color-mix(in srgb, var(--steel) 75%, var(--mist));
   }
 
   .input:hover {
-    border-color: var(--steel);
+    border-color: var(--mist);
   }
 
   .input:focus-visible {

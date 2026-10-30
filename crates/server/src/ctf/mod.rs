@@ -9,14 +9,10 @@
 mod puzzles;
 
 use std::collections::HashMap;
-use std::fs::{DirBuilder, OpenOptions};
-use std::io::{ErrorKind, Read as _, Write as _};
-use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::Path;
 use std::sync::{Mutex, PoisonError};
 use std::time::Instant;
 
-use anyhow::Context;
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use hmac::{Hmac, Mac};
@@ -60,35 +56,7 @@ impl Ctf {
     /// Loads `{data_dir}/ctf.key`, creating it (32 random bytes, mode 0600) on first start.
     /// Deleting it invalidates every run in progress.
     pub fn open(data_dir: &Path) -> anyhow::Result<Ctf> {
-        DirBuilder::new()
-            .recursive(true)
-            .mode(0o700)
-            .create(data_dir)
-            .with_context(|| format!("creating {}", data_dir.display()))?;
-        let path = data_dir.join("ctf.key");
-        let mut secret = [0u8; 32];
-        match OpenOptions::new().read(true).open(&path) {
-            Ok(mut file) => {
-                let mut bytes = Vec::new();
-                file.read_to_end(&mut bytes).with_context(|| format!("reading {}", path.display()))?;
-                secret = bytes
-                    .try_into()
-                    .map_err(|_| anyhow::anyhow!("{} must hold exactly 32 bytes", path.display()))?;
-            }
-            Err(e) if e.kind() == ErrorKind::NotFound => {
-                rand::rngs::OsRng.fill_bytes(&mut secret);
-                let mut file = OpenOptions::new()
-                    .write(true)
-                    .create_new(true)
-                    .mode(0o600)
-                    .open(&path)
-                    .with_context(|| format!("creating {}", path.display()))?;
-                file.write_all(&secret).with_context(|| format!("writing {}", path.display()))?;
-                file.sync_all()?;
-            }
-            Err(e) => return Err(e).with_context(|| format!("opening {}", path.display())),
-        }
-        Ok(Ctf::with_secret(secret))
+        Ok(Ctf::with_secret(crate::secret::load_or_create(data_dir, "ctf.key")?))
     }
 
     fn with_secret(secret: [u8; 32]) -> Ctf {

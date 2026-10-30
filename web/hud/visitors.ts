@@ -1,14 +1,16 @@
 // The proof console's "Real visitors" row: what visitors' browsers measured on this server, from
 // GET /_rum (docs/CONTRACTS.md §14). Imported when the panel opens, like headers.ts, and asked
 // again on every opening. Too few samples for a percentile are said in words, never as a number.
+// While an A/B test runs, its lines come from ./experiment.ts, loaded only then (§17).
 // Imports only shared modules (never ./index.ts), so the console stays a single chunk.
 
 import { h, num, render } from '../shared/dom.ts';
 import { duration } from '../shared/format.ts';
 import { offline } from '../shared/env.ts';
-import { lang, pluralKey, t, tn } from '../shared/i18n.ts';
+import { dateTime, lang, numberLocale, pluralKey, t, tn } from '../shared/i18n.ts';
 import { declined, type Metric, type RumSummary, type RumWindow } from '../shared/rum.ts';
 import { clsText } from './metrics.ts';
+import { at } from '../shared/base.ts';
 
 const T = (key: string, vars?: Record<string, string | number>): string => t('hud-visitors-' + key, vars);
 const ORDER: Metric[] = ['lcp', 'inp', 'cls', 'fcp', 'ttfb'];
@@ -30,18 +32,20 @@ export function lines(w: RumWindow, min: number): Line[] {
 
 export async function show(cell: HTMLElement): Promise<void> {
   const L = lang();
-  const count = (n: number) => num({ value: new Intl.NumberFormat(L).format(n), unit: '' });
+  const count = (n: number) => num({ value: new Intl.NumberFormat(numberLocale(L)).format(n), unit: '' });
   let s: RumSummary;
   try {
-    const res = await fetch('/_rum', { cache: 'no-store', headers: { accept: 'application/json' } });
+    const res = await fetch(at('/_rum'), { cache: 'no-store', headers: { accept: 'application/json' } });
     if (!res.ok) throw new Error(`/_rum answered ${res.status}`);
     s = (await res.json()) as RumSummary;
   } catch (err) {
     render(cell, offline() ? t('hud-offline') : T('error', { reason: err instanceof Error ? err.message : String(err) }));
     return;
   }
-  const date = new Intl.DateTimeFormat(L, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(s.since * 1000));
+  const date = dateTime(new Date(s.since * 1000), L);
   const w = s.start;
+  const test = s.experiment;
+  const ab = test && h('div', { class: 'hud-ab' });
   const value = (l: Line) =>
     l.p75 === null
       ? h('span', null, ...tn(pluralKey('hud-visitors-few', l.n), { n: count(l.n), min: count(s.min_n) }))
@@ -50,6 +54,8 @@ export async function show(cell: HTMLElement): Promise<void> {
     cell,
     h('span', { class: 'hud-sub' }, ...tn(pluralKey('hud-visitors-since', w.views), { date, n: count(w.views) })),
     w.views > 0 && h('ul', { class: 'hud-list', role: 'list' }, lines(w, s.min_n).map((l) => h('li', null, h('span', { class: 'mono' }, l.metric.toUpperCase()), ' ', value(l)))),
+    ab,
     declined() && h('span', { class: 'hud-sub' }, T('declined')),
   );
+  if (test && ab) import('./experiment.ts').then((m) => m.show(ab, test), () => render(ab, t(offline() ? 'hud-offline' : 'hud-pending')));
 }

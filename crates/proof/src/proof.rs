@@ -17,6 +17,20 @@ pub struct Proof {
     /// Lower-case names of the security headers sent on this very response (no HSTS over plain
     /// HTTP), in the order the contract lists them, then `alt-svc` when HTTP/3 is announced.
     pub headers: Vec<String>,
+    /// Set when the visitor's connection ended at a reverse proxy in front of this server (the
+    /// hosting provider's edge, `--trusted-proxy`). `tls`, `http` and `connection` then describe
+    /// the proxy's hop to us — so `tls` is `null` and the kernel RTT is not reported — and the
+    /// visitor's own TLS is unknown here. `null` when visitors connect to this server directly.
+    #[serde(default)]
+    pub edge: Option<EdgeFacts>,
+}
+
+/// The proxy in front of this server, as far as its request says.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EdgeFacts {
+    /// The scheme the visitor used (`https`), from the proxy's `X-Forwarded-Proto`; `null` if it
+    /// sent none.
+    pub proto: Option<String>,
 }
 
 /// The machine and build answering the request.
@@ -145,11 +159,30 @@ mod tests {
             connection: ConnectionFacts { id: 1, requests: 1, kernel_rtt_us: None, kernel_rttvar_us: None, quic_rtt_us: None },
             privacy: PrivacyFacts { cookies_set: 0, third_party_origins: 0, ip_stored: false, ip_logged: false },
             headers: vec![],
+            edge: None,
         };
         let v = serde_json::to_value(&proof).unwrap();
         assert!(v["tls"].is_null());
         assert!(v["server"]["location"].is_null());
         assert!(v["connection"]["kernel_rtt_us"].is_null());
+        assert!(v["edge"].is_null(), "direct: present and null");
+    }
+
+    #[test]
+    fn behind_an_edge_proxy() {
+        let json = r#"{
+          "server": { "region": "dyu-1", "location": null, "build": "b", "software": "s",
+            "time_us": 30, "uptime_s": 1, "cores": 2 },
+          "tls": null,
+          "http": { "version": "HTTP/1.1" },
+          "connection": { "id": 9, "requests": 40, "kernel_rtt_us": null, "kernel_rttvar_us": null, "quic_rtt_us": null },
+          "privacy": { "cookies_set": 0, "third_party_origins": 0, "ip_stored": false, "ip_logged": false },
+          "headers": ["content-security-policy"],
+          "edge": { "proto": "https" }
+        }"#;
+        let proof: Proof = serde_json::from_str(json).unwrap();
+        assert_eq!(proof.edge, Some(EdgeFacts { proto: Some("https".into()) }));
+        assert!(proof.tls.is_none());
     }
 
     #[test]

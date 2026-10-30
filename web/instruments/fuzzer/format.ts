@@ -1,5 +1,8 @@
 // Formatting helpers for the fuzzer island. Pure functions, unit-tested.
 
+import { unit } from '../../shared/format.ts';
+import { lang, numberLocale } from '../../shared/i18n.ts';
+
 /** "4F 52 49 02" — at most `max` bytes, then "…". */
 export function hex(bytes: Uint8Array, max = Infinity): string {
   const shown = Array.from(bytes.subarray(0, Math.min(bytes.length, max)), (b) => b.toString(16).toUpperCase().padStart(2, '0'));
@@ -58,14 +61,18 @@ export function escapeInput(bytes: Uint8Array): string {
 
 /** 1284551 → "1,284,551" (locale-aware). */
 export function count(n: number, locale?: string): string {
-  return Math.round(n).toLocaleString(locale);
+  return Math.round(n).toLocaleString(numberLocale(locale));
 }
+
+// Thousands and millions, as CLDR abbreviates them: "48 k" · "48 тыс." · "48 ҳзр.".
+const BIG: Record<string, readonly [string, string]> = { ru: ['тыс.', 'млн'], tg: ['ҳзр.', 'млн.'] };
 
 /** 2_140_000 → "2.1 M", 48_200 → "48 k", 900 → "900". */
 export function rate(perSecond: number, locale?: string): string {
-  const f = (v: number, d: number) => v.toLocaleString(locale, { maximumFractionDigits: d });
-  if (perSecond >= 1e6) return `${f(perSecond / 1e6, 1)} M`;
-  if (perSecond >= 1e4) return `${f(perSecond / 1e3, 0)} k`;
+  const f = (v: number, d: number) => v.toLocaleString(numberLocale(locale), { maximumFractionDigits: d });
+  const [k, m] = BIG[(locale ?? lang()).split('-')[0] ?? ''] ?? ['k', 'M'];
+  if (perSecond >= 1e6) return `${f(perSecond / 1e6, 1)} ${m}`;
+  if (perSecond >= 1e4) return `${f(perSecond / 1e3, 0)} ${k}`;
   return f(perSecond, 0);
 }
 
@@ -73,7 +80,7 @@ export function rate(perSecond: number, locale?: string): string {
 export function seconds(ms: number, locale?: string): string {
   const s = ms / 1000;
   const digits = s < 0.1 ? 3 : s < 10 ? 2 : 1;
-  return `${s.toLocaleString(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits })} s`;
+  return `${s.toLocaleString(numberLocale(locale), { minimumFractionDigits: digits, maximumFractionDigits: digits })} ${unit('s', locale)}`;
 }
 
 /** Splits "panicked at path:line:col:\nmessage" into its two parts. */

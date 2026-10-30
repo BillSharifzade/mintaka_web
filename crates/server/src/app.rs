@@ -8,6 +8,7 @@ use proof::Location;
 use tokio::sync::watch;
 
 use crate::assets::Site;
+use crate::config::ProxySettings;
 use crate::contact::Contact;
 use crate::ctf::Ctf;
 use crate::headers::SecurityHeaders;
@@ -52,6 +53,8 @@ pub(crate) struct AppState {
     pub hello: Bytes,
     /// `Alt-Svc` for TLS responses (`h3=":443"; ma=86400`) when HTTP/3 is on.
     pub alt_svc: Option<HeaderValue>,
+    /// The reverse proxy in front of this server (`--trusted-proxy`), if any.
+    pub proxy: Option<ProxySettings>,
     /// Turns `true` when the server starts shutting down (ends event streams).
     pub shutdown: watch::Receiver<bool>,
 }

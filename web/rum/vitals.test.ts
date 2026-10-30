@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 // @ts-ignore -- Node built-in.
 import assert from 'node:assert/strict';
-import { EVENT_KEYS, beacon, inp, route, worthSending } from './vitals.ts';
+import { EVENT_KEYS, beacon, inp, route, worthSending, type Test } from './vitals.ts';
 import { take, track } from '../shared/rum.ts';
 
 test('INP: the slowest interaction, one outlier ignored per 50', () => {
@@ -62,4 +62,36 @@ test('every key track() can produce is one the server knows', () => {
   ];
   assert.deepEqual([...keys].sort(), [...EVENT_KEYS].sort());
   assert.equal(EVENT_KEYS.length, 23, 'crates/proof/src/rum.rs EVENTS has 23');
+});
+
+test('A/B test: the variant on every beacon, each metric converting once', () => {
+  const t: Test = { variant: 'hero-title-hardware', metrics: ['cta_start_project', 'contact_submit'] };
+  // The page view's first beacon exposes it; a click on "Start a project" before that converts it.
+  assert.deepEqual(beacon('/en/', true, {}, { cta_start_project: 2, 'render_tier:B': 1 }, t), {
+    route: '/en/',
+    view: true,
+    events: { cta_start_project: 2, 'render_tier:B': 1 },
+    variant: 'hero-title-hardware',
+    converted: ['cta_start_project'],
+  });
+  // Later: another click is an event, not a second conversion…
+  assert.deepEqual(beacon('/en/', false, {}, { cta_start_project: 1 }, t), { route: '/en/', events: { cta_start_project: 1 }, variant: 'hero-title-hardware' });
+  // …and sending the form is the secondary metric's first time.
+  assert.deepEqual(beacon('/en/', false, {}, { contact_submit: 1, cta_start_project: 1 }, t), {
+    route: '/en/',
+    events: { contact_submit: 1, cta_start_project: 1 },
+    variant: 'hero-title-hardware',
+    converted: ['contact_submit'],
+  });
+  assert.deepEqual(t.metrics, [], 'both reached');
+  assert.equal(beacon('/en/', false, {}, { contact_submit: 1 }, t).converted, undefined, 'once per page view');
+});
+
+test('A/B test: an exposure without a conversion, and conversions only of known events', () => {
+  const t: Test = { variant: 'hero-title', metrics: ['cta_start_project'] };
+  assert.deepEqual(beacon('/en/', true, { lcp: 800 }, {}, t), { route: '/en/', view: true, metrics: { lcp: 800 }, variant: 'hero-title' });
+  // An event the server wouldn't know is dropped, so it can't convert either.
+  const odd: Test = { variant: 'hero-title', metrics: ['nope'] };
+  assert.deepEqual(beacon('/en/', true, {}, { nope: 1 }, odd), { route: '/en/', view: true, variant: 'hero-title' });
+  assert.ok(!worthSending(beacon('/en/', false, {}, {}, t)), 'nothing new: not sent, test or not');
 });

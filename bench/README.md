@@ -59,7 +59,8 @@ oha -z 10s -q 50000 -c 128 --latency-correction --no-tui \
     http://127.0.0.1:18080/en/
 ```
 
-(The browser-like `User-Agent` matters: `curl/…` would get the curl-mode text instead.)
+(The browser-like `User-Agent` is a precaution: only `curl/`, `Wget/`, `HTTPie/` and `xh/` get the
+curl-mode text, so oha's own would do too.)
 
 ## Results
 

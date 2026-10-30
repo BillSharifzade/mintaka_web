@@ -1,6 +1,7 @@
 // The page's only Trusted Types policy (CSP: `trusted-types mintaka`). It exists for one sink:
 // script URLs for Workers, and it only ever approves our own hashed files under /assets/ and the
 // service worker at /sw.js (a fixed URL by necessity: its scope is the whole site).
+import { at } from './base.ts';
 
 interface TrustedTypePolicyLike {
   createScriptURL(input: string): unknown;
@@ -13,7 +14,7 @@ let policy: TrustedTypePolicyLike | null = null;
 
 function check(input: string): string {
   const url = new URL(input, location.href);
-  if (url.origin !== location.origin || !(url.pathname.startsWith('/assets/') || url.pathname === '/sw.js')) {
+  if (url.origin !== location.origin || !(url.pathname.startsWith(at('/assets/')) || url.pathname === at('/sw.js'))) {
     throw new TypeError(`refusing script URL ${input}`);
   }
   return url.href;

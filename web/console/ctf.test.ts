@@ -30,13 +30,16 @@ test('the strings (inline and lazy) and the module agree, both ways', () => {
   const ftl = new Set([...files.matchAll(/^(ctf-[a-z0-9-]+) =/gm)].map((m) => m[1]!));
   const src = read('./ctf.ts');
   const used = new Set([...src.matchAll(/'(ctf-[a-z0-9-]+)'/g)].map((m) => m[1]!));
-  for (const star of ['rigel', 'saiph', 'betelgeuse', 'meissa']) for (const suffix of ['', '-title', '-hint']) used.add(`ctf-${star}${suffix}`);
+  for (const star of ['rigel', 'saiph', 'betelgeuse', 'meissa']) {
+    for (const suffix of ['', '-title', '-hint']) used.add(`ctf-${star}${suffix}`);
+    used.add(`ctf-star-${star}`);
+  }
   for (const reason of ['limited', 'failed']) used.add(`ctf-${reason}`);
   for (const key of used) assert.ok(ftl.has(key), `${key} is used but not in ctf.ftl`);
   for (const key of ftl) assert.ok(used.has(key), `${key} is in ctf.ftl but never used`);
 });
 
 test('every console help line has its string', () => {
-  const ftl = read('../../content/en/islands/console.ftl');
+  const ftl = read('../../content/en/islands/console.ftl') + read('../../content/en/islands/lazy/console.ftl');
   for (const [, key] of read('./index.ts').matchAll(/T\('([a-z-]+)'\)/g)) assert.match(ftl, new RegExp(`^console-${key} =`, 'm'), key);
 });

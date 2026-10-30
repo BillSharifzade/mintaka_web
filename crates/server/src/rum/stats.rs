@@ -5,7 +5,7 @@
 //! life (it restarts with every deploy, so "since start" also means "this build"). The 24-hour
 //! window keeps a long-running process from averaging over weeks of old traffic, in whole hours so
 //! it costs one slot per hour with traffic and needs no timer: slots rotate lazily, on the next
-//! beacon or read in a new hour.
+//! beacon or read in a new hour. The A/B test keeps its own counts ([`Test`]), since start only.
 
 use std::collections::BTreeMap;
 
@@ -14,6 +14,7 @@ use proof::rum::{EVENTS, METRICS, RUM_MIN_SAMPLES};
 use proof::{RumPercentile, RumRejected, RumSummary, RumWindow};
 
 use super::beacon::Beacon;
+use super::experiment::Test;
 
 /// Histogram units per wire unit, per [`METRICS`] entry: times in tenths of a millisecond, CLS in
 /// ten-thousandths. Two significant figures: exact below 25.6 ms (CLS 0.0256), within 1 % above.
@@ -119,13 +120,15 @@ pub(crate) struct Stats {
     /// Scratch space for summing the ring on a read.
     day: Totals,
     rejected: RumRejected,
+    /// The A/B test this build runs, if any.
+    test: Option<Test>,
     /// Bumped on every change; the cached summary is reused until it moves or the hour does.
     version: u64,
     cached: Option<(u64, u64, bytes::Bytes)>,
 }
 
 impl Stats {
-    pub fn new(routes: Vec<String>, since: u64) -> anyhow::Result<Stats> {
+    pub fn new(routes: Vec<String>, since: u64, test: Option<Test>) -> anyhow::Result<Stats> {
         let n = routes.len();
         Ok(Stats {
             routes,
@@ -134,6 +137,7 @@ impl Stats {
             ring: (0..HOURS).map(|_| None).collect(),
             day: Totals::new(n)?,
             rejected: RumRejected::default(),
+            test,
             version: 0,
             cached: None,
         })
@@ -141,6 +145,10 @@ impl Stats {
 
     pub fn routes(&self) -> &[String] {
         &self.routes
+    }
+
+    pub fn test(&self) -> Option<&Test> {
+        self.test.as_ref()
     }
 
     pub fn record(&mut self, b: &Beacon, now: u64) -> anyhow::Result<()> {
@@ -158,6 +166,9 @@ impl Stats {
             h.totals.add(b);
         }
         self.start.add(b);
+        if let (Some(test), Some((variant, converted))) = (&mut self.test, &b.variant) {
+            test.record(*variant, b.view, converted);
+        }
         self.version += 1;
         Ok(())
     }
@@ -192,6 +203,7 @@ impl Stats {
             start: self.start.window(self.since, &self.routes),
             day: self.day.window((oldest * 3600).max(self.since), &self.routes),
             rejected: self.rejected,
+            experiment: self.test.as_ref().map(Test::summary),
         };
         let body = bytes::Bytes::from(serde_json::to_vec(&summary).unwrap_or_else(|_| b"null".to_vec()));
         self.cached = Some((self.version, hour, body.clone()));
@@ -207,11 +219,11 @@ mod tests {
     const T0: u64 = 1_793_102_400; // a whole hour
 
     fn stats() -> Stats {
-        Stats::new(["/", "/en/", "404"].map(String::from).to_vec(), T0).unwrap()
+        Stats::new(["/", "/en/", "404"].map(String::from).to_vec(), T0, None).unwrap()
     }
 
     fn beacon(s: &Stats, json: &str) -> Beacon {
-        parse(json.as_bytes(), s.routes()).unwrap()
+        parse(json.as_bytes(), "", s.routes(), s.test()).unwrap()
     }
 
     fn summary(s: &mut Stats, now: u64) -> RumSummary {
@@ -285,6 +297,23 @@ mod tests {
         let r = summary(&mut s, T0 + 24 * 3600);
         assert_eq!(r.start.views, 2);
         assert_eq!(r.day.views, 1);
+    }
+
+    #[test]
+    fn the_test_counts_its_variants_since_start() {
+        let test = Test::new(crate::rum::experiment::tests::spec(2), vec![1]).unwrap();
+        let mut s = Stats::new(["/", "/en/", "404"].map(String::from).to_vec(), T0, Some(test)).unwrap();
+        assert_eq!(summary(&mut s, T0).experiment.unwrap().variants[0].views, 0);
+        let b = beacon(&s, r#"{"route":"/en/","view":true,"variant":"hero-title","events":{"cta_start_project":1},"converted":["cta_start_project"]}"#);
+        s.record(&b, T0).unwrap();
+        let b = beacon(&s, r#"{"route":"/en/","view":true,"variant":"hero-title-cycle"}"#);
+        s.record(&b, T0 + 30 * 3600).unwrap(); // long after the day window moved on
+        let r = summary(&mut s, T0 + 30 * 3600);
+        let e = r.experiment.unwrap();
+        assert_eq!((e.variants[0].views, e.variants[0].conversions, e.variants[2].views), (1, 1, 1));
+        assert_eq!(r.start.events["cta_start_project"], 1, "conversions are events too");
+        assert_eq!(r.day.views, 1);
+        assert_eq!(summary(&mut stats(), T0).experiment, None, "no test, no block");
     }
 
     #[test]

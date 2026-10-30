@@ -7,6 +7,8 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.90"
 publish = false
+# The source code; the Lab articles, brand, copy and portraits have their own terms (LICENSE).
+license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
 proof = { path = "crates/proof" }

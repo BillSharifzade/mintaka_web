@@ -15,6 +15,7 @@
 //! * Static files come from `dist/manifest.json` and are loaded into memory at startup
 //!   (`assets`); the per-request path only clones pre-built header maps and `Bytes`.
 //! * `/_proof`, `/_telemetry`, `/_ping`, `/_rum`, curl mode, the contact API and the console challenge are in `routes`.
+//! * `telegram`: new-brief notifications and the bot a client can continue in (long polling).
 //! * Certificates come from PEM files, a self-signed development certificate, or `acme`, which
 //!   gets and renews them from Let's Encrypt itself (TLS-ALPN-01 on the TLS listener).
 //!
@@ -38,14 +39,16 @@ mod pow;
 mod quic;
 mod routes;
 mod rum;
+mod secret;
 mod server;
 mod sys;
+mod telegram;
 mod telemetry;
 mod tls;
 
 pub use config::{
-    AcmeSettings, CertSource, Cli, Config, Http3Settings, LETS_ENCRYPT_PRODUCTION, LETS_ENCRYPT_STAGING,
-    TelegramSettings, TlsSettings,
+    AcmeSettings, CertSource, Cidr, Cli, Config, Http3Settings, LETS_ENCRYPT_PRODUCTION, LETS_ENCRYPT_STAGING,
+    ProxySettings, TELEGRAM_API, TelegramSettings, TlsSettings,
 };
 pub use server::Server;
 pub use tls::SelfSigned;

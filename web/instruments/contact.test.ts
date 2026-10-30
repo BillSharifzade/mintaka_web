@@ -1,5 +1,5 @@
 import { assert, test } from './testkit.ts';
-import { emailOk, errorKey, messageChars, validate, type Brief } from './contact.ts';
+import { botLink, emailOk, errorKey, messageChars, validate, type Brief } from './contact.ts';
 
 const brief = (b: Partial<Brief>): Brief => ({
   kind: [],
@@ -115,4 +115,27 @@ test('errorKey maps codes to their e-* element by prefix', () => {
   assert.equal(errorKey('message-too-long'), 'message');
   assert.equal(errorKey('rate-limited'), 'rate');
   assert.equal(errorKey('pow-expired'), 'pow');
+});
+
+test('botLink: only a t.me deep link with a start code becomes a link', () => {
+  const code = 'b1' + 'A'.repeat(39);
+  assert.equal(botLink(`https://t.me/mintaka_bot?start=${code}`), `https://t.me/mintaka_bot?start=${code}`);
+  assert.equal(botLink(`https://t.me/mintaka_bot?start=${'x'.repeat(64)}`), `https://t.me/mintaka_bot?start=${'x'.repeat(64)}`);
+  for (const bad of [
+    undefined,
+    null,
+    42,
+    '',
+    'javascript:alert(1)',
+    `http://t.me/mintaka_bot?start=${code}`,
+    `https://t.me.evil.example/mintaka_bot?start=${code}`,
+    `https://evil.example/?u=https://t.me/mintaka_bot?start=${code}`,
+    `https://t.me/mintaka_bot?start=${'x'.repeat(65)}`,
+    `https://t.me/bot?start=${code}`,
+    `https://t.me/mintaka_bot?start=${code}&x=1`,
+    `https://t.me/mintaka_bot?start=b1"onmouseover=x`,
+    `https://t.me/mintaka_bot?start=${code}\n`,
+  ]) {
+    assert.equal(botLink(bad), undefined, String(bad));
+  }
 });

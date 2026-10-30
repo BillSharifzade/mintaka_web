@@ -5,9 +5,10 @@ use crate::util::civil_from_days;
 
 pub fn robots(cfg: &SiteConfig) -> String {
     format!(
-        "#        ●            mintaka — software at the edge of physics\n#   ·  ·   ●\n#      ● ·\n\nUser-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /_\n{}\nSitemap: {}/sitemap.xml\n",
-        cfg.langs.iter().map(|l| format!("Disallow: /{l}/sent/")).collect::<Vec<_>>().join("\n"),
-        cfg.origin
+        "#        ●            mintaka — software at the edge of physics\n#   ·  ·   ●\n#      ● ·\n\nUser-agent: *\nAllow: {b}/\nDisallow: {b}/api/\nDisallow: {b}/_\n{}\nSitemap: {}/sitemap.xml\n",
+        cfg.langs.iter().map(|l| format!("Disallow: {}/{l}/sent/", cfg.base)).collect::<Vec<_>>().join("\n"),
+        cfg.abs(""),
+        b = cfg.base,
     )
 }
 
@@ -25,8 +26,8 @@ pub fn humans(cfg: &SiteConfig, date: &str, people: &[(String, String, String, S
         name = cfg.company.name,
         city = cfg.company.city,
         country = cfg.company.country,
-        email = cfg.contact.email,
-        careers = cfg.contact.careers_email,
+        email = cfg.contact.primary().1,
+        careers = cfg.contact.careers().1,
         langs = cfg.langs.join(", "),
     )
 }
@@ -42,26 +43,28 @@ pub struct SitemapUrl {
 /// `pages`: paths without language prefix, e.g. `/` and `/privacy/`, in every language and dated
 /// by the build. `extra`: pages with their own languages and dates.
 pub fn sitemap(cfg: &SiteConfig, pages: &[&str], extra: &[SitemapUrl], date: &str) -> String {
+    // Absolute URLs with the site's URL prefix.
+    let origin = cfg.abs("");
     let mut out = String::from(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\" xmlns:xhtml=\"http://www.w3.org/1999/xhtml\">\n",
     );
     for page in pages {
         for lang in &cfg.langs {
-            out += &format!("  <url>\n    <loc>{}/{lang}{page}</loc>\n    <lastmod>{date}</lastmod>\n", cfg.origin);
+            out += &format!("  <url>\n    <loc>{}/{lang}{page}</loc>\n    <lastmod>{date}</lastmod>\n", origin);
             for alt in &cfg.langs {
-                out += &format!("    <xhtml:link rel=\"alternate\" hreflang=\"{alt}\" href=\"{}/{alt}{page}\"/>\n", cfg.origin);
+                out += &format!("    <xhtml:link rel=\"alternate\" hreflang=\"{alt}\" href=\"{}/{alt}{page}\"/>\n", origin);
             }
             if *page == "/" {
-                out += &format!("    <xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"{}/\"/>\n", cfg.origin);
+                out += &format!("    <xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"{}/\"/>\n", origin);
             }
             out += "  </url>\n";
         }
     }
     for url in extra {
         for lang in &url.langs {
-            out += &format!("  <url>\n    <loc>{}/{lang}{}</loc>\n    <lastmod>{}</lastmod>\n", cfg.origin, url.path, url.lastmod);
+            out += &format!("  <url>\n    <loc>{}/{lang}{}</loc>\n    <lastmod>{}</lastmod>\n", origin, url.path, url.lastmod);
             for alt in &url.langs {
-                out += &format!("    <xhtml:link rel=\"alternate\" hreflang=\"{alt}\" href=\"{}/{alt}{}\"/>\n", cfg.origin, url.path);
+                out += &format!("    <xhtml:link rel=\"alternate\" hreflang=\"{alt}\" href=\"{}/{alt}{}\"/>\n", origin, url.path);
             }
             out += "  </url>\n";
         }
@@ -75,9 +78,9 @@ pub fn security_txt(cfg: &SiteConfig, days_since_epoch: i64) -> String {
     let (y, m, d) = civil_from_days(days_since_epoch + 360);
     let langs: Vec<&str> = ["en", "ru", "tg"].into_iter().collect();
     format!(
-        "# Security contact for {origin}. We welcome reports and reply in {langs}.\nContact: mailto:{email}\nExpires: {y:04}-{m:02}-{d:02}T00:00:00.000Z\nPreferred-Languages: {langs}\nCanonical: {origin}/.well-known/security.txt\n",
-        origin = cfg.origin,
-        email = cfg.contact.security_email,
+        "# Security contact for {origin}. We welcome reports and reply in {langs}.\nContact: {contact}\nExpires: {y:04}-{m:02}-{d:02}T00:00:00.000Z\nPreferred-Languages: {langs}\nCanonical: {origin}/.well-known/security.txt\n",
+        origin = cfg.abs(""),
+        contact = cfg.contact.security_uri(),
         langs = langs.join(", "),
     )
 }
@@ -86,14 +89,15 @@ pub fn webmanifest(cfg: &SiteConfig) -> String {
     serde_json::json!({
         "name": cfg.company.name,
         "short_name": cfg.company.name,
-        "start_url": "/",
+        "start_url": cfg.url("/"),
+        "scope": cfg.url("/"),
         "display": "browser",
         "background_color": "#0A0B0D",
         "theme_color": "#0A0B0D",
         "icons": [
-            { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-            { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
-            { "src": "/icon-512.svg", "sizes": "any", "type": "image/svg+xml" }
+            { "src": cfg.url("/icon-192.png"), "sizes": "192x192", "type": "image/png" },
+            { "src": cfg.url("/icon-512.png"), "sizes": "512x512", "type": "image/png" },
+            { "src": cfg.url("/icon-512.svg"), "sizes": "any", "type": "image/svg+xml" }
         ]
     })
     .to_string()

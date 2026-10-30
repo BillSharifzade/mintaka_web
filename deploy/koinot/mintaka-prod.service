@@ -1,0 +1,79 @@
+# mintaka-prod — https://dchr.koinotinav.com/mintaka/ on the Koinot host, as a sandboxed system
+# service under an account of its own (`mintaka`) instead of a process of the dchradmin account
+# (which is in the docker group, i.e. root in all but name). Install and switch over:
+# deploy/koinot/README.md (install.sh).
+#
+# The binary, site and settings stay where deploys put them (~dchradmin/mintaka-prod/bin, dist,
+# env); systemd mounts the first two read-only into the sandbox, and mintaka-prod-reload.path
+# restarts the service when a deploy replaces the binary or the env file changes, so neither
+# needs sudo.
+
+[Unit]
+Description=Mintaka website (https://dchr.koinotinav.com/mintaka/)
+# 172.20.0.1 is the gateway of the docker network the host's Caddy is on: it exists once Docker
+# has created that network.
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+ExecStart=/opt/mintaka/bin/mintaka-prod \
+    --dist /opt/mintaka/dist \
+    --data-dir ${STATE_DIRECTORY} \
+    --listen 172.20.0.1:8790 \
+    --trusted-proxy 172.20.0.0/16 --client-ip-header x-mintaka-client-ip \
+    --region dyu-1 --location "Dushanbe,TJ,38.5598,68.7870"
+# MINTAKA_CONTACT_RECIPIENT and the Telegram settings (mode 0600). systemd reads it as root
+# before the sandbox exists; the service itself never sees /home.
+EnvironmentFile=/home/dchradmin/mintaka-prod/env
+Environment=RUST_LOG=info
+KillSignal=SIGTERM
+TimeoutStopSec=15
+Restart=on-failure
+RestartSec=2
+LimitNOFILE=65536
+
+# Identity and file system: an account with no shell, home or other rights; nothing writable but
+# its state directory /var/lib/mintaka (briefs, the console-challenge and bot keys, the bot's chat
+# memory); no view of /home except the two read-only mounts. The directory is 0750 and the briefs
+# 0640 so that dchradmin, in the mintaka group, can fetch them (they are encrypted); the keys and
+# the chat memory are 0600.
+User=mintaka
+Group=mintaka
+StateDirectory=mintaka
+StateDirectoryMode=0750
+UMask=0027
+ProtectSystem=strict
+ProtectHome=tmpfs
+BindReadOnlyPaths=/home/dchradmin/mintaka-prod/bin:/opt/mintaka/bin
+BindReadOnlyPaths=/home/dchradmin/mintaka-prod/dist:/opt/mintaka/dist
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectProc=invisible
+ProcSubset=pid
+
+# Privileges: none (port 8790 needs no capability).
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+RemoveIPC=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+# Outbound HTTPS to the Telegram API needs the resolver (AF_UNIX/AF_NETLINK) and AF_INET*.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+SystemCallErrorNumber=EPERM
+
+[Install]
+WantedBy=multi-user.target

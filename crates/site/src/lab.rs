@@ -187,7 +187,7 @@ pub fn load(root: &Path, lang: &str, cfg: &SiteConfig, s: &Strings) -> Result<Ve
     let mut posts: Vec<Post> = vec![];
     for file in sources(root, lang) {
         let text = std::fs::read_to_string(&file).with_context(|| format!("reading {}", file.display()))?;
-        let post = parse(&text, &repo, &cfg.origin, lang, s).with_context(|| format!("Lab post {}", file.display()))?;
+        let post = parse(&text, &repo, cfg, lang, s).with_context(|| format!("Lab post {}", file.display()))?;
         if posts.iter().any(|p| p.slug == post.slug) {
             bail!("Lab post {}: slug {:?} is used twice", file.display(), post.slug);
         }
@@ -197,7 +197,7 @@ pub fn load(root: &Path, lang: &str, cfg: &SiteConfig, s: &Strings) -> Result<Ve
     Ok(posts)
 }
 
-fn parse(text: &str, repo: &Repo, origin: &str, lang: &str, s: &Strings) -> Result<Post> {
+fn parse(text: &str, repo: &Repo, cfg: &SiteConfig, lang: &str, s: &Strings) -> Result<Post> {
     let text = text.replace("\r\n", "\n");
     let rest = text.strip_prefix("+++\n").context("a post starts with TOML front matter between `+++` lines")?;
     let end = rest.find("\n+++\n").context("the front matter is not closed with a `+++` line")?;
@@ -218,8 +218,8 @@ fn parse(text: &str, repo: &Repo, origin: &str, lang: &str, s: &Strings) -> Resu
     let repo_url = repo.link(&fm.repo).context("front matter `repo`")?;
 
     let path = format!("/{lang}/lab/{}/", fm.slug);
-    let page = render(body, &Render { repo, s, feed: None })?;
-    let feed = render(body, &Render { repo, s, feed: Some((origin, &path)) })?;
+    let page = render(body, &Render { repo, s, base: &cfg.base, feed: None })?;
+    let feed = render(body, &Render { repo, s, base: &cfg.base, feed: Some((&cfg.abs(""), &path)) })?;
     Ok(Post {
         slug: fm.slug,
         title: fm.title.trim().to_owned(),
@@ -242,11 +242,13 @@ fn plain_date(d: &toml::value::Datetime, field: &str) -> Result<String> {
     }
 }
 
-/// How a body is rendered: for the page, or for the feed (`(origin, the post's path)`), where
-/// links become absolute and code is left unhighlighted.
+/// How a body is rendered: for the page, or for the feed (`(origin and URL prefix, the post's
+/// path)`), where links become absolute and code is left unhighlighted.
 struct Render<'a> {
     repo: &'a Repo<'a>,
     s: &'a Strings,
+    /// The site's URL prefix, for site-path links on the page.
+    base: &'a str,
     feed: Option<(&'a str, &'a str)>,
 }
 
@@ -426,7 +428,8 @@ fn inline<'a>(e: Event<'a>, r: &Render, fragments: &mut Vec<String>) -> Result<E
             } else if dest_url.starts_with('/') {
                 match r.feed {
                     Some((origin, _)) => format!("{origin}{dest_url}").into(),
-                    None => dest_url,
+                    None if r.base.is_empty() => dest_url,
+                    None => format!("{}{dest_url}", r.base).into(),
                 }
             } else {
                 ensure!(dest_url.starts_with("https://"), "link {dest_url:?}: use https://, a site path, #id or repo:path");
@@ -687,7 +690,8 @@ pub fn sitemap_urls(posts: &BTreeMap<String, Vec<Post>>) -> Vec<crate::well_know
 /// The Atom feed (RFC 4287) of a language's posts. Every value is a function of the posts and the
 /// configured origin — never of the build time — so the feed only changes when a post does.
 pub fn atom(cfg: &SiteConfig, lang: &str, s: &Strings, posts: &[Post]) -> String {
-    let origin = &cfg.origin;
+    // The origin with the site's URL prefix: every link here is absolute.
+    let origin = cfg.abs("");
     let rfc3339 = |date: &str| format!("{date}T00:00:00Z");
     let updated = posts.iter().map(|p| p.updated.as_str()).max().unwrap_or("1970-01-01");
     let x = escape_xml;
@@ -747,12 +751,12 @@ mod tests {
 
         fn render(&self, md: &str) -> Result<String> {
             let repo = Repo { root: &self.dir, url: "https://github.com/o/r", branch: "main" };
-            render(md, &Render { repo: &repo, s: &self.s, feed: None }).map(|b| b.html)
+            render(md, &Render { repo: &repo, s: &self.s, base: "", feed: None }).map(|b| b.html)
         }
 
         fn post(&self, md: &str) -> Result<Post> {
             let repo = Repo { root: &self.dir, url: "https://github.com/o/r", branch: "main" };
-            parse(md, &repo, "https://mintaka.tj", "en", &self.s)
+            parse(md, &repo, &self.cfg, "en", &self.s)
         }
     }
 
@@ -882,7 +886,8 @@ mod tests {
         let root = doc.root_element();
         assert_eq!(root.tag_name().namespace(), Some("http://www.w3.org/2005/Atom"));
         let child = |n: roxmltree::Node<'_, '_>, name: &str| n.children().find(|c| c.has_tag_name(name)).and_then(|c| c.text()).unwrap_or("").to_owned();
-        let origin = &f.cfg.origin;
+        // The origin with the site's URL prefix, if it has one.
+        let origin = &f.cfg.abs("");
         assert_eq!(child(root, "id"), format!("{origin}/en/lab/feed.xml"));
         assert_eq!(child(root, "updated"), "2026-10-29T00:00:00Z");
         let entry = root.children().find(|c| c.has_tag_name("entry")).unwrap();

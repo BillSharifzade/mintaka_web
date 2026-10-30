@@ -14,6 +14,11 @@ pub const POW_CHALLENGE_BYTES: usize = 41;
 /// How long a challenge stays valid after it was issued, in seconds.
 pub const POW_TTL_SECS: u64 = 600;
 
+/// What the Telegram bot writes to a client (docs/CONTRACTS.md §19): page strings
+/// (`content/{lang}/page.ftl`) the generator renders into `manifest.bot` for every language, with
+/// `{brief}` left in place for the server to fill with the brief's number.
+pub const BOT_MESSAGES: [&str; 6] = ["bot-linked", "bot-again", "bot-taken", "bot-expired", "bot-stopped", "bot-hello"];
+
 /// Largest accepted `POST /api/contact` body.
 pub const CONTACT_BODY_LIMIT: usize = 32 * 1024;
 
@@ -62,17 +67,26 @@ pub struct ContactResponse {
     pub ok: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub errors: Vec<FieldError>,
+    /// On success, while the server runs the Telegram bot (§19): `https://t.me/<bot>?start=<code>`,
+    /// a chat with the bot about this brief.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bot_link: Option<String>,
 }
 
 impl ContactResponse {
     /// `{"ok":true}`.
     pub fn ok() -> Self {
-        Self { ok: true, errors: Vec::new() }
+        Self { ok: true, errors: Vec::new(), bot_link: None }
+    }
+
+    /// `{"ok":true,"bot_link":"https://t.me/…"}`, or `{"ok":true}` without a link.
+    pub fn ok_with(bot_link: Option<String>) -> Self {
+        Self { bot_link, ..Self::ok() }
     }
 
     /// `{"ok":false,"errors":[…]}`.
     pub fn errors(errors: Vec<FieldError>) -> Self {
-        Self { ok: false, errors }
+        Self { ok: false, errors, bot_link: None }
     }
 }
 
@@ -254,6 +268,9 @@ mod tests {
     #[test]
     fn responses_match_the_contract() {
         assert_eq!(serde_json::to_string(&ContactResponse::ok()).unwrap(), r#"{"ok":true}"#);
+        assert_eq!(serde_json::to_string(&ContactResponse::ok_with(None)).unwrap(), r#"{"ok":true}"#, "no bot, no link");
+        let linked = ContactResponse::ok_with(Some("https://t.me/mintaka_bot?start=b1abc".into()));
+        assert_eq!(serde_json::to_string(&linked).unwrap(), r#"{"ok":true,"bot_link":"https://t.me/mintaka_bot?start=b1abc"}"#);
         let err = ContactResponse::errors(vec![FieldError::new(Field::Email, ErrorCode::EmailInvalid)]);
         assert_eq!(
             serde_json::to_string(&err).unwrap(),

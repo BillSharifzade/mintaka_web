@@ -5,7 +5,7 @@
 // to event.timeStamp. Mouse, touch and pen alike; keyboard users are told what this measures.
 
 import { h, render } from '../../shared/dom.ts';
-import { fill, fmt, L, num, P, trials, type Experiment, type Item } from './kit.ts';
+import { fill, fmt, L, MS, num, P, trials, type Experiment, type Item } from './kit.ts';
 import { plotBox, scatter } from './plot.ts';
 import { fit, fittsId, shuffle, throughput, type Pt } from './stats.ts';
 
@@ -67,7 +67,7 @@ export const fitts: Experiment = (panel, api) => {
 
   const plot = () => {
     const f = fit(data);
-    scatter(svg, { pts: data, fit: f, xMax: 6, x: L('fitts-x'), y: 'ms' });
+    scatter(svg, { pts: data, fit: f, xMax: 6, x: L('fitts-x'), y: MS });
     return f;
   };
 
@@ -98,7 +98,7 @@ export const fitts: Experiment = (panel, api) => {
     idle();
     if (!f) return;
     const items: Item[] = [
-      [L('a'), fmt(f.a), 'ms'],
+      [L('a'), fmt(f.a), MS],
       [L('b'), fmt(f.b), 'ms/bit'],
       [L('r2'), fmt(f.r2, 2), ''],
       [L('tp'), fmt(throughput(data), 1), 'bit/s'],
@@ -113,7 +113,7 @@ export const fitts: Experiment = (panel, api) => {
     said.textContent = '';
     api.report({
       items,
-      plain: f.b >= 1 ? fill('fitts-plain', { b: num(fmt(f.b), 'ms') }) : undefined,
+      plain: f.b >= 1 ? fill('fitts-plain', { b: num(fmt(f.b), MS) }) : undefined,
       line: L('fitts-line'),
       note: f.r2 < 0.5 ? L('fitts-loose') : undefined,
     });

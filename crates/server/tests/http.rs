@@ -443,7 +443,8 @@ async fn telemetry_streams_hello_then_ticks() {
     let response = client.stream(request("GET", "/_telemetry", &[BROWSER], Bytes::new())).await;
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(response.headers()["content-type"], "text/event-stream");
-    assert_eq!(response.headers()["cache-control"], "no-store");
+    assert_eq!(response.headers()["cache-control"], "no-store, no-transform");
+    assert_eq!(response.headers()["x-accel-buffering"], "no");
     let mut body = response.into_body();
     let events = read_events(&mut body, 3).await;
     assert_eq!(events[0].0, "hello");

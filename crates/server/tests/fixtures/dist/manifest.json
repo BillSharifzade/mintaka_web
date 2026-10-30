@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "build": "2026-10-27.f1x7ure0",
   "origin": "https://mintaka.tj",
   "default_lang": "en",
@@ -18,5 +18,12 @@
   "text": {
     "en": { "/": "text/en/index.ansi", "/pillars": "text/en/pillars.ansi", "/contact": "text/en/contact.ansi" },
     "ru": { "/": "text/ru/index.ansi" }
+  },
+  "bot": {
+    "en": {
+      "bot-linked": "Linked to brief {brief}.", "bot-again": "Already linked to brief {brief}.", "bot-taken": "Taken by another chat.",
+      "bot-expired": "This link has expired.", "bot-stopped": "Disconnected from brief {brief}.", "bot-hello": "Send a brief on the site first."
+    },
+    "ru": { "bot-linked": "Чат связан с брифом {brief}." }
   }
 }

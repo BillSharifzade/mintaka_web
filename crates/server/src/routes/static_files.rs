@@ -1,5 +1,7 @@
 //! Everything the router doesn't name: manifest routes, `/` by `Accept-Language`, `/{page}` →
-//! `/{page}/`, curl mode and the 404 page (docs/CONTRACTS.md §4.1, §4.3, §4.4).
+//! `/{page}/`, curl mode and the 404 page (docs/CONTRACTS.md §4.1, §4.3, §4.4). A page of the
+//! A/B test gets one of its variants per request, drawn before `If-None-Match` is looked at (§17):
+//! a cached copy is confirmed only when the draw lands on it, so the cache can't make a variant stick.
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -34,7 +36,7 @@ pub(crate) async fn handler(State(app): State<Arc<AppState>>, req: Request) -> R
 
     if let Some((index, route)) = site.route(path) {
         let routed = Instant::now();
-        let response = if read { serve(&route.variants, headers) } else { method_not_allowed(GET_HEAD) };
+        let response = if read { serve(route.arms.pick(), headers) } else { method_not_allowed(GET_HEAD) };
         return mark(response, RouteName::Static(index), routed);
     }
 
@@ -42,7 +44,7 @@ pub(crate) async fn handler(State(app): State<Arc<AppState>>, req: Request) -> R
         let routed = Instant::now();
         let response = if read {
             let lang = negotiate::language(headers.get_all(ACCEPT_LANGUAGE), &site.langs, &site.default_lang);
-            site.root(lang).map_or_else(internal_error, |variants| serve(variants, headers))
+            site.root(lang).map_or_else(internal_error, |arms| serve(arms.pick(), headers))
         } else {
             method_not_allowed(GET_HEAD)
         };

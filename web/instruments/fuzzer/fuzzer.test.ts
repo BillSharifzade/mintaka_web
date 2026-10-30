@@ -63,7 +63,8 @@ test('every point has a place in the sky, and the module agrees on how many', ()
 });
 
 test('the strings file and the island agree, both ways', () => {
-  const ftl = new Set([...read('../../../content/en/islands/fuzzer.ftl').matchAll(/^(fuzzer-[a-z0-9-]+) =/gm)].map((m) => m[1]!));
+  const files = read('../../../content/en/islands/fuzzer.ftl') + read('../../../content/en/islands/lazy/fuzzer.ftl');
+  const ftl = new Set([...files.matchAll(/^(fuzzer-[a-z0-9-]+) =/gm)].map((m) => m[1]!));
   const used = new Set([...read('./index.ts').matchAll(/'(fuzzer-[a-z0-9-]+)'/g)].map((m) => m[1]!));
   for (let i = 0; i < POINTS; i++) used.add(`fuzzer-point-${i}`);
   for (const code of PARSE_CODES.slice(1)) used.add(`fuzzer-reason-${code}`);

@@ -199,7 +199,8 @@ impl Request {
         // The request head is decoded: the same moment `t0` marks on TCP.
         let t0 = Instant::now();
         let seq = self.info.next_request();
-        let ctx = ReqCtx { t0, conn: self.info, seq, rtt: None, quic_rtt: quic_rtt(&self.quic) };
+        let client_net = self.info.client_net;
+        let ctx = ReqCtx { t0, conn: self.info, seq, rtt: None, quic_rtt: quic_rtt(&self.quic), client_net, edge: None };
         let (send, recv) = stream.split();
         let method = req.method().clone();
         let req = req.map(|()| body::RequestBody::new(recv));

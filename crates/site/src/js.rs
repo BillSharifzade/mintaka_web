@@ -78,11 +78,11 @@ pub fn import(js_dir: &Path, dist: &mut Dist) -> Result<Js> {
         }
         if let Some(entry) = &out.entry_point {
             if entry.ends_with("web/main.ts") {
-                main = Some(url.clone());
+                main = Some(dist.link(&url));
             } else if ext == "js" {
                 // "web/instruments/pow.worker.ts" → "pow.worker"
                 let stem = Path::new(entry).file_name().map(|n| n.to_string_lossy().trim_end_matches(".ts").to_owned()).unwrap_or_default();
-                named.insert(stem, url.clone());
+                named.insert(stem, dist.link(&url));
             }
         }
     }

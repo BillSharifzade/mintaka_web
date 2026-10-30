@@ -36,6 +36,9 @@ pub struct Ctx<'a> {
     pub portraits: &'a BTreeMap<String, Portrait>,
     /// This language's Lab posts, newest first (spec §S11).
     pub lab: &'a [crate::lab::Post],
+    /// For a language without posts of its own: the default language and its posts, which the
+    /// Lab section and index list instead, marked with their language.
+    pub lab_fallback: Option<(&'a str, &'a [crate::lab::Post])>,
 }
 
 /// Hashed URLs of one team portrait.
@@ -45,13 +48,19 @@ pub struct Portrait {
 }
 
 impl Ctx<'_> {
-    /// Home page path for this language: `/en/`.
+    /// Link to this language's home page: `/en/` (`/mintaka/en/` under a URL prefix).
     pub fn home(&self) -> String {
-        format!("/{}/", self.lang)
+        self.url(&format!("/{}/", self.lang))
     }
 
+    /// A path of this site (`/en/privacy/`) as a link, with the site's URL prefix.
+    pub fn url(&self, path: &str) -> String {
+        self.cfg.url(path)
+    }
+
+    /// The same link, absolute (canonical URLs, `hreflang`, Open Graph).
     pub fn abs(&self, path: &str) -> String {
-        format!("{}{}", self.cfg.origin, path)
+        self.cfg.abs(path)
     }
 }
 
@@ -89,7 +98,7 @@ fn source_greeting(cfg: &SiteConfig, scripts: bool) -> String {
     format!(
         "<!--\n      ●            Mintaka · software at the edge of physics\n       ╲   ·\n        ╲ ·  ●     {}\n    · ·  ●         {}\n        ╱    ╲\n       ●      ●    {last}\n-->\n",
         proof::CTF_CRIB,
-        cfg.contact.careers_email
+        cfg.contact.careers().1
     )
 }
 
@@ -104,10 +113,14 @@ pub fn document(ctx: &Ctx, page: Page) -> Markup {
     let long = page.long_form.as_ref();
     let scripts = long.is_none();
     let alternates = long.map_or(&[][..], |l| l.alternates.as_slice());
+    // A page rendered as one variant of the A/B test says which (docs/CONTRACTS.md §17), and which
+    // events its beacons report as conversions.
+    let variant = ctx.s.variant();
+    let converts = variant.as_ref().and(ctx.cfg.experiment.as_ref()).map(|e| e.metrics().collect::<Vec<_>>().join(" "));
     html! {
         (DOCTYPE)
         (PreEscaped(source_greeting(ctx.cfg, scripts)))
-        html lang=(ctx.lang) dir="ltr" {
+        html lang=(ctx.lang) dir="ltr" data-variant=[variant] data-converts=[converts] {
             head {
                 meta charset="utf-8";
                 meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover";
@@ -128,15 +141,15 @@ pub fn document(ctx: &Ctx, page: Page) -> Markup {
                     }
                 }
                 @if !ctx.lab.is_empty() {
-                    link rel="alternate" type="application/atom+xml" title=(s.t("lab-feed-title")) href=(crate::lab::feed_path(ctx.lang));
+                    link rel="alternate" type="application/atom+xml" title=(s.t("lab-feed-title")) href=(ctx.url(&crate::lab::feed_path(ctx.lang)));
                 }
                 @for url in &ctx.font_preloads {
                     link rel="preload" href=(url) as="font" type="font/woff2" crossorigin;
                 }
-                link rel="icon" href="/favicon.ico" sizes="any";
-                link rel="icon" href="/favicon.svg" type="image/svg+xml";
-                link rel="apple-touch-icon" href="/apple-touch-icon.png";
-                link rel="manifest" href="/manifest.webmanifest";
+                link rel="icon" href=(ctx.url("/favicon.ico")) sizes="any";
+                link rel="icon" href=(ctx.url("/favicon.svg")) type="image/svg+xml";
+                link rel="apple-touch-icon" href=(ctx.url("/apple-touch-icon.png"));
+                link rel="manifest" href=(ctx.url("/manifest.webmanifest"));
                 meta property="og:type" content=(long.map_or("website", |l| l.og_type));
                 meta property="og:site_name" content="Mintaka";
                 meta property="og:title" content=(page.title);
@@ -171,16 +184,21 @@ pub fn document(ctx: &Ctx, page: Page) -> Markup {
                         a class="btn btn--primary btn--sm site-header__cta" href=(nav_href("contact")) { (s.t("nav-cta")) }
                         details class="menu" {
                             summary class="btn btn--ghost btn--sm menu__toggle" { (s.t("nav-menu")) }
-                            nav class="menu__panel" aria-label=(s.t("nav-label")) {
-                                ul role="list" {
-                                    li { a href=(nav_href("efficiency")) { (s.t("nav-efficiency")) } }
-                                    li { a href=(nav_href("security")) { (s.t("nav-security")) } }
-                                    li { a href=(nav_href("highload")) { (s.t("nav-highload")) } }
-                                    li { a href=(nav_href("design")) { (s.t("nav-design")) } }
-                                    li { a href=(nav_href("process")) { (s.t("nav-process")) } }
-                                    li { a href=(nav_href("team")) { (s.t("nav-team")) } }
-                                    li { a href=(nav_href("contact")) { (s.t("nav-cta")) } }
+                            // Small screens: the sections and, below them, the language switch,
+                            // which has no room in the header there.
+                            div class="menu__panel" {
+                                nav aria-label=(s.t("nav-label")) {
+                                    ul role="list" {
+                                        li { a href=(nav_href("efficiency")) { (s.t("nav-efficiency")) } }
+                                        li { a href=(nav_href("security")) { (s.t("nav-security")) } }
+                                        li { a href=(nav_href("highload")) { (s.t("nav-highload")) } }
+                                        li { a href=(nav_href("design")) { (s.t("nav-design")) } }
+                                        li { a href=(nav_href("process")) { (s.t("nav-process")) } }
+                                        li { a href=(nav_href("team")) { (s.t("nav-team")) } }
+                                        li { a href=(nav_href("contact")) { (s.t("nav-cta")) } }
+                                    }
                                 }
+                                (lang_switch(ctx, alternates))
                             }
                         }
                     }
@@ -203,7 +221,7 @@ fn lang_switch(ctx: &Ctx, alternates: &[(String, String)]) -> Markup {
     if ctx.cfg.langs.len() < 2 {
         return html! {};
     }
-    let href = |l: &str| alternates.iter().find(|(a, _)| a == l).map_or_else(|| format!("/{l}/"), |(_, p)| p.clone());
+    let href = |l: &str| ctx.url(&alternates.iter().find(|(a, _)| a == l).map_or_else(|| format!("/{l}/"), |(_, p)| p.clone()));
     html! {
         nav class="lang" aria-label=(ctx.s.t("lang-switch")) {
             @for l in &ctx.cfg.langs {
@@ -229,7 +247,7 @@ fn footer(ctx: &Ctx, path: &str, scripts: bool) -> Markup {
                         p class="titleblock__made" { (s.t("ft-made")) }
                     }
                     dl class="titleblock__cells" {
-                        div { dt { (s.t("ft-sheet")) } dd class="mono" { (ctx.cfg.origin.trim_start_matches("https://")) (path) } }
+                        div { dt { (s.t("ft-sheet")) } dd class="mono" { (ctx.cfg.origin.trim_start_matches("https://")) (ctx.cfg.base) (path) } }
                         div { dt { (s.t("ft-build")) } dd class="mono" { (ctx.build) } }
                         div { dt { (s.t("ft-checked")) } dd { (s.t("ft-checked-value")) } }
                         div class="titleblock__live" {
@@ -252,8 +270,8 @@ fn footer(ctx: &Ctx, path: &str, scripts: bool) -> Markup {
                     div class="site-footer__links" {
                         ul role="list" {
                             li { a href=(format!("{}privacy/", ctx.home())) { (s.t("ft-privacy")) } }
-                            li { a href="/.well-known/security.txt" { (s.t("ft-security")) } }
-                            li { a href="/humans.txt" { (s.t("ft-humans")) } }
+                            li { a href=(ctx.url("/.well-known/security.txt")) { (s.t("ft-security")) } }
+                            li { a href=(ctx.url("/humans.txt")) { (s.t("ft-humans")) } }
                         }
                         @if scripts {
                             p class="site-footer__tools" {
@@ -293,11 +311,13 @@ pub fn pillar_head(ctx: &Ctx, star: &str, id: &str, eyebrow_key: &str, title_key
     }
 }
 
-/// An instrument frame (CONTRACTS §9) with a static fallback body.
+/// An instrument frame (CONTRACTS §9) with a static fallback body. The frame is a tab stop until
+/// its island has mounted (`web/main.ts`): an island mounts only when it scrolls near, so without
+/// it Tab would jump past every instrument the visitor has not scrolled to yet.
 pub fn instrument(island: &str, id_text: &str, title: &str, status: &str, body: Markup, foot: Option<Markup>) -> Markup {
     let title_id = format!("{island}-instrument-title");
     html! {
-        div class="instrument" role="region" aria-labelledby=(title_id) data-island=(island) {
+        div class="instrument" role="region" aria-labelledby=(title_id) data-island=(island) tabindex="0" {
             div class="instrument__bar" {
                 span class="instrument__id" { (id_text) }
                 h3 class="instrument__title" id=(title_id) { (title) }

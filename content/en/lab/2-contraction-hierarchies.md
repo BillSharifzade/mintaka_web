@@ -9,7 +9,7 @@ repo = "crates/routing"
 
 ## The problem
 
-The efficiency section of our home page races three algorithms across the same map of Dushanbe in your browser. It is there to make one claim visible: the fastest way to answer a question is often to do mathematics before anyone asks it. Dijkstra's algorithm, given a start and a destination, explores the city outwards in rings until the destination comes up. A* bends those rings towards the destination with a straight-line estimate. Contraction Hierarchies (Geisberger, Sanders, Schultes and Delling, 2008) spend a moment before the first query to rank every intersection, and then answer each query by searching only upwards in that ranking.
+The efficiency section of our home page races three algorithms across the same map of Dushanbe in your browser. It is there to make one claim visible: the fastest way to answer a question is often to do mathematics before anyone asks it. Dijkstra's algorithm, given a start and a destination, explores the city outwards in rings until the destination comes up. A* bends those rings towards the destination with a straight-line estimate. Contraction Hierarchies (Geisberger, Sanders, Schultes and Delling, 2008) spend a moment before the first query to rank every intersection and add shortcuts, and then answer each query by searching only upwards in that ranking.
 
 We wrote our own implementation instead of using a library, because the point of the section is that we can explain every step. This post is that explanation, with the measurements.
 
@@ -17,11 +17,11 @@ We wrote our own implementation instead of using a library, because the point of
 
 ### The road graph
 
-The input is an OpenStreetMap extract of 28 October 2026: every car-routable road in a box around Dushanbe, 5,493 ways and 43,906 nodes. [`prep.rs`](repo:crates/routing/src/prep.rs) keeps the nodes where roads meet or end, gives one-way streets, roundabouts and motorways arcs in one direction only, and keeps the largest strongly connected component, so every intersection can reach every other. That leaves 8,393 intersections and 18,980 directed arcs. An arc's weight is its length along the road in decimetres, rounded up, so the straight line never overestimates and A* stays exact. The counts, the query and the timestamp are in [`dushanbe.meta.json`](repo:assets/data/dushanbe.meta.json).
+The input is an OpenStreetMap extract of 28 October 2026: every road in a box around Dushanbe from motorways down to residential and living streets (service roads and tracks are left out), 5,493 ways and 43,906 nodes. [`prep.rs`](repo:crates/routing/src/prep.rs) keeps the nodes where roads meet or end, gives one-way streets, roundabouts and motorways arcs in one direction only, and keeps the largest strongly connected component, so every intersection can reach every other. That leaves 8,393 intersections and 18,980 directed arcs. An arc's weight is its length along the road in decimetres, rounded up, so the straight line never overestimates and A* stays exact. The counts, the query and the timestamp are in [`dushanbe.meta.json`](repo:assets/data/dushanbe.meta.json).
 
 ### Contraction
 
-Contracting an intersection $v$ removes it from the graph while keeping every shortest path between the intersections that remain. For each road into $v$ from some $u$ and each road out of it to some $w$, the path $u$, $v$, $w$ might be the only shortest way from $u$ to $w$. If it is, we add a shortcut from $u$ to $w$ whose weight is the sum of the two, and remember $v$ as its middle. If some other path among the remaining intersections is at least as short, the shortcut is unnecessary; that other path is called a witness.
+Contracting an intersection $v$ removes it from the graph while keeping every shortest path between the intersections that remain. For each arc into $v$ from some $u$ and each arc out of it to some $w$, the path $u$, $v$, $w$ might be the only shortest way from $u$ to $w$. If it is, we add a shortcut from $u$ to $w$ whose weight is the sum of the two, and remember $v$ as its middle. If some other path among the remaining intersections is at least as short, the shortcut is unnecessary; that other path is called a witness.
 
 Intersections are contracted one at a time, least important first, and the order becomes their rank: the first one contracted has rank 0. Importance is an estimate (below), re-checked when an intersection reaches the front of the queue; if it has grown past the next one in line, the intersection goes back into the queue.
 
@@ -41,13 +41,13 @@ $$
 
 $S(v)$ is the number of shortcuts contracting $v$ would add, $A(v)$ the number of arcs it would remove, and $C(v)$ the number of arcs it has already lost to contracted neighbours. Adding few shortcuts while removing many arcs keeps the graph small; the last term is there to spread contraction across the city instead of finishing one district first.
 
-A shortcut from $u$ to $w$ through $v$ is added exactly when
+A shortcut from $u$ to $w$ through $v$ is needed exactly when
 
 $$
 d_{G - v}(u, w) > c(u, v) + c(v, w)
 $$
 
-where $c$ is an arc weight and $d_{G - v}$ is the distance among the intersections not yet contracted, without $v$. The witness search computes that distance with Dijkstra, but gives up after 600 settled intersections or once it passes $c(u,v) + c(v,w)$. Giving up early can only overestimate the left side, so the test can only add a shortcut that wasn't needed; it can never leave out one that was. A useless shortcut costs memory, never a wrong answer.
+where $c$ is an arc weight and $d_{G - v}$ is the distance among the intersections not yet contracted, without $v$. The witness search computes those distances with one Dijkstra from each $u$ to all its $w$ at once, and gives up after 600 settled intersections or once it passes the longest $c(u,v) + c(v,w)$ it has to beat. Giving up early can only overestimate the left side, so the test can only add a shortcut that wasn't needed; it can never leave out one that was. A useless shortcut costs memory, never a wrong answer.
 
 ### Why the upward search is correct
 
@@ -81,7 +81,11 @@ The two-sided upward query, from [`search.rs`](repo:crates/routing/src/search.rs
 
 ## The benchmark
 
-We measured on 2026-10-29 on a laptop with a 13th-generation Intel Core i7-13620H, Arch Linux (kernel 7.2.11-zen1), rustc 1.99.1, `opt-level = 3` with fat LTO, a desktop session running. The harness is a scratch program outside the repository that links the `routing` crate. It loads the committed `assets/data/dushanbe.bin`, draws 10,000 random start and destination pairs with a xorshift generator (seed 42), and times each query with `Instant::now()`. Each algorithm runs over all pairs in its own pass after 1,000 warm-up queries. Every timing includes rebuilding the route as road arcs.
+We measured on 2026-10-29 on a laptop with a 13th-generation Intel Core i7-13620H, Arch Linux (kernel 7.2.11-zen1), rustc 1.99.1, `opt-level = 3` with fat LTO, a desktop session running. The harness is [`examples/timing.rs`](repo:crates/routing/examples/timing.rs) in the `routing` crate. It loads the committed `assets/data/dushanbe.bin`, draws 10,000 random start and destination pairs with a xorshift generator (seed 42), and times each query with `Instant::now()`. Each algorithm runs over all pairs in its own pass after 1,000 warm-up queries. Every timing includes rebuilding the route as road arcs.
+
+```sh title="The timing harness"
+cargo run --release -p routing --features prep --example timing
+```
 
 | Algorithm | Median time | p99 time | Median settled | p99 settled |
 |---|---:|---:|---:|---:|
@@ -89,13 +93,15 @@ We measured on 2026-10-29 on a laptop with a 13th-generation Intel Core i7-13620
 | A* | 78.5 µs | 474.6 µs | 874 | 5,129 |
 | Contraction Hierarchies | 12.4 µs | 20.1 µs | 90 | 143 |
 
-Table: 10,000 random routes across Dushanbe, one thread. All three returned the same distance for every pair.
+Table: 10,000 random routes across Dushanbe, one thread. All three returned the same distance for every pair. For the hierarchy, settled counts both searches.
 
-At the median, the hierarchy does 46 times less work than Dijkstra and answers 23.5 times sooner. The ratios differ because each settled intersection costs the hierarchy more: two queues, a meeting check, and unpacking shortcuts, which searches the adjacency lists of each middle intersection. The tail matters more than the median: Dijkstra's p99 settles almost the whole city, the hierarchy's p99 settles 143 intersections.
+At the median, the hierarchy settles 46 times fewer intersections than Dijkstra and answers 23.5 times sooner. The ratios differ because the hierarchy pays more for each intersection it settles, with two queues and a meeting check, and then unpacks its shortcuts, which searches the adjacency lists of each middle intersection. The tail matters more than the median: Dijkstra's p99 settles almost the whole city, the hierarchy's p99 settles 143 intersections.
 
-The home page's preset route, from the railway station to the airport, is 9,098.9 m long. Natively it took Dijkstra 304.8 µs and 4,867 settled intersections, A* 28.8 µs and 879, and the hierarchy 4.6 µs and 88 (medians of 101 runs). Our milestone notes measured the same counts in Chrome with WebAssembly: 290 µs, 34 µs and 6.4 µs.
+The absolute times depend on which core runs the harness, and this laptop has two kinds. Pinned with `taskset` a day later, the same harness took 201 µs, 54 µs and 8.6 µs at the median on a performance core, and 261 µs, 76 µs and 13.1 µs on an efficiency core. The settled counts never change, and the hierarchy stayed 20 to 24 times faster than Dijkstra.
 
-Preprocessing is cheap at this size. From the raw Overpass JSON to the finished hierarchy took a median of 105 ms over five runs, of which 16 ms was parsing JSON, so building the graph, finding the strongly connected component and contracting it took about 89 ms. (The 0.6 s in our milestone notes was measured through `cargo xtask graph`, which runs the same code without release optimisations.) The rebuilt file was byte for byte identical to the committed one, 1,138,156 bytes: the contraction is deterministic.
+The home page's preset route, from the railway station to the airport, is 9,098.9 m long. As native code it took Dijkstra 304.8 µs and 4,867 settled intersections, A* 28.8 µs and 879, and the hierarchy 4.6 µs and 88 (medians of 101 runs). [Our milestone notes](repo:docs/MILESTONE-2.md) record the same counts in Chrome with WebAssembly, in 290 µs, 34 µs and 6.4 µs.
+
+Preprocessing is cheap at this size. From the raw Overpass JSON to the finished hierarchy took a median of 105 ms over five runs, of which 16 ms was parsing JSON, so building the graph, finding the strongly connected component and contracting it took about 89 ms. (The 0.6 s in our milestone notes was measured through `cargo xtask graph`, which runs the same code without release optimisations.) The rebuilt file was byte for byte identical to the committed one, 1,138,156 bytes: the contraction is deterministic. The extract itself is not in the repository; `cargo xtask graph --fetch` downloads today's map, which builds a slightly different graph.
 
 Correctness has its own tests, which compare A* and the hierarchy with Dijkstra on four random grids with one-way streets (300 pairs each) and on 1,000 random pairs across Dushanbe, and check that every route is a connected chain of real arcs whose weights add up:
 
@@ -104,4 +110,4 @@ cargo test -p routing --features prep --release
 cargo xtask graph          # add --fetch for a fresh OpenStreetMap extract
 ```
 
-What we did not do: stall-on-demand, a smarter witness search, or the multi-threaded batch of 10,000 routes the spec asks the browser to run. With 8,393 intersections none of them is needed for the page; on a country-sized graph the first two would be the next work.
+What we did not do: stall-on-demand, a smarter witness search, or the multi-threaded batch of 10,000 random routes we planned for the browser. With 8,393 intersections none of them is needed for the page; on a country-sized graph the first two would be the next work.

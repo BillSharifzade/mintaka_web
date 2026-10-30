@@ -1,0 +1,8 @@
+[Unit]
+Description=Restart mintaka-prod after a deploy
+
+[Service]
+Type=oneshot
+# Give rsync a moment to finish the dist/ copy that comes with the binary.
+ExecStartPre=/bin/sleep 3
+ExecStart=/bin/systemctl restart mintaka-prod.service

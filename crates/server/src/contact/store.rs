@@ -1,5 +1,7 @@
 //! Encrypted storage of accepted briefs: one `age` file per brief in `{data-dir}/contact/`,
-//! mode 0600, encrypted to an X25519 recipient. The server holds only the public key.
+//! encrypted to an X25519 recipient. The server holds only the public key. Files are mode 0640 and
+//! the directory 0750: ciphertext, which the deploy account fetches through the server's group
+//! when the server runs as a user of its own (deploy/koinot).
 
 use std::fs::{DirBuilder, File, OpenOptions};
 use std::io::{self, Write};
@@ -21,13 +23,13 @@ pub(crate) struct Store {
 }
 
 impl Store {
-    /// Creates `{data_dir}/contact/` (mode 0700). Without a configured recipient, loads or
+    /// Creates `{data_dir}/contact/` (mode 0750). Without a configured recipient, loads or
     /// creates the development identity `{data_dir}/dev-identity.txt` and warns loudly.
     pub fn open(data_dir: &Path, recipient: Option<&str>) -> anyhow::Result<Store> {
         let dir = data_dir.join("contact");
         DirBuilder::new()
             .recursive(true)
-            .mode(0o700)
+            .mode(0o750)
             .create(&dir)
             .with_context(|| format!("cannot create {} (set --data-dir to a writable directory)", dir.display()))?;
         let recipient = match recipient {
@@ -59,7 +61,7 @@ impl Store {
         let plaintext = serde_json::to_vec(brief)?;
         let ciphertext = age::encrypt(&self.recipient, &plaintext).map_err(io::Error::other)?;
         let path = self.dir.join(format!("{}.json.age", brief.id));
-        let mut file = OpenOptions::new().write(true).create_new(true).mode(0o600).open(&path)?;
+        let mut file = OpenOptions::new().write(true).create_new(true).mode(0o640).open(&path)?;
         file.write_all(&ciphertext)?;
         file.sync_all()?;
         File::open(&self.dir)?.sync_all()?;
@@ -127,7 +129,7 @@ mod tests {
     }
 
     #[test]
-    fn writes_decryptable_0600_files_with_a_dev_identity() {
+    fn writes_decryptable_briefs_with_a_dev_identity() {
         let dir = temp_dir("dev");
         let store = Store::open(&dir, None).unwrap();
         let again = Store::open(&dir, None).unwrap();
@@ -150,7 +152,8 @@ mod tests {
             ctf_solved: false,
         };
         let path = store.save(&brief).unwrap();
-        assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+        // At most 0640 (the umask may take the group bit away).
+        assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777 & !0o640, 0);
         assert_eq!(std::fs::metadata(dir.join("dev-identity.txt")).unwrap().permissions().mode() & 0o777, 0o600);
 
         let identity_text = std::fs::read_to_string(dir.join("dev-identity.txt")).unwrap();

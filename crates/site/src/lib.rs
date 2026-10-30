@@ -32,6 +32,12 @@ use proof::{CachePolicy, Csp, MANIFEST_VERSION, Manifest, RouteKind};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
+/// The URL prefix this build is for (`content/site.toml` `base`, or `MINTAKA_BASE`): the scripts
+/// are bundled with it (xtask passes it to esbuild as `MINTAKA_BASE`).
+pub fn base(root: &std::path::Path) -> Result<String> {
+    Ok(config::SiteConfig::load(root)?.base)
+}
+
 pub struct BuildOptions {
     /// Repository root (where `content/`, `web/`, `assets/` live).
     pub root: PathBuf,
@@ -55,8 +61,12 @@ const HTML: &str = "text/html; charset=utf-8";
 pub fn build(opts: &BuildOptions) -> Result<Report> {
     let root = &opts.root;
     let cfg = SiteConfig::load(root)?;
-    let mut dist = Dist::create(&opts.out)?;
+    let mut dist = Dist::create(&opts.out, &cfg.base)?;
     let mut warnings = vec![];
+    // Every enabled translation has the source's files, messages and attributes (CONTRACTS §10.1).
+    for lang in cfg.langs.iter().filter(|l| **l != cfg.default_lang) {
+        warnings.extend(i18n::check_translation(root, &cfg.default_lang, lang)?);
+    }
     let today = util::today_utc();
     let date = util::iso_date(today);
     let days = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() / 86_400).unwrap_or(0) as i64;
@@ -176,7 +186,12 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
             named.insert(stem, url);
         }
     }
-    let assets_json = util::json_for_html(&serde_json::to_value(&named)?);
+    // Each page lists only its own language's string bundles: loadStrings() asks for no other.
+    let assets_for = |lang: &str| -> Result<String> {
+        let own = |k: &String| k.strip_prefix("strings/").is_none_or(|b| b.ends_with(&format!(".{lang}")));
+        let list: BTreeMap<&String, &String> = named.iter().filter(|(k, _)| own(k)).collect();
+        Ok(util::json_for_html(&serde_json::to_value(&list)?))
+    };
 
     let osm_date = std::fs::read_to_string(root.join("assets/data/dushanbe.meta.json"))
         .ok()
@@ -184,8 +199,9 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
         .and_then(|m| m["osm_timestamp"].as_str().map(|s| s.chars().take(10).collect::<String>()))
         .unwrap_or_else(|| "—".into());
     let mut text_map = BTreeMap::new();
+    let mut bot = BTreeMap::new();
     let mut not_found = BTreeMap::new();
-    let host = cfg.origin.trim_start_matches("https://").trim_start_matches("http://").to_owned();
+    let host = format!("{}{}", cfg.origin.trim_start_matches("https://").trim_start_matches("http://"), cfg.base);
     let mut lab_pages: Vec<(String, String)> = vec![];
 
     let mut people = vec![];
@@ -204,6 +220,7 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
             }
         }
         let island_json = util::json_for_html(&serde_json::to_value(&islands)?);
+        let assets_json = assets_for(lang)?;
         let ctx = Ctx {
             s: &s,
             cfg: &cfg,
@@ -222,6 +239,11 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
             osm_date: &osm_date,
             portraits: &portraits,
             lab: lab_posts.get(lang).map_or(&[][..], Vec::as_slice),
+            lab_fallback: lab_posts
+                .get(lang)
+                .is_none_or(Vec::is_empty)
+                .then(|| lab_posts.get(&cfg.default_lang).filter(|p| !p.is_empty()).map(|p| (cfg.default_lang.as_str(), p.as_slice())))
+                .flatten(),
         };
 
         let mut page = |rel_path: &str, title: String, body: maud::Markup, is_home: bool, index: bool| -> Result<String> {
@@ -233,8 +255,25 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
             Ok(html)
         };
 
-        let html = page("/", s.t("meta-title"), home::body(&ctx), true, true)?;
-        dist.add(&format!("/{lang}/"), &format!("{lang}/index.html"), html.as_bytes(), HTML, CachePolicy::Document, RouteKind::Page, Some(lang))?;
+        // The home page, once per variant while an A/B test runs (spec §12): the control as the
+        // route's own file, the others beside it. The server picks one for every page load.
+        let (home_path, home_file) = (format!("/{lang}/"), format!("{lang}/index.html"));
+        match &cfg.experiment {
+            None => {
+                let html = page("/", s.t("meta-title"), home::body(&ctx), true, true)?;
+                dist.add(&home_path, &home_file, html.as_bytes(), HTML, CachePolicy::Document, RouteKind::Page, Some(lang))?;
+            }
+            Some(exp) => {
+                for (i, variant) in exp.ids().enumerate() {
+                    let html = s.as_variant(&exp.control, variant, || page("/", s.t("meta-title"), home::body(&ctx), true, true))?;
+                    if i == 0 {
+                        dist.add(&home_path, &home_file, html.as_bytes(), HTML, CachePolicy::Document, RouteKind::Page, Some(lang))?;
+                    } else {
+                        dist.add_variant(&home_path, variant, &format!("{lang}/index.{variant}.html"), html.as_bytes())?;
+                    }
+                }
+            }
+        }
 
         let html = page("/privacy/", format!("{} — Mintaka", s.t("pv-title")), misc::privacy(&ctx), false, true)?;
         dist.add(&format!("/{lang}/privacy/"), &format!("{lang}/privacy/index.html"), html.as_bytes(), HTML, CachePolicy::Document, RouteKind::Page, Some(lang))?;
@@ -263,7 +302,8 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
             dist.add(&lab::feed_path(lang), &format!("{lang}/lab/feed.xml"), feed.as_bytes(), content_type_for("atom"), CachePolicy::Short, RouteKind::File, Some(lang))?;
         }
 
-        let tp = text::pages(root, &s, &host, &cfg.contact.email, &cfg.contact.telegram)?;
+        let lang_path = if *lang == cfg.default_lang { String::new() } else { format!("/{lang}") };
+        let tp = text::pages(root, &s, &host, &lang_path, &cfg.contact)?;
         let mut files = BTreeMap::new();
         for (key, body) in [("/", &tp.index), ("/pillars", &tp.pillars), ("/contact", &tp.contact)] {
             let name = if key == "/" { "index" } else { key.trim_start_matches('/') };
@@ -272,6 +312,15 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
             files.insert(key.to_owned(), rel);
         }
         text_map.insert(lang.clone(), files);
+
+        // What the Telegram bot writes to clients whose brief is in this language
+        // (docs/CONTRACTS.md §19): rendered now, with `{brief}` left for the server.
+        let args = [
+            ("within", cfg.contact.reply_within.as_str().into()),
+            ("site", cfg.abs(&format!("/{lang}/")).into()),
+            ("brief", "{brief}".into()),
+        ];
+        bot.insert(lang.clone(), proof::BOT_MESSAGES.iter().map(|id| (id.to_string(), s.ta(id, &args))).collect::<BTreeMap<_, _>>());
 
         s.finish()?;
     }
@@ -311,21 +360,35 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
 
     // Budgets (spec §10.1).
     let mut budget = Budget::default();
-    let route_size = |dist: &Dist, path: &str| dist.routes.iter().find(|r| r.path == path).map(|r| dist.wire_size(r)).unwrap_or(0);
-    let mut first_view = 0;
+    // By route path or by link (hashed asset URLs carry the URL prefix).
+    let route_size = |dist: &Dist, path: &str| {
+        let path = path.strip_prefix(dist.base.as_str()).filter(|p| p.starts_with('/')).unwrap_or(path);
+        dist.routes.iter().find(|r| r.path == path).map(|r| dist.wire_size(r)).unwrap_or(0)
+    };
+    // A visitor's first view is one language's home page and fonts plus the shared files below.
+    let mut first_view_page = BTreeMap::new();
     for lang in &cfg.langs {
         // The 14 kB rule is about the first screen arriving in the first round trip (spec §10.1):
         // measure the compressed bytes up to the end of the hero, and cap the whole page separately.
-        let html = std::fs::read_to_string(dist.dir.join(format!("{lang}/index.html")))?;
-        let cut = html.find(r#"<section id="physics""#).unwrap_or(html.len());
-        budget.add(format!("/{lang}/ first screen: head, CSS, header, hero (brotli)"), assets::brotli(&html.as_bytes()[..cut])?.len() as u64, Some(14_000));
-        let home = route_size(&dist, &format!("/{lang}/"));
-        budget.add(format!("/{lang}/ whole page (brotli)"), home, Some(32_000));
-        first_view += home;
-        for url in fonts.preloads_for(lang) {
-            first_view += route_size(&dist, url);
+        // Every variant of an A/B test is a page a visitor may get, so each has to fit; the first
+        // view counts the largest.
+        let route = dist.routes.iter().find(|r| r.path == format!("/{lang}/")).context("no home page route")?;
+        let mut files = vec![(String::new(), route.file.clone(), route.encodings.clone())];
+        files.extend(route.variants.iter().map(|v| (format!(", variant {}", v.id), v.file.clone(), v.encodings.clone())));
+        let mut home = 0;
+        for (variant, file, encodings) in files {
+            let html = std::fs::read_to_string(dist.dir.join(&file))?;
+            let cut = html.find(r#"<section id="physics""#).unwrap_or(html.len());
+            let first_screen = assets::brotli(&html.as_bytes()[..cut])?.len() as u64;
+            budget.add(format!("/{lang}/ first screen{variant}: head, CSS, header, hero (brotli)"), first_screen, Some(14_000));
+            let whole = dist.file_wire_size(&file, &encodings);
+            budget.add(format!("/{lang}/ whole page{variant} (brotli)"), whole, Some(32_000));
+            home = home.max(whole);
         }
+        let font_bytes: u64 = fonts.preloads_for(lang).map(|url| route_size(&dist, url)).sum();
+        first_view_page.insert(lang.clone(), home + font_bytes);
     }
+    let mut first_view = 0;
     budget.add("inline page CSS (minified)", page_css.len() as u64, None);
     // Lab pages: the same 14 kB first-round-trip rule for what a reader sees first (head, CSS,
     // header, the post's title and summary), and the home page's 32 kB cap for a whole page. The
@@ -347,18 +410,26 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
             // The hero is a small core plus exactly one renderer chunk: together ≤ 25 kB.
             "hero" => Some(6_000),
             "webgpu" | "webgl" => Some(19_000),
-            "hud" => Some(6_000),
+            // Raised from 6 kB on 2026-10-30: the panel's rows and their text arrive on first opening
+            // (a lazy string bundle), ~0.3 kB of code here for 1.4–2.0 kB brotli less HTML on every
+            // page view.
+            "hud" => Some(6_200),
             "terminal" => Some(8_000),
             "pow" => Some(4_000),
             // The console challenge: client and application form, fetched only on a challenge
             // command (its text is a lazy string bundle, not counted here).
             "ctf" => Some(7_000),
-            // Real-user measurements (loaded on idle), offline mode (on idle), the console's visitors row.
-            "rum" => Some(3_000),
-            "offline" | "visitors" => Some(2_000),
+            // Real-user measurements (loaded on idle), offline mode (on idle), the console's visitors
+            // row and, while an A/B test runs, its lines in that row. rum was 3,000 until the A/B
+            // test's exposure and conversion fields and the URL prefix took it to ~3,020 (2026-10-30).
+            "rum" => Some(3_200),
+            "offline" | "visitors" | "experiment" => Some(2_000),
             "physics" | "armour" | "trace" | "live" | "laws" | "contact" | "routing" | "loadsim" => Some(15_000),
-            // Three chapters, the coverage sky, the crash minimiser and a hand-input panel.
-            "fuzzer" => Some(21_000),
+            // Three chapters, the coverage sky, the crash minimiser and a hand-input panel. Raised
+            // from 21 kB on 2026-10-30 for the code that fetches its run-time text (a lazy string
+            // bundle) on the first start and builds the hand-input panel on first opening: about
+            // 0.45 kB here for 1.6 kB brotli less HTML on every Russian page view.
+            "fuzzer" => Some(21_500),
             _ => None,
         }
     };
@@ -381,11 +452,16 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
     }
     first_view += route_size(&dist, &islands_css_url);
     if let Some(bytes) = sw_bytes {
-        budget.add("sw.js (minified, with this build's file list)", bytes, Some(8_000));
+        // The file list grows with every page and language: raised from 8 kB on 2026-10-30, when
+        // Russian and Tajik tripled the pages (24, three ETags on each home page for the A/B test)
+        // and string bundles (77 assets), every URL carrying the /mintaka prefix (~1 kB of it).
+        budget.add("sw.js (minified, with this build's file list)", bytes, Some(11_000));
         first_view += route_size(&dist, "/sw.js");
     }
     budget.add("islands CSS (minified)", islands_css.len() as u64, None);
-    budget.add("first full view, compressed (HTML, fonts, boot, hero, HUD, RUM, offline)", first_view, Some(100_000));
+    for (lang, page) in &first_view_page {
+        budget.add(format!("/{lang}/ first full view, compressed (HTML, fonts, boot, hero, HUD, RUM, offline)"), first_view + page, Some(100_000));
+    }
 
     // Report and enforce.
     if !gaps.is_empty() {
@@ -413,17 +489,33 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
         bail!("over budget:\n{}", budget.table());
     }
 
+    // Every inline stylesheet of every page — each A/B test variant and each 404 page too — is
+    // one the CSP allows.
+    let style_src = if lab_pages.is_empty() { vec![style_hash] } else { vec![style_hash, lab_style_hash] };
+    let html_files = dist.routes.iter().filter(|r| r.content_type == HTML).flat_map(|r| std::iter::once(&r.file).chain(r.variants.iter().map(|v| &v.file)));
+    for file in html_files.chain(not_found.values()) {
+        let html = std::fs::read_to_string(dist.dir.join(file))?;
+        for (css, _) in html.split("<style>").skip(1).filter_map(|rest| rest.split_once("</style>")) {
+            if !style_src.contains(&util::csp_hash(css.as_bytes())) {
+                bail!("{file}: an inline <style> whose hash is not in the CSP");
+            }
+        }
+    }
+
     let routes = dist.routes.len();
     let manifest = Manifest {
         version: MANIFEST_VERSION,
         build: build.clone(),
         origin: cfg.origin.clone(),
+        base: cfg.base.clone(),
         default_lang: cfg.default_lang.clone(),
         langs: cfg.langs.clone(),
-        csp: Csp { style_src: if lab_pages.is_empty() { vec![style_hash] } else { vec![style_hash, lab_style_hash] }, script_src: vec![] },
+        csp: Csp { style_src, script_src: vec![] },
         routes: std::mem::take(&mut dist.routes),
         not_found,
         text: text_map,
+        experiment: cfg.experiment.as_ref().map(config::Experiment::manifest),
+        bot,
     };
     dist.write("manifest.json", serde_json::to_string_pretty(&manifest)?.as_bytes())?;
 

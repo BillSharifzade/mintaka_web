@@ -50,7 +50,7 @@ assets/ (fonts, brand kit files) ─────┘                             
 |---|---|
 | `crates/site` | Generator: Maud templates (`src/pages/`), Fluent strings, Lightning CSS, font `@font-face` + metric-matched fallbacks + a WOFF2 glyph-coverage check, curl-mode ANSI art rasterised from the logo SVG, `security.txt`/`sitemap.xml`/`humans.txt`, the Lab (Markdown → HTML with MathML and highlighted code, no JavaScript, Atom feed), the service worker's file list, precompression, budgets |
 | `crates/server` | The server: headers, Server-Timing (incl. kernel RTT), `/_proof`, `/_telemetry` (SSE), `/_ping`, `/_rum` (real-user Web Vitals and event counts, in memory), curl mode, 404 suggestions, contact API with proof of work and age encryption, the console challenge API (`/api/ctf/*`), HTTP/3 (quinn + h3), Let's Encrypt certificates from inside the binary (TLS-ALPN-01) |
-| `crates/proof` | Types shared by both (manifest, `/_proof`, telemetry, contact, `/_rum`, console challenge) |
+| `crates/proof` | Types shared by both (manifest, `/_proof`, telemetry, contact, `/_rum`, console challenge, the A/B test and its statistics) |
 | `crates/fuzzer` | S5: a coverage-guided fuzzer attacking a small parser of ours (v1 with one bug, v2 fixed) → WebAssembly without bindgen |
 | `crates/routing` | S4: road graph, Dijkstra, A*, our own Contraction Hierarchies (build-time `prep` feature turns an OpenStreetMap extract into `assets/data/dushanbe.bin`) → WebAssembly |
 | `crates/loadsim` | S6: discrete-event queueing simulator (naive vs. load-shedding + autoscaling) → WebAssembly |
@@ -131,14 +131,90 @@ domain or port 443, so the full flow was tested against a small ACME CA written 
 suite (`crates/server/tests/acme.rs`: account, order, TLS-ALPN-01 validation of the real
 listener, CSR, download, renewal, cache, restart). The first staging run above is the real test.
 
+## Where it runs now: `https://dchr.koinotinav.com/mintaka/`
+
+Until Mintaka has a domain of its own, the site is a path on the hosting provider's domain
+(Koinot Innovations and Technologies, Dushanbe). That host already has an owner for ports 80 and
+443, so the design above (our own TLS, HTTP/3, the kernel's RTT) runs on the LAN preview only;
+production looks like this:
+
+```
+browser ─HTTPS─▶ provider's edge (OpenResty, wildcard *.koinotinav.com certificate)
+        ─HTTP─▶ the host's Caddy :80, route /mintaka/*  ─HTTP─▶ mintaka-prod 172.20.0.1:8790
+```
+
+- The site is built for the prefix (`base = "/mintaka"` in `content/site.toml`, CONTRACTS §3.1)
+  and the server strips it. `MINTAKA_BASE= cargo xtask build` builds for the root instead.
+- The server runs with `--trusted-proxy 172.20.0.0/16 --client-ip-header x-mintaka-client-ip`
+  (CONTRACTS §18): rate limits per visitor, `/_proof` reports `edge` instead of TLS it can't see.
+- On the server: `~/mintaka-prod/` holds `bin/mintaka-prod`, `dist/`, `data/` (briefs, the
+  console-challenge key, the Telegram bot's key and memory), `env` (mode 600:
+  `MINTAKA_CONTACT_RECIPIENT`, the Telegram settings below) and `run.sh`;
+  `~/mintaka-web/watchdog.sh` (cron, every minute) restarts it. `deploy/koinot/` moves it to a
+  sandboxed systemd service under an account of its own, with its data in `/var/lib/mintaka`.
+- Deploy: `cargo build --release -p server && cargo xtask build --release`, check
+  `objdump -T target/release/mintaka-server | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1` is at
+  most 2.39 (Ubuntu 24.04), copy `dist/` and the binary (as `bin/mintaka-prod`, last), run
+  `run.sh` (under systemd, the copy itself restarts the service).
+
+### Contact briefs: the key and reading them
+
+Briefs are encrypted to an [age](https://age-encryption.org) public key; the server never holds
+the private half, so a stolen server can't read them.
+
+```sh
+cargo xtask keygen ~/.config/mintaka/briefs-identity.txt   # once; prints the age1… public key
+rsync -a <server>:mintaka-prod/data/contact/ briefs/       # fetch the encrypted files
+#   (under the systemd service: <server>:/var/lib/mintaka/contact/)
+cargo xtask briefs ~/.config/mintaka/briefs-identity.txt briefs/
+```
+
+Keep the identity file in a password manager too: without it, stored briefs can't be read.
+
+### Contact briefs in Telegram: the team chat and the client bot
+
+With a Telegram bot configured, the server posts "New brief · …" to the team's chat, and the form's
+last screen offers the client "Continue in Telegram — our bot answers right away". The bot answers
+at once in the brief's language, copies what the client writes into the team chat, and sends a team
+member's *reply* to one of those messages back to the client (CONTRACTS §19). Without the two
+settings nothing changes: no notifications, no link, no promise.
+
+1. **Create the bot:** in Telegram, open @BotFather, send `/newbot`, choose a name ("Mintaka") and a
+   username ending in `bot`. BotFather replies with the token (`123456789:AA…`). It is a password:
+   keep it out of chats, screenshots and shell history; if it leaks, `/revoke` in BotFather.
+2. **The team chat:** create a group for the team (or use an existing one) and add the bot. Privacy
+   mode can stay on: the bot only needs replies to its own messages.
+3. **The chat's id:** send any message in the group, then — before the server runs with the token,
+   which would take the update itself — ask Telegram, typing the token without saving it:
+
+   ```sh
+   read -rs TOKEN && curl -s "https://api.telegram.org/bot$TOKEN/getUpdates" | grep -o '"chat":{"id":-*[0-9]*'
+   ```
+
+   A group's id is negative, e.g. `-1001234567890`.
+4. **On the server**, add both to `~/mintaka-prod/env` (mode 600) and restart with `run.sh`:
+
+   ```sh
+   MINTAKA_TELEGRAM_BOT_TOKEN=123456789:AA…
+   MINTAKA_TELEGRAM_CHAT_ID=-1001234567890
+   ```
+
+5. **Check:** the log says `bot @… answers clients and relays them to the team chat`. Send a test
+   brief from the site, follow the link, and reply to the copy in the team chat.
+
+Only one server may poll a bot: a LAN preview must not run with the production token (Telegram
+then answers `409 Conflict` to one of them). The bot keeps `{data-dir}/telegram.key` (its links'
+key) and `{data-dir}/telegram.json` (which chat belongs to which brief, 30 days); back them up with
+the rest of `data/`.
+
 ## House rules (enforced in code where possible)
 
 - **Mono means measured.** A number in IBM Plex Mono was measured on this page view or computed from a cited source. Never an example.
 - **Claims must be true on launch day.** Practices listed in `content/site.toml` are shown with an *UNVERIFIED* badge in development and **dropped from release builds** until marked `verified = true`.
 - **Zero third-party requests, zero cookies.** CSP `default-src 'none'`, Trusted Types enforced, COOP + COEP (the page is cross-origin isolated).
-- **Analytics are totals on our own server.** One beacon per page view to `/_rum`, aggregated in memory (no IP, user agent or cookie; nothing on disk); Global Privacy Control and Do Not Track mean nothing is sent. The totals are public in the proof console and at `/_rum`.
+- **Analytics are totals on our own server.** One beacon per page view to `/_rum`, aggregated in memory (no IP, user agent or cookie; nothing on disk); Global Privacy Control and Do Not Track mean nothing is sent. The totals are public in the proof console and at `/_rum`. An A/B test of the home page (`[experiment]` in `content/site.toml`, one at a time) draws a variant per page load on the server and counts totals per variant up to a sample size fixed in advance (docs/CONTRACTS.md §17).
 - **Budgets** (spec §10.1) are checked on every build: first screen ≤ 14 kB compressed (one round trip), first full view ≤ 100 kB, hero ≤ 25 kB, HUD ≤ 6 kB, each instrument ≤ 15 kB.
-- **Languages** are written natively by the team; the build fails on any missing string in an enabled language.
+- **Languages:** the build fails on any missing string in an enabled language. Russian and Tajik were drafted by Claude at the founder's request; native speakers review them (docs/TRANSLATION.md).
 
 ## Status
 
@@ -147,3 +223,12 @@ corrected the spec, what is still a placeholder, and what comes next.
 [`docs/MILESTONE-2.md`](docs/MILESTONE-2.md): the WebAssembly instruments.
 [`docs/MILESTONE-3.md`](docs/MILESTONE-3.md): team, console challenge, Lab, real-user metrics,
 offline mode, Let's Encrypt and HTTP/3, the benchmark harness.
+[`docs/MILESTONE-4.md`](docs/MILESTONE-4.md): live at dchr.koinotinav.com/mintaka behind the
+provider's edge, the A/B test, the Telegram bot, the Lab review, the license, the production
+benchmark, the [penetration test](docs/SECURITY-REVIEW.md) and the accessibility audit.
+
+## License
+
+The source code is MIT or Apache-2.0, at your option; the Lab articles are CC BY 4.0; the name,
+logo, copy and team portraits are all rights reserved; fonts and map data keep their own licences.
+Details in [LICENSE](LICENSE).

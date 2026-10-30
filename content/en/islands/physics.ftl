@@ -13,6 +13,7 @@ physics-rtt-label = Your round trip
 physics-bound-label = You are within
 physics-floor-label = Light needs at least
 physics-src-kernel = Our Linux kernel's round-trip time for this connection (Server-Timing: krtt)
+physics-src-quic = QUIC's own round-trip estimate for this HTTP/3 connection, from its acknowledgements (Server-Timing: qrtt)
 physics-src-navigation = Your browser, from requestStart to responseStart, minus our server's time
 physics-src-ping = Fastest of { $n ->
     [one] { $n } request

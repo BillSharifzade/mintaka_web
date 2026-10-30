@@ -2,15 +2,17 @@
 // §9.1) — enhance, never replace. Without JavaScript the form posts itself and the server
 // redirects. With it: the proof of work (§8.1) is solved in a worker while the visitor types, the
 // fields are checked by the server's own rules (§8.2) with specific messages, the brief goes as
-// JSON, and the answer appears in place. `validate` is pure and tested in contact.test.ts.
+// JSON, and the answer appears in place — with a link to our Telegram bot when the server's answer
+// carries one (§19). `validate` and `botLink` are pure and tested in contact.test.ts.
 
 import { assetUrl } from '../shared/assets.ts';
 import { emit } from '../shared/bus.ts';
 import { $, h, render } from '../shared/dom.ts';
 import { offline } from '../shared/env.ts';
 import { duration } from '../shared/format.ts';
-import { lang, t, tp } from '../shared/i18n.ts';
+import { lang, list, loadStrings, numberLocale, t, tp } from '../shared/i18n.ts';
 import { worker } from '../shared/tt.ts';
+import { at } from '../shared/base.ts';
 
 export interface Brief {
   kind: string[];
@@ -77,6 +79,14 @@ export function validate(b: Brief): Problem[] {
   return out;
 }
 
+/**
+ * The Telegram link of a successful answer (docs/CONTRACTS.md §19), if it is one: a t.me deep link
+ * with a start code, nothing else — it becomes an `href`.
+ */
+export function botLink(value: unknown): string | undefined {
+  return typeof value === 'string' && /^https:\/\/t\.me\/[A-Za-z0-9_]{5,32}\?start=[A-Za-z0-9_-]{1,64}$/.test(value) ? value : undefined;
+}
+
 /** The `e-*` element an error code belongs to, by its prefix (`email-invalid` → `email`). */
 export const errorKey = (code: string): string => code.slice(0, code.indexOf('-'));
 
@@ -95,7 +105,7 @@ type FromWorker =
   | { type: 'done'; counter: number; tried: number; ms: number }
   | { type: 'error'; message: string };
 
-type Answer = { ok: true } | { ok: false; errors: Problem[] };
+type Answer = { ok: true; bot?: string | undefined } | { ok: false; errors: Problem[] };
 
 const num = (value: string, unit: string): HTMLElement =>
   h('span', { class: 'num' }, value, unit && h('span', { class: 'num__unit' }, unit));
@@ -131,11 +141,11 @@ export function mount(root: HTMLElement): void {
   const say = (text: string) => {
     if (status) status.textContent = text;
   };
-  const message = (code: string) => {
-    const key = `contact-error-${code}`;
-    const text = t(key);
-    return text === key ? t('contact-error-server-error') : text;
-  };
+  // The form's messages are a lazy string bundle (lazy/contact.ftl), fetched on the first focus and
+  // awaited on Send; only the offline lines are inline. Without the bundle (offline before it
+  // ever arrived), a message falls back to the inline one about the connection.
+  const message = (code: string) =>
+    [`contact-error-${code}`, 'contact-error-server-error', 'contact-error-network'].map((k) => [k, t(k)]).find(([k, v]) => k !== v)?.[1] ?? '';
 
   // "Add an email or a Telegram handle" belongs to both inputs.
   for (const input of [byId('f-email'), byId('f-telegram')]) {
@@ -148,7 +158,7 @@ export function mount(root: HTMLElement): void {
   let solver: Worker | null = null;
 
   const solve = async (): Promise<Solved | null> => {
-    const r = await fetch('/api/pow', { cache: 'no-store', headers: { accept: 'application/json' } });
+    const r = await fetch(at('/api/pow'), { cache: 'no-store', headers: { accept: 'application/json' } });
     if (!r.ok) return null;
     const c = (await r.json()) as { challenge: string; difficulty: number };
     return new Promise<Solved | null>((resolve) => {
@@ -173,7 +183,7 @@ export function mount(root: HTMLElement): void {
     void mine.then((r) => {
       if (!r || job !== mine) return;
       const f = duration(r.ms);
-      const n = num(new Intl.NumberFormat(lang()).format(r.tried), '');
+      const n = num(new Intl.NumberFormat(numberLocale()).format(r.tried), '');
       render(powLine, ...tpn('contact-pow', r.tried, { ms: num(f.value, f.unit), n }));
       powLine.hidden = false;
     });
@@ -252,7 +262,7 @@ export function mount(root: HTMLElement): void {
       names.push(key === 'contact' ? t('contact-contact') : fieldName(form, key));
     }
     sync();
-    const summary = names.length ? t('contact-invalid', { fields: new Intl.ListFormat(lang(), { type: 'conjunction' }).format(names) }) : '';
+    const summary = names.length ? t('contact-invalid', { fields: list(names) }) : '';
     say([summary, ...lines].filter(Boolean).join(' '));
     $('[aria-invalid="true"]', form)?.focus();
   };
@@ -313,7 +323,7 @@ export function mount(root: HTMLElement): void {
   const post = async (body: Record<string, unknown>): Promise<Answer> => {
     let res: Response;
     try {
-      res = await fetch(form.getAttribute('action') || '/api/contact', {
+      res = await fetch(form.getAttribute('action') || at('/api/contact'), {
         method: 'POST',
         headers: { 'content-type': 'application/json', accept: 'application/json' },
         body: JSON.stringify(body),
@@ -322,7 +332,16 @@ export function mount(root: HTMLElement): void {
       if (offline()) keepDraft();
       return { ok: false, errors: [{ field: 'form', code: offline() ? 'offline' : 'network' }] };
     }
-    if (res.ok) return { ok: true };
+    if (res.ok) {
+      // The server runs the Telegram bot: the answer names the chat that continues this brief.
+      let bot: string | undefined;
+      try {
+        bot = botLink(((await res.json()) as { bot_link?: unknown }).bot_link);
+      } catch {
+        /* an empty or odd body is still a success */
+      }
+      return { ok: true, bot };
+    }
     let errors: Problem[] = [];
     try {
       errors = ((await res.json()) as { errors?: Problem[] }).errors ?? [];
@@ -354,12 +373,15 @@ export function mount(root: HTMLElement): void {
     return body;
   };
 
-  const sent = () => {
+  const sent = (bot?: string) => {
     const done = h(
       'div',
       { class: 'contact-done', tabindex: '-1' },
       h('p', { class: 'contact-done__title' }, t('contact-sent')),
       h('p', null, t('contact-sent-reply')),
+      // Promised only when the server runs the bot: the page itself can't know.
+      bot && h('p', null, h('a', { class: 'btn btn--ghost', href: bot }, t('contact-bot'))),
+      bot && h('p', { class: 'contact-done__note' }, t('contact-bot-note')),
     );
     for (const el of Array.from(form.children)) if (el !== status && el instanceof HTMLElement) el.hidden = true;
     say('');
@@ -384,6 +406,7 @@ export function mount(root: HTMLElement): void {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (busy) return;
+    await loadStrings('contact');
     const { data, brief } = read();
     const problems = validate(brief);
     if (problems.length) return show(problems);
@@ -400,7 +423,7 @@ export function mount(root: HTMLElement): void {
       for (let attempt = 0; ; attempt++) {
         const pow = await proof();
         const answer = await post(payload(data, brief, pow));
-        if (answer.ok) return sent();
+        if (answer.ok) return sent(answer.bot);
         if (pow && attempt === 0 && answer.errors.some((x) => x.code.startsWith('pow-'))) continue;
         show(answer.errors);
         void startPow(); // ready for the next try
@@ -412,7 +435,7 @@ export function mount(root: HTMLElement): void {
     }
   });
 
-  form.addEventListener('focusin', () => void startPow(), { once: true });
+  form.addEventListener('focusin', () => (void startPow(), void loadStrings('contact')), { once: true });
   restoreDraft();
   // Our checks give specific, announced messages; the server checks again either way.
   form.noValidate = true;

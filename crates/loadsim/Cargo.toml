@@ -3,6 +3,7 @@ name = "loadsim"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 description = "S6 Overload lab: a seeded discrete-event simulation of two services under load, for WebAssembly."
 
 [lib]

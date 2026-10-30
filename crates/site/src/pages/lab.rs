@@ -10,13 +10,17 @@ use std::collections::BTreeMap;
 
 /// Every Lab page of `ctx.lang` as `(path, html)`: the index, then each post. `all` holds the
 /// posts of every language, for the language switch and `hreflang` links (a post's slug is the
-/// same in every language that has it).
+/// same in every language that has it). A language without posts of its own gets the index only,
+/// listing the default language's posts in that language ([`Ctx::lab_fallback`]).
 pub fn pages(ctx: &Ctx, all: &BTreeMap<String, Vec<Post>>, css: &str) -> Vec<(String, String)> {
-    if ctx.lab.is_empty() {
-        return vec![];
-    }
+    let Some((posts, posts_lang)) = listed(ctx) else { return vec![] };
+    let default_has_posts = all.get(&ctx.cfg.default_lang).is_some_and(|ps| !ps.is_empty());
     let alternates = |slug: Option<&str>| -> Vec<(String, String)> {
-        let has = |l: &String| all.get(l).is_some_and(|ps| slug.map_or(!ps.is_empty(), |slug| ps.iter().any(|p| p.slug == slug)));
+        let has = |l: &String| match slug {
+            Some(slug) => all.get(l).is_some_and(|ps| ps.iter().any(|p| p.slug == slug)),
+            // Every language has an index while the default language has posts to fall back on.
+            None => default_has_posts || all.get(l).is_some_and(|ps| !ps.is_empty()),
+        };
         let path = |l: &String| slug.map_or_else(|| index_path(l), |slug| format!("/{l}/lab/{slug}/"));
         ctx.cfg.langs.iter().filter(|l| has(l)).map(|l| (l.clone(), path(l))).collect()
     };
@@ -24,7 +28,8 @@ pub fn pages(ctx: &Ctx, all: &BTreeMap<String, Vec<Post>>, css: &str) -> Vec<(St
     let mut out = vec![];
     let path = index_path(ctx.lang);
     let long_form = Some(LongForm { css, og_type: "website", head: html! {}, alternates: alternates(None) });
-    let page = Page { path: &path, title: format!("{} — Mintaka", s.t("lab-title")), description: s.t("lab-description"), is_home: false, body: index(ctx), index: true, long_form };
+    let body = index(ctx, posts, posts_lang);
+    let page = Page { path: &path, title: format!("{} — Mintaka", s.t("lab-title")), description: s.t("lab-description"), is_home: false, body, index: true, long_form };
     out.push((path.clone(), document(ctx, page).into_string()));
     for p in ctx.lab {
         let path = p.path(ctx.lang);
@@ -35,9 +40,17 @@ pub fn pages(ctx: &Ctx, all: &BTreeMap<String, Vec<Post>>, css: &str) -> Vec<(St
     out
 }
 
-/// `/{lang}/lab/`: every post, newest first.
-pub fn index(ctx: &Ctx) -> Markup {
+/// The posts the Lab lists for `ctx.lang` and their language: its own, else the default
+/// language's (`None` when neither has any).
+pub fn listed<'a>(ctx: &Ctx<'a>) -> Option<(&'a [Post], &'a str)> {
+    if !ctx.lab.is_empty() { Some((ctx.lab, ctx.lang)) } else { ctx.lab_fallback.map(|(lang, posts)| (posts, lang)) }
+}
+
+/// `/{lang}/lab/`: every post, newest first. Posts in another language (`posts_lang`) say so
+/// first, and their titles and summaries carry that language.
+pub fn index(ctx: &Ctx, posts: &[Post], posts_lang: &str) -> Markup {
     let s = ctx.s;
+    let other = (posts_lang != ctx.lang).then_some(posts_lang);
     html! {
         section class="sec lab-index" aria-labelledby="lab-title" {
             div class="wrap" {
@@ -45,18 +58,19 @@ pub fn index(ctx: &Ctx) -> Markup {
                     p class="eyebrow" { (s.t("lab-eyebrow")) }
                     h1 class="sec__title" id="lab-title" { (s.t("lab-title")) }
                     p class="lead" { (s.t("lab-lead")) }
-                    p class="lab-index__feed" { a href=(feed_path(ctx.lang)) type="application/atom+xml" { (s.t("lab-feed-follow")) } }
+                    @if other.is_some() { p class="lab-index__note" { (s.t("lab-untranslated")) } }
+                    p class="lab-index__feed" { a href=(ctx.url(&feed_path(posts_lang))) type="application/atom+xml" hreflang=[other] { (s.t("lab-feed-follow")) } }
                 }
                 ol class="lab-list" role="list" {
-                    @for post in ctx.lab {
+                    @for post in posts {
                         li class="lab-item" {
                             p class="lab-item__meta" {
                                 span class="lab-item__pillar" data-star=(post.pillar.star()) { (s.t(&post.pillar.label_key())) }
                                 span aria-hidden="true" { " · " }
                                 time datetime=(post.date) { (post.date) }
                             }
-                            h2 class="lab-item__title" { a href=(post.path(ctx.lang)) { (post.title) } }
-                            p class="lab-item__summary" { (post.summary) }
+                            h2 class="lab-item__title" lang=[other] { a href=(ctx.url(&post.path(posts_lang))) hreflang=[other] { (post.title) } }
+                            p class="lab-item__summary" lang=[other] { (post.summary) }
                         }
                     }
                 }
@@ -72,7 +86,7 @@ pub fn post(ctx: &Ctx, post: &Post) -> Markup {
         article class="post" aria-labelledby="post-title" {
             header class="post__head wrap" {
                 p class="post__kicker" {
-                    a href=(index_path(ctx.lang)) { (s.t("lab-title")) }
+                    a href=(ctx.url(&index_path(ctx.lang))) { (s.t("lab-title")) }
                     span aria-hidden="true" { " · " }
                     span class="post__pillar" { (svg::star_mark(post.pillar.star())) (s.t(&post.pillar.label_key())) }
                 }
@@ -101,8 +115,8 @@ pub fn post(ctx: &Ctx, post: &Post) -> Markup {
                     p { a class="post__repo-link mono" href=(post.repo_url) { (post.repo_url.trim_start_matches("https://")) } }
                 }
                 nav class="post__nav" aria-label=(s.t("lab-title")) {
-                    a href=(index_path(ctx.lang)) { (s.t("lab-all")) }
-                    a href=(feed_path(ctx.lang)) type="application/atom+xml" { (s.t("lab-feed")) }
+                    a href=(ctx.url(&index_path(ctx.lang))) { (s.t("lab-all")) }
+                    a href=(ctx.url(&feed_path(ctx.lang))) type="application/atom+xml" { (s.t("lab-feed")) }
                 }
             }
         }

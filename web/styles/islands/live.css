@@ -6,6 +6,10 @@
     container-type: inline-size;
   }
 
+  .live-hold {
+    justify-self: start;
+  }
+
   .live-kv dd {
     display: flex;
     align-items: center;

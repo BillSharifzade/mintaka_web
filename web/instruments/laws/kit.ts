@@ -1,7 +1,8 @@
 // Pieces the three experiments share: strings, number formatting, timing and the answer slot.
 
 import { h } from '../../shared/dom.ts';
-import { lang, t, tn, tp } from '../../shared/i18n.ts';
+import { numberLocale, t, tn, tp } from '../../shared/i18n.ts';
+import { unit } from '../../shared/format.ts';
 
 export const L = (key: string, vars?: Record<string, string | number>): string => t(`laws-${key}`, vars);
 
@@ -33,9 +34,12 @@ export type Experiment = (panel: HTMLElement, api: Api) => (reason?: string) => 
 
 /** `v` with exactly `digits` decimals, in the page language (never "-0"). */
 export const fmt = (v: number, digits = 0): string =>
-  new Intl.NumberFormat(lang(), { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(
+  new Intl.NumberFormat(numberLocale(), { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(
     Math.round(v * 10 ** digits) / 10 ** digits || 0,
   );
+
+/** Milliseconds as the page language writes them ("ms", "мс"). */
+export const MS = unit('ms');
 
 /** A measured value: <span class="num">412<span class="num__unit">ms</span></span>. */
 export const num = (value: string, unit = ''): HTMLElement =>

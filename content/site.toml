@@ -1,11 +1,15 @@
 # Site-wide facts. Every value in this file is published on the page.
 
-# Placeholder domain until it is secured (spec §16 question 1).
-origin = "https://mintaka.tj"
+# Published at https://dchr.koinotinav.com/mintaka/ — a path on our hosting provider's domain —
+# until Mintaka has a domain of its own (spec §16 question 1). The server strips `base` from
+# requests; `MINTAKA_BASE= cargo xtask build` builds for the root instead (local previews).
+origin = "https://dchr.koinotinav.com"
+base = "/mintaka"
 default_lang = "en"
-# Add "ru" and "tg" once content/ru and content/tg are complete — the build fails on any missing
-# string, and translations are written natively by the team, never machine-translated.
-langs = ["en"]
+# In the spec's order (§11); the order sets the language switch and hreflang lists, nothing else.
+# The build fails on any missing string. The Russian and Tajik copy was drafted by Claude at the
+# founder's request on 2026-10-30 and should be reviewed by native speakers (docs/TRANSLATION.md).
+langs = ["tg", "ru", "en"]
 
 # Flip to true when the domain and every contact detail below are final. Release builds warn
 # loudly while it is false.
@@ -25,12 +29,22 @@ lon = 68.7870
 repo = "https://github.com/BillSharifzade/mintaka_web"
 branch = "main"
 
+[hosting]
+# Who runs the machine (the privacy page names them) and whether a proxy of theirs ends visitors'
+# HTTPS connections before they reach our server (it does: the provider's edge for its domain).
+provider = "Koinot Innovations and Technologies"
+city = "Dushanbe"
+country = "Tajikistan"
+edge = true
+
 [contact]
-email = "hello@mintaka.tj"
-telegram = "mintaka"
-phone = ""
-careers_email = "jobs@mintaka.tj"
-security_email = "security@mintaka.tj"
+# For now the founder's phone is the one public contact; add email and Telegram when they exist.
+# (Empty details are not published. security.txt and the careers link fall back to the phone.)
+email = ""
+telegram = ""
+phone = "+992 98 544 70 72"
+careers_email = ""
+security_email = ""
 reply_within = "one working day"
 
 # ---------------------------------------------------------------------------------------------
@@ -51,6 +65,8 @@ key = "armour-sbom"
 [[claims]]
 group = "armour"
 key = "armour-secrets"
+# GitHub secret scanning and push protection are on for this repository (checked 2026-10-30).
+verified = true
 [[claims]]
 group = "armour"
 key = "armour-access"
@@ -76,6 +92,8 @@ key = "practice-usability"
 [[claims]]
 group = "practice"
 key = "practice-ab"
+# The hero headline runs as an A/B test on this page ([experiment] below).
+verified = true
 [[claims]]
 group = "practice"
 key = "practice-walkthrough"
@@ -85,9 +103,41 @@ key = "practice-wcag"
 [[claims]]
 group = "practice"
 key = "practice-comfort"
+# Contrast, reduced motion and pause controls checked in docs/ACCESSIBILITY.md.
+verified = true
 [[claims]]
 group = "practice"
 key = "practice-speed"
+# Enforced by the build: pages over their transfer budgets fail it (crates/site/src/lib.rs).
+verified = true
+
+# ---------------------------------------------------------------------------------------------
+# A/B test on the landing page itself (spec §12; docs/CONTRACTS.md §17). One at a time. Every
+# enabled language's home page is built once per variant; the server picks one per page load,
+# with no cookie. Beacons count page views and conversions per variant, in memory, until each
+# variant has `sample_size` page views — then the console shows the verdict, and counting stops.
+# Remove this table (or start a new test with a new id) to end it.
+# ---------------------------------------------------------------------------------------------
+[experiment]
+id = "hero-headline"
+# Message ids in content/{lang}/page.ftl: the control as it is, then the alternatives (spec §S1).
+control = "hero-title"
+variants = ["hero-title-hardware", "hero-title-cycle"]
+# Primary metric: a page view converts when it follows a link to #contact ("Start a project").
+metric = "cta_start_project"
+# Counted per variant for context — a headline that wins clicks but loses briefs is no win — and
+# never tested: the sample size is planned for the primary metric, at whose size a brief is too
+# rare to judge, and every extra test would raise the chance of a false positive.
+secondary = ["contact_submit"]
+# Planning assumptions, decided before the test starts. Placeholders until two weeks of /_rum show
+# the real baseline (spec §2.3: cta_start_project per page view of /en/).
+baseline = 0.05   # share of home page views that follow a link to the contact form
+mde = 0.30        # smallest lift worth finding, relative: 5 % → 6.5 %
+alpha = 0.05      # family-wise false-positive rate, two-sided, shared by the 2 comparisons
+power = 0.80      # chance of finding a true lift of `mde` in one comparison
+# Page views per variant that these imply (two-proportion z-test, alpha 0.025 each); the build
+# recomputes it and fails if this disagrees. 3 variants: 13,734 page views in all.
+sample_size = 4578
 
 # ---------------------------------------------------------------------------------------------
 # S12 team grid, in this order. Name, role and the one line are strings (content/{lang}/page.ftl:

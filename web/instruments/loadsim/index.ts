@@ -7,8 +7,8 @@ import init, { Lab, params } from '../../wasm/loadsim/loadsim.js';
 import { assetUrl } from '../../shared/assets.ts';
 import { $, h, num, render, s, type Child } from '../../shared/dom.ts';
 import { offline, reducedMotion } from '../../shared/env.ts';
-import { duration } from '../../shared/format.ts';
-import { lang, pluralKey, t, tn } from '../../shared/i18n.ts';
+import { duration, unit } from '../../shared/format.ts';
+import { numberLocale, pluralKey, t, tn } from '../../shared/i18n.ts';
 import { area, line, linear, loadRate, log, nice, Series } from './chart.ts';
 
 // Fields per system per window — crates/loadsim/src/sim.rs, FIELDS.
@@ -31,11 +31,14 @@ interface Panel {
   little: HTMLElement;
 }
 
-const nf = (digits: number) => new Intl.NumberFormat(lang(), { maximumFractionDigits: digits, minimumFractionDigits: digits });
+const nf = (digits: number) => new Intl.NumberFormat(numberLocale(), { maximumFractionDigits: digits, minimumFractionDigits: digits });
 const n0 = (v: number) => ({ value: nf(0).format(v), unit: '' });
 const n1 = (v: number) => ({ value: nf(v < 10 ? 1 : 0).format(v), unit: '' });
 /** A model parameter in words: 2000 → "2 s", 50 → "50 ms". */
-const span = (ms: number) => (ms >= 1000 ? `${new Intl.NumberFormat(lang()).format(ms / 1000)} s` : `${ms} ms`);
+const span = (ms: number) => {
+  const n = new Intl.NumberFormat(numberLocale());
+  return ms >= 1000 ? `${n.format(ms / 1000)} ${unit('s')}` : `${n.format(ms)} ${unit('ms')}`;
+};
 
 export function mount(root: HTMLElement): void {
   const body = $('.instrument__body', root);

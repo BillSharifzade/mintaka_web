@@ -1,0 +1,72 @@
+Mintaka website — licensing
+===========================
+
+Copyright (c) 2026 Sharifzoda Bilol and the Mintaka contributors.
+
+This repository is open so that engineers can read, run, learn from and reuse how the site
+is built. Different parts carry different terms:
+
+  What                                               Licence
+  -------------------------------------------------  ------------------------------------------
+  The source code: everything under crates/, web/,   MIT or Apache-2.0, at your option
+  xtask/, bench/ and deploy/, the build and test     (LICENSE-MIT, LICENSE-APACHE)
+  configuration, and docs/
+
+  The Lab articles: content/*/lab/*.md               Creative Commons Attribution 4.0
+                                                     International (CC BY 4.0)
+
+  The Mintaka name, logo and star mark               All rights reserved
+  (assets/brand/), the site's own copy
+  (content/*/*.ftl, content/*/islands/), and the
+  team portraits (assets/team/)
+
+  Fonts (assets/fonts/)                              SIL Open Font License 1.1 — see
+                                                     assets/fonts/licenses/
+
+  The Dushanbe road network                          Open Database License 1.0 — see below
+  (assets/data/dushanbe.bin)
+
+
+Source code — MIT OR Apache-2.0
+-------------------------------
+
+Unless a file says otherwise, the source code is dual-licensed under the MIT License
+(LICENSE-MIT) and the Apache License, Version 2.0 (LICENSE-APACHE); you may use it under
+either. This is the usual arrangement in the Rust ecosystem: MIT is short and permissive,
+Apache-2.0 adds an explicit patent grant.
+
+Unless you state otherwise, any contribution you intentionally submit for inclusion in this
+repository, as defined in the Apache-2.0 licence, is dual-licensed as above, without any
+additional terms or conditions.
+
+
+The Lab articles — CC BY 4.0
+----------------------------
+
+The articles in content/*/lab/ may be shared and adapted for any purpose, including
+commercially, if you credit "Mintaka" with a link to the original article and indicate any
+changes you made. The code they quote is part of the source code above.
+Full terms: https://creativecommons.org/licenses/by/4.0/legalcode
+
+
+Brand, copy and portraits — all rights reserved
+-----------------------------------------------
+
+The Mintaka name, logo and star mark identify our company; please don't use them for your own
+products or in a way that suggests we endorse you. The site's copy is ours. The portraits show
+real people, published with their consent for this site only; they are not licensed for any
+other use. If you fork the code, replace all three with your own.
+
+
+Third-party material
+--------------------
+
+- Space Grotesk, Onest and IBM Plex Mono are licensed under the SIL Open Font License 1.1; the
+  licence texts are in assets/fonts/licenses/.
+- assets/data/dushanbe.bin is a database derived from OpenStreetMap data,
+  © OpenStreetMap contributors, and is available under the Open Database License 1.0
+  (https://opendatacommons.org/licenses/odbl/1-0/). The site shows the attribution next to the
+  map; assets/data/README.md describes how the file is produced.
+- Time zone locations come from the IANA time zone database, which is in the public domain.
+
+Dependencies fetched by Cargo and npm come with their own licences.

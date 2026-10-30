@@ -1,6 +1,7 @@
 // Pure helpers for the proof console (web/hud/index.ts). No DOM, so Node tests can import them.
 
 import type { Proof } from '../shared/proof.ts';
+import { numberLocale } from '../shared/i18n.ts';
 
 export interface Shift {
   value: number;
@@ -40,7 +41,7 @@ export function slowest(entries: readonly { interactionId?: number; duration: nu
 /** CLS is unitless: "0", "0.004", "0.12". */
 export function clsText(v: number, locale?: string): string {
   const digits = v === 0 ? 0 : v < 0.01 ? 3 : 2;
-  return new Intl.NumberFormat(locale, { maximumFractionDigits: digits, minimumFractionDigits: digits }).format(v);
+  return new Intl.NumberFormat(numberLocale(locale), { maximumFractionDigits: digits, minimumFractionDigits: digits }).format(v);
 }
 
 /** Cookies visible to scripts: `a=1; b=2` → 2. */
@@ -66,12 +67,21 @@ export function cookies(jar: string, serverSet: number | undefined): Cookies {
 /** "TLSv1.3" → "TLS 1.3". */
 export const tlsVersion = (v: string): string => v.replace(/^TLSv?\s*/i, 'TLS ');
 
+/** The browser's own protocol for this page (`nextHopProtocol`: h2 → HTTP/2), null if it doesn't say. */
+export function nextHop(alpn: string | undefined): string | null {
+  const names: Record<string, string> = { h3: 'HTTP/3', h2: 'HTTP/2', 'http/1.1': 'HTTP/1.1', 'http/1.0': 'HTTP/1.0' };
+  return (alpn && names[alpn]) || null;
+}
+
 /** "HTTP/2.0" → "HTTP/2"; "HTTP/1.1" stays. */
 export const httpVersion = (v: string): string => v.replace(/^(HTTP\/\d)\.0$/i, '$1');
 
-/** What the pill says about the transport: `pq`, `dev` (plain HTTP), a TLS version, or null (unknown). */
+/**
+ * What the pill says about the transport: `pq`, `edge` (TLS ended at the hosting edge), `dev`
+ * (plain HTTP), a TLS version, or null (unknown).
+ */
 export function transport(p: Proof | null | undefined): string | null {
   if (!p) return null;
-  if (!p.tls) return 'dev';
+  if (!p.tls) return p.edge ? 'edge' : 'dev';
   return p.tls.post_quantum ? 'pq' : tlsVersion(p.tls.version);
 }

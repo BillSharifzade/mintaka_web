@@ -2,7 +2,8 @@
 //!
 //! xtask bundles `web/sw/sw.ts` into `sw.js` next to esbuild's other output (not in its
 //! metafile). Here the one `self.__MINTAKA_SHELL__` in it becomes this build's file list: the
-//! pages with their languages and content hashes, the shell (main.js, islands.css and the hero
+//! pages with their languages and content hashes (one per A/B test variant, any of which the
+//! server may send), the shell (main.js, islands.css and the hero
 //! core, each with its static imports), the fonts each language preloads, each render tier's
 //! renderer, and every asset of the build. Any change to a shipped file therefore changes the
 //! worker's bytes, which is what makes browsers install the new one.
@@ -35,8 +36,9 @@ pub struct Shell {
 #[derive(Debug, Serialize, PartialEq)]
 pub struct Page {
     pub lang: String,
-    /// First 128 bits of SHA-256 of the page's bytes, hex: the server's ETag, unquoted.
-    pub etag: String,
+    /// First 128 bits of SHA-256 of the page's bytes, hex: the server's ETag, unquoted. One per
+    /// variant on a page of the A/B test, control first; one everywhere else.
+    pub etags: Vec<String>,
 }
 
 /// What the generator already decided, by URL.
@@ -117,21 +119,26 @@ impl Chunks {
 pub fn shell(dist: &Dist, inputs: &Inputs) -> Result<Shell> {
     let chunks = Chunks::read(inputs.js_dir)?;
     let mut pages = BTreeMap::new();
+    // The worker sees URLs, so every path in the list carries the site's URL prefix.
+    let link = |paths: Vec<String>| paths.iter().map(|p| dist.link(p)).collect::<Vec<_>>();
     for route in dist.routes.iter().filter(|r| r.kind == RouteKind::Page) {
-        let bytes = std::fs::read(dist.dir.join(&route.file))?;
-        let etag = sha256(&bytes)[..16].iter().map(|b| format!("{b:02x}")).collect();
-        pages.insert(route.path.clone(), Page { lang: route.lang.clone().unwrap_or_default(), etag });
+        let mut etags = vec![];
+        for file in std::iter::once(&route.file).chain(route.variants.iter().map(|v| &v.file)) {
+            let bytes = std::fs::read(dist.dir.join(file))?;
+            etags.push(sha256(&bytes)[..16].iter().map(|b| format!("{b:02x}")).collect());
+        }
+        pages.insert(dist.link(&route.path), Page { lang: route.lang.clone().unwrap_or_default(), etags });
     }
-    let mut core = chunks.closure("web/main.ts")?;
+    let mut core = link(chunks.closure("web/main.ts")?);
     core.push(inputs.islands_css.to_owned());
-    core.extend(chunks.closure("web/hero/index.ts")?);
+    core.extend(link(chunks.closure("web/hero/index.ts")?));
     let mut seen = BTreeSet::new();
     core.retain(|u| seen.insert(u.clone()));
     let mut renderers = BTreeMap::new();
     for (tier, entry) in [("A", "web/hero/webgpu.ts"), ("B", "web/hero/webgl.ts"), ("C", "web/hero/canvas.ts")] {
-        renderers.insert(tier.to_owned(), chunks.closure(entry)?);
+        renderers.insert(tier.to_owned(), link(chunks.closure(entry)?));
     }
-    let assets = dist.routes.iter().map(|r| r.path.clone()).filter(|p| p.starts_with("/assets/") && !p.ends_with(".map")).collect();
+    let assets = dist.routes.iter().filter(|r| r.path.starts_with("/assets/") && !r.path.ends_with(".map")).map(|r| dist.link(&r.path)).collect();
     Ok(Shell { build: inputs.build.to_owned(), pages, core, fonts: inputs.fonts.clone(), renderers, assets })
 }
 

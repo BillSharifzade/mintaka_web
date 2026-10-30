@@ -112,7 +112,7 @@ export function hops(nav: Nav, timing: (name: string) => number | undefined, sec
   else if (reused) out.push(['tls', 0, 'reused']);
   else out.push(['tls', nav.secureConnectionStart > 0 ? nav.connectEnd - nav.secureConnectionStart : undefined]);
   out.push(['wait', nav.responseStart - nav.requestStart]);
-  for (const name of ['app', 'krtt', 'tls']) {
+  for (const name of ['app', 'krtt', 'qrtt', 'tls']) {
     const ms = timing(name);
     if (ms !== undefined) out.push(['st-' + name, ms]);
   }

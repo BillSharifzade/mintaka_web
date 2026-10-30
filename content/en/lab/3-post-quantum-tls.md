@@ -1,9 +1,9 @@
 +++
 slug = "post-quantum-tls-with-rustls"
-title = "Post-quantum TLS in production with rustls"
+title = "Post-quantum TLS with rustls"
 pillar = "security"
 date = 2026-10-29
-summary = "Our server offers X25519MLKEM768, the hybrid of X25519 and ML-KEM-768, through rustls and aws-lc-rs. It cannot force it: in TLS 1.3 rustls takes the client's order of preference, so a client that prefers X25519 gets X25519. Measured on a laptop, the hybrid adds exactly 1,184 bytes to the ClientHello, 1,088 bytes to the ServerHello, and about 0.04 ms to a handshake."
+summary = "Our server offers X25519MLKEM768, the hybrid of X25519 and ML-KEM-768, through rustls and aws-lc-rs. It cannot force it: in TLS 1.3 rustls takes the client's order of preference, so a client that prefers X25519 gets X25519. Measured on a laptop, the hybrid adds exactly 1,184 bytes to the client's key share and 1,088 bytes to the server's, and about 0.04 ms to a handshake."
 repo = "crates/server/src/tls.rs"
 +++
 
@@ -13,7 +13,7 @@ TLS 1.3 agrees on session keys with an elliptic-curve Diffie–Hellman exchange,
 
 The standard answer is a hybrid: do X25519 and ML-KEM-768 (the lattice-based key encapsulation NIST standardised as FIPS 203) in the same handshake and derive the keys from both secrets, so an attacker has to break both. The TLS group for it is X25519MLKEM768. This post describes how our server offers it, what it cannot do about clients, and what the hybrid costs, measured.
 
-This is the server we will run in production; the site is not deployed yet. The measurements below come from a laptop, against the same binary with a self-signed certificate.
+This is the TLS of our own server, and the public site does not use it yet. Until Mintaka has a domain of its own, the site is a path on our hosting provider's domain, where HTTPS ends at the provider's edge proxy, and the page says so instead of guessing. The measurements below come from a laptop, against the same binary with a self-signed certificate.
 
 ## Method
 
@@ -23,7 +23,7 @@ This is the server we will run in production; the site is not deployed yet. The 
 
 ### Who decides
 
-Two corrections came out of building this, both recorded in our milestone notes.
+Two corrections came out of building this, both recorded in [our milestone notes](repo:docs/MILESTONE-1.md).
 
 The server cannot force post-quantum key exchange. In TLS 1.3, rustls 0.23.46 walks the client's `supported_groups` list in the client's order and takes the first group it also supports; the server's own list only decides what it supports, not the order. If the client sent no key share for that group, rustls answers with a HelloRetryRequest asking for one, which costs a round trip. A client that lists X25519 first gets X25519, and the page says so instead of pretending. Our milestone notes record that current Chrome, Firefox and Safari list X25519MLKEM768 first, so they get it.
 
@@ -35,7 +35,7 @@ The connection layer reads the complete ClientHello first, then starts a clock a
 
 ## The mathematics
 
-The sizes are fixed by the standards. FIPS 203 (Table 3) gives ML-KEM-768 an encapsulation key of 1,184 bytes, a ciphertext of 1,088 bytes and a shared secret of 32 bytes. RFC 10024 (August 2026, formerly the IETF draft draft-ietf-tls-ecdhe-mlkem), sections 4.1 to 4.3, defines the TLS group with codepoint 4588 (0x11EC) and puts the ML-KEM part first:
+The sizes are fixed by the standards. FIPS 203 (Table 3) gives ML-KEM-768 an encapsulation key of 1,184 bytes, a ciphertext of 1,088 bytes and a shared secret of 32 bytes. RFC 10024 (August 2026, formerly the IETF draft draft-ietf-tls-ecdhe-mlkem) defines the TLS group in sections 4.1 to 4.3, registers it as codepoint 4588 (0x11EC) in section 7.1, and puts the ML-KEM part first:
 
 $$
 |\text{client share}| = 1184 + 32 = 1216 \text{ bytes}
@@ -91,7 +91,13 @@ The key share extension grows by 1,184 bytes, exactly the encapsulation key. The
 
 ### Time
 
-For handshake time, process start-up must stay out of the loop, so we wrote a small client in a scratch directory (not in the repository) with rustls 0.23.46 and aws-lc-rs. It pins the server's certificate but still verifies the handshake signature, turns resumption off, and alternates the two groups for 5,000 fresh connections each after 50 warm-up rounds. For each connection it records its own handshake time and the server's `tls;dur`.
+For handshake time, process start-up must stay out of the loop, so we wrote a small client with rustls 0.23.46 and aws-lc-rs: [`examples/handshakes.rs`](repo:crates/server/examples/handshakes.rs) in the server crate. It pins the certificate the server presents on its first connection but still verifies every handshake signature, turns resumption off, and alternates the two groups for 5,000 fresh connections each after 50 warm-up rounds. For each connection it records its own handshake time and the server's `tls;dur`.
+
+```sh title="A server to measure, then 5,000 handshakes per group"
+cargo run --release -p server -- --dist crates/server/tests/fixtures/dist --data-dir /tmp/mintaka-tls \
+    --listen 127.0.0.1:18880 --tls-self-signed --tls-listen 127.0.0.1:18843 &
+cargo run --release -p server --example handshakes -- 127.0.0.1:18843 5000
+```
 
 | Group | Client median | Client p99 | Server median | Server p99 |
 |---|---:|---:|---:|---:|
@@ -102,10 +108,10 @@ Table: 5,000 TLS 1.3 handshakes per group over loopback. The median paired diffe
 
 The same client counted 1,511 bytes written with the hybrid against 327 without (exactly 1,184 more) and 1,791 read against 703, which is the ServerHello's 1,088 (in the first run it was 1,086: an ECDSA signature's encoding varies by a byte or two between connections).
 
-We also timed 300 handshakes per offer with curl and `--curves`. There the server's median `tls;dur` was 1.288 ms with the hybrid, 1.171 ms with X25519 and 1.520 ms with the HelloRetryRequest, about five times the server-side time measured with the rustls client. Each curl process makes exactly one handshake, so most of that is probably per-process start-up in the client, which the server's clock includes because it waits for the client's Finished. The differences point the same way: the hybrid 0.12 ms above X25519, and the HelloRetryRequest another 0.23 ms above the hybrid, even though a loopback round trip is tens of microseconds.
+We also timed 300 handshakes per offer with curl and `--curves`. There the server's median `tls;dur` was 1.288 ms with the hybrid, 1.171 ms with X25519 and 1.520 ms with the HelloRetryRequest, about five times the server-side time measured with the rustls client. Each curl process makes exactly one handshake, so it handles our flight with cold caches and code it has not run before. That is probably most of the difference, and the server's clock includes it because it waits for the client's Finished. The differences point the same way: the hybrid 0.12 ms above X25519, and the HelloRetryRequest another 0.23 ms above the hybrid, even though a loopback round trip is tens of microseconds.
 
 ## What it means
 
-On this machine the hybrid costs about 0.04 ms and 2.3 kB per new connection. Next to a network round trip it is small: light in fibre needs at least 47.1 ms between Dushanbe and Frankfurt. Two things are worth watching instead. A 1,546-byte ClientHello no longer fits one 1,500-byte Ethernet packet, and some middleboxes fail on that ([tldr.fail](https://tldr.fail/) collects them; rustls's own manual warns about it). And a client that lists the hybrid first without sending its share pays a full extra round trip, which on a real network is far more than the 0.04 ms.
+On this machine the hybrid costs about 0.04 ms and 2.3 kB per new connection. Next to a network round trip it is small: light in fibre needs at least 47.1 ms for a round trip between Dushanbe and Frankfurt. Two things are worth watching instead. With the hybrid share, a ClientHello is about 1.5 kB (1,490 to 1,546 bytes in the table above), which with its record, TCP and IP headers no longer fits into one 1,500-byte Ethernet packet, and some middleboxes fail when it arrives in two ([tldr.fail](https://tldr.fail/) collects them; rustls's own manual warns about it). And a client that lists the hybrid first without sending its share pays a full extra round trip, which on a real network is far more than the 0.04 ms.
 
 What is still classical: the certificate and its ECDSA signature, and anything negotiated over TLS 1.2, which the server only allows behind `--tls12`. Hybrid key exchange protects recorded traffic; authentication can change when post-quantum certificates do.

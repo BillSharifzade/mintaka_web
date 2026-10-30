@@ -155,6 +155,7 @@ pub(crate) fn server_timing(
     tls_handshake: Option<Duration>,
     rtt: Option<TcpRtt>,
     quic_rtt: Option<Duration>,
+    edge: bool,
 ) -> Option<HeaderValue> {
     let mut s = String::with_capacity(128);
     s.push_str("app;dur=");
@@ -177,6 +178,10 @@ pub(crate) fn server_timing(
         s.push_str(", qrtt;dur=");
         push_ms(&mut s, micros(rtt));
         s.push_str(";desc=\"QUIC RTT\"");
+    }
+    if edge {
+        // No duration: a flag that the visitor's connection ended at a proxy in front of us.
+        s.push_str(", edge;desc=\"TLS at the hosting edge\"");
     }
     HeaderValue::try_from(s).ok()
 }
@@ -269,14 +274,17 @@ mod tests {
             Some(Duration::from_micros(1830)),
             Some(TcpRtt { rtt_us: 48210, rttvar_us: 1200 }),
             None,
+            false,
         )
         .unwrap();
         assert_eq!(
             v,
             "app;dur=0.021, route;dur=0.002, render;dur=0.003, tls;dur=1.83;desc=\"TLS handshake\", krtt;dur=48.21;desc=\"kernel RTT\""
         );
-        let quic = server_timing(Duration::from_micros(21), Duration::ZERO, Duration::ZERO, None, None, Some(Duration::from_micros(512)))
+        let quic = server_timing(Duration::from_micros(21), Duration::ZERO, Duration::ZERO, None, None, Some(Duration::from_micros(512)), false)
             .unwrap();
         assert_eq!(quic, "app;dur=0.021, route;dur=0, render;dur=0, qrtt;dur=0.512;desc=\"QUIC RTT\"");
+        let edge = server_timing(Duration::from_micros(21), Duration::ZERO, Duration::ZERO, None, None, None, true).unwrap();
+        assert_eq!(edge, "app;dur=0.021, route;dur=0, render;dur=0, edge;desc=\"TLS at the hosting edge\"");
     }
 }

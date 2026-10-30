@@ -53,9 +53,11 @@ async fn missing_files_and_wrong_versions_fail_fast() {
     let err = bind_error(missing_sibling).await;
     assert!(err.contains("favicon.svg.br"), "{err}");
 
-    let version = dist_with("version", |m| m["version"] = 2.into());
+    let next = proof::MANIFEST_VERSION + 1;
+    let version = dist_with("version", |m| m["version"] = next.into());
     let err = bind_error(version).await;
-    assert!(err.contains("manifest version 2") && err.contains("reads version 1"), "{err}");
+    let reads = format!("reads version {}", proof::MANIFEST_VERSION);
+    assert!(err.contains(&format!("manifest version {next}")) && err.contains(&reads), "{err}");
 
     let traversal = dist_with("traversal", |m| m["routes"][0]["file"] = "../../etc/passwd".into());
     let err = bind_error(traversal).await;

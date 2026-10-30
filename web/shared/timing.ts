@@ -1,4 +1,5 @@
 // What the browser measured about this page view. Everything here is read-only and local.
+import { at } from './base.ts';
 
 export function navEntry(): PerformanceNavigationTiming | undefined {
   return performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
@@ -73,7 +74,7 @@ export interface PingSample {
 
 /** One `GET /_ping` (204, no-store), timed by the browser's Resource Timing. */
 export async function ping(): Promise<PingSample> {
-  const url = new URL('/_ping', location.href).href;
+  const url = new URL(at('/_ping'), location.href).href;
   const t0 = performance.now();
   const res = await fetch(url, { cache: 'no-store' });
   await res.arrayBuffer();

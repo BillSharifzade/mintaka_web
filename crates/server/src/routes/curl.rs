@@ -34,6 +34,9 @@ pub(crate) fn is_cli_agent(headers: &HeaderMap) -> bool {
     })
 }
 
+/// The `tls` line behind a `--trusted-proxy`: the visitor's TLS ended there, out of our sight.
+const EDGE_TLS: &str = "terminated at the hosting edge (not visible to this server)";
+
 /// What a curl-mode path resolves to.
 pub(crate) enum Target<'a> {
     Text { lang: &'a str, template: &'a TextTemplate, negotiated: bool, key: &'static str },
@@ -97,7 +100,11 @@ pub(crate) fn respond(app: &AppState, req: &Request, target: &Target<'_>) -> Res
             (proof_text(&facts, &ctx).into_bytes(), None, "User-Agent")
         }
         Target::Text { lang, template, negotiated, .. } => {
-            let tls = ctx.conn.tls.as_ref().map_or_else(|| "plain HTTP (development)".to_owned(), |t| t.describe());
+            let tls = match (&ctx.conn.tls, ctx.edge) {
+                (Some(t), _) => t.describe(),
+                (None, Some(_)) => EDGE_TLS.to_owned(),
+                (None, None) => "plain HTTP (development)".to_owned(),
+            };
             let server_time = server_time(ctx.t0.elapsed());
             let body = template.render(&server_time, &tls, http_short(req.version()));
             (body, Some(*lang), if *negotiated { "Accept-Language, User-Agent" } else { "User-Agent" })
@@ -169,6 +176,7 @@ fn proof_text(p: &Proof, ctx: &ReqCtx) -> String {
                 line("handshake", STARLIGHT, &format!("{} (server side, includes one round trip)", ms(us)));
             }
         }
+        None if p.edge.is_some() => line("tls", STARLIGHT, EDGE_TLS),
         None => line("tls", RUST, "plain HTTP (development)"),
     }
     line("http", STARLIGHT, &p.http.version);

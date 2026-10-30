@@ -2,6 +2,7 @@
 //! the brand kit's SVG with resvg and drawn with half-block characters, so the terminal logo is
 //! the real logo. `{{tokens}}` are filled by the server per request (CONTRACTS §4.6).
 
+use crate::config::Contact;
 use crate::i18n::Strings;
 use anyhow::{Context, Result, anyhow};
 use std::fmt::Write as _;
@@ -120,23 +121,32 @@ pub struct Pages {
     pub contact: String,
 }
 
-pub fn pages(root: &Path, s: &Strings, host: &str, email: &str, telegram: &str) -> Result<Pages> {
+/// `host` is where the site is, without the scheme: `mintaka.tj`, or `host/prefix` under a URL
+/// prefix. `lang_path` is `/{lang}` for every language but the default one, so the `curl` hints
+/// keep the reader in their language (curl sends no `Accept-Language`). `/proof` has one language
+/// only.
+pub fn pages(root: &Path, s: &Strings, host: &str, lang_path: &str, contact: &Contact) -> Result<Pages> {
     let art = mark_ansi(root, 22)?;
     let (w, m, b, r) = (fg(STARLIGHT), fg(MIST), fg(BLUE), fg(RUST));
     let footer = format!(
-        "\n  {m}{} {w}{{{{server_time}}}}{m} · {{{{tls}}}} · {{{{http}}}} · 0 cookies{RESET}\n  {m}build {{{{build}}}}{RESET}\n\n",
-        s.t("curl-served")
+        "\n  {m}{} {w}{{{{server_time}}}}{m} · {{{{tls}}}} · {{{{http}}}} · {}{RESET}\n  {m}{} {{{{build}}}}{RESET}\n\n",
+        s.t("curl-served"),
+        s.t("curl-cookies"),
+        s.t("curl-build")
     );
     let pillar_rows = [
-        ("pillar-efficiency", "curl-fast", "pillars"),
-        ("pillar-security", "curl-secure", "proof"),
-        ("pillar-highload", "curl-scaled", "contact"),
-        ("pillar-design", "curl-intuitive", ""),
+        ("pillar-efficiency", "curl-fast", format!("{lang_path}/pillars")),
+        ("pillar-security", "curl-secure", "/proof".to_owned()),
+        ("pillar-highload", "curl-scaled", format!("{lang_path}/contact")),
+        ("pillar-design", "curl-intuitive", String::new()),
     ];
     let mut index = format!("\n{art}\n  {BOLD}{w}mintaka{RESET}{m} — {}{RESET}\n  {m}{}{RESET}\n\n", s.t("curl-tagline"), s.t("curl-sub"));
-    for (name, line, path) in pillar_rows {
-        let hint = if path.is_empty() { String::new() } else { format!("{b}curl {host}/{path}{RESET}") };
-        let _ = writeln!(index, "  {w}{:<24}{m}{:<26}{RESET}{hint}", s.t(name).to_lowercase(), s.t(line));
+    // Columns fit the longest name and line of this language (24 and 26 in English).
+    let name_w = pillar_rows.iter().map(|(name, _, _)| s.t(name).chars().count()).max().unwrap_or(0) + 2;
+    let line_w = pillar_rows.iter().map(|(_, line, _)| s.t(line).chars().count()).max().unwrap_or(0) + 3;
+    for (name, line, path) in &pillar_rows {
+        let hint = if path.is_empty() { String::new() } else { format!("{b}curl {host}{path}{RESET}") };
+        let _ = writeln!(index, "  {w}{:<name_w$}{m}{:<line_w$}{RESET}{hint}", s.t(name).to_lowercase(), s.t(line));
     }
     index.push_str(&footer);
 
@@ -151,9 +161,13 @@ pub fn pages(root: &Path, s: &Strings, host: &str, email: &str, telegram: &str) 
     }
     pillars.push_str(&footer);
 
-    let contact = format!(
-        "\n  {BOLD}{w}{}{RESET}\n\n  {m}email    {RESET}{b}{email}{RESET}\n  {m}telegram {RESET}{b}@{telegram}{RESET}\n  {m}web      {RESET}{b}https://{host}/#contact{RESET}\n{footer}",
-        s.t("ct-title")
-    );
+    let telegram = if contact.telegram.is_empty() { String::new() } else { format!("@{}", contact.telegram) };
+    let mut direct = String::new();
+    for (label, value) in [("email", contact.email.as_str()), ("telegram", telegram.as_str()), ("phone", contact.phone.as_str())] {
+        if !value.is_empty() {
+            let _ = writeln!(direct, "  {m}{label:<9}{RESET}{b}{value}{RESET}");
+        }
+    }
+    let contact = format!("\n  {BOLD}{w}{}{RESET}\n\n{direct}  {m}web      {RESET}{b}https://{host}{lang_path}/#contact{RESET}\n{footer}", s.t("ct-title"));
     Ok(Pages { index, pillars, contact })
 }

@@ -1,22 +1,28 @@
 // The `~` terminal: a real modal <dialog> with a prompt and a polite live log. Every answer comes
-// from this page view: the browser's own measurements, /_proof and /_ping. Loaded on first use.
+// from this page view: the browser's own measurements, /_proof and /_ping. Loaded on first use,
+// with its text (a lazy string bundle, content/{lang}/islands/lazy/terminal.ftl).
 
 import { $, $$, h, render } from '../shared/dom.ts';
-import { lang, t, tp } from '../shared/i18n.ts';
+import { lang, loadStrings, t, tp } from '../shared/i18n.ts';
 import { emit, lastValue, on } from '../shared/bus.ts';
 import { getProof } from '../shared/proof.ts';
 import { connectionReused, navEntry, ping, serverTiming } from '../shared/timing.ts';
-import { duration, join } from '../shared/format.ts';
+import { duration, join, unit } from '../shared/format.ts';
 import { offline, reducedMotion } from '../shared/env.ts';
 import { track } from '../shared/rum.ts';
 import { browser, complete, flatten, hops, parse, platform, stats, table } from './lib.ts';
+import { at } from '../shared/base.ts';
 
 const T = (key: string, vars?: Record<string, string | number>): string => t('terminal-' + key, vars);
 const TP = (key: string, n: number, vars?: Record<string, string | number>): string => tp('terminal-' + key, n, vars);
 const PINGS = 10;
 const PS1 = 'mintaka:~$';
 const L = lang();
-const fmt = (ms: number | undefined) => (ms === undefined ? '—' : join(duration(ms, L)).replace(/^0 µs$/, '0 ms'));
+const fmt = (ms: number | undefined): string => {
+  if (ms === undefined) return '—';
+  const f = duration(ms, L);
+  return f.value === '0' && f.unit === unit('µs', L) ? `0 ${unit('ms', L)}` : join(f);
+};
 const reason = (err: unknown) => (err instanceof Error ? err.message : String(err));
 /** A failed command: offline says so instead of the browser's network error. */
 const failed = (err: unknown) => (offline() ? T('offline') : T('error', { reason: reason(err) }));
@@ -29,6 +35,7 @@ let restore = true;
 const history: string[] = [];
 let cursor = 0; // index into history; history.length means the line being typed
 let draft = '';
+let welcomed = false;
 /** Where a command prints: its own block, reserved under its prompt line when it was entered. */
 type Out = (text: string) => void;
 
@@ -49,8 +56,15 @@ const COMMANDS: Record<string, (arg: string, out: Out) => unknown> = {
 };
 
 /** Open the terminal (idempotent); focus returns to whatever opened it. */
-export function open(): void {
+export async function open(): Promise<void> {
+  const text = await loadStrings('terminal');
   dialog ??= build();
+  if (!welcomed) {
+    // Without its text (offline before it was ever fetched) the terminal says so and tries again
+    // on the next opening.
+    welcomed = text;
+    print(text ? T('welcome') : offline() ? t('offline-island') : T('error', { reason: 'strings/terminal' }));
+  }
   if (!dialog.open) {
     track('terminal_open');
     opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -94,7 +108,6 @@ function build(): HTMLDialogElement {
   );
   d.addEventListener('close', () => restore && opener?.focus());
   document.body.append(d);
-  print(T('welcome'));
   return d;
 }
 
@@ -214,7 +227,7 @@ function language(arg: string, out: Out): void {
   if (code && all.includes(code)) {
     out(T('lang-go', { code }));
     track('lang_switch');
-    return location.assign(`/${code}/`);
+    return location.assign(at(`/${code}/`));
   }
   out(T(code ? 'lang-unknown' : 'lang-list', { code, list: all.join(', ') || L }));
 }
