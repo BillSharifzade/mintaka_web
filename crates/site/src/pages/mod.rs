@@ -2,6 +2,7 @@
 
 pub mod home;
 pub mod lab;
+pub mod landing;
 pub mod misc;
 pub mod svg;
 

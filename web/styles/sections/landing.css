@@ -1,0 +1,604 @@
+/* The studio landing page. One layer, flat specificity, prefixed `lp-`/component classes so
+   nothing here collides with the lab. Depth comes from lightness, never shadows (spec §8). */
+@layer studio {
+  .lp-sprite {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+  }
+
+  /* ---- Shell ------------------------------------------------------------------------------ */
+  .lp-wrap {
+    width: 100%;
+    max-width: var(--max);
+    margin-inline: auto;
+    padding-inline: var(--gutter);
+  }
+
+  .lp-skip {
+    position: fixed;
+    top: var(--s-2);
+    left: var(--s-2);
+    z-index: var(--z-dialog);
+    padding: var(--s-2) var(--s-4);
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-control);
+    transform: translateY(-150%);
+  }
+  .lp-skip:focus {
+    transform: none;
+  }
+
+  /* ---- Header ----------------------------------------------------------------------------- */
+  .lp-header {
+    position: sticky;
+    top: 0;
+    z-index: var(--z-header);
+    background: color-mix(in oklab, var(--void) 86%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+  }
+  .lp-header__inner {
+    display: flex;
+    align-items: center;
+    gap: var(--s-4);
+    min-height: var(--header-h);
+  }
+  .lp-logo {
+    display: inline-flex;
+    align-items: center;
+    margin-inline-end: auto;
+  }
+  .lp-logo svg {
+    height: 1.5rem;
+    width: auto;
+  }
+  .lp-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--s-5);
+    font-size: var(--fs-sm);
+  }
+  .lp-nav a {
+    color: var(--text-2);
+    text-decoration: none;
+  }
+  .lp-nav a:hover {
+    color: var(--text);
+  }
+  .lp-lang {
+    display: flex;
+    gap: var(--s-3);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+  }
+  .lp-lang a {
+    color: var(--text-2);
+    text-decoration: none;
+  }
+  .lp-lang a[aria-current="page"] {
+    color: var(--text);
+  }
+  .lp-lang a:hover {
+    color: var(--link-hover);
+  }
+
+  /* ---- Buttons ---------------------------------------------------------------------------- */
+  .btn {
+    --_bg: transparent;
+    --_fg: var(--text);
+    --_bd: var(--border-strong);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-2);
+    min-height: var(--tap);
+    padding: 0 var(--s-5);
+    border: 1px solid var(--_bd);
+    border-radius: var(--r-control);
+    background: var(--_bg);
+    color: var(--_fg);
+    font-weight: 500;
+    font-size: var(--fs-sm);
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background var(--t-micro) var(--ease-enter), border-color var(--t-micro) var(--ease-enter), transform var(--t-micro) var(--ease-enter);
+  }
+  .btn:hover {
+    color: var(--_fg);
+  }
+  .btn:active {
+    transform: translateY(1px);
+  }
+  .btn--cta {
+    --_bg: var(--cta-bg);
+    --_fg: var(--cta-text);
+    --_bd: var(--cta-bg);
+    font-weight: 600;
+  }
+  .btn--cta:hover {
+    --_bg: var(--cta-hover);
+    --_bd: var(--cta-hover);
+  }
+  .btn--ghost:hover {
+    --_bd: var(--steel);
+    --_bg: color-mix(in oklab, var(--starlight) 5%, transparent);
+  }
+  .btn--sm {
+    min-height: 2.25rem;
+    padding-inline: var(--s-4);
+    font-size: var(--fs-xs);
+  }
+  .btn--lg {
+    min-height: 3.25rem;
+    padding-inline: var(--s-6);
+    font-size: var(--fs-md);
+  }
+  .arrow {
+    width: 0.85em;
+    height: 0.85em;
+    flex: none;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: transform var(--t-micro) var(--ease-enter);
+  }
+  a:hover > .arrow,
+  .btn:hover > .arrow {
+    transform: translate(1px, -1px);
+  }
+
+  /* ---- Shared section rhythm -------------------------------------------------------------- */
+  .lp-section {
+    padding-block: var(--section-y);
+    border-top: 1px solid var(--border);
+  }
+  .lp-eyebrow {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    font-weight: 400;
+    letter-spacing: var(--track-eyebrow);
+    text-transform: uppercase;
+    color: var(--link);
+    margin: 0;
+  }
+  .lp-h2 {
+    font-size: var(--fs-h2);
+    letter-spacing: var(--track-heading);
+    max-width: 20ch;
+    margin-block: var(--s-3) 0;
+  }
+  .lp-lead {
+    color: var(--text-2);
+    font-size: var(--fs-lg);
+    line-height: var(--lh-body);
+    max-width: 52ch;
+    margin-block-start: var(--s-4);
+  }
+
+  /* ---- Hero ------------------------------------------------------------------------------- */
+  .lp-hero {
+    padding-block: clamp(var(--s-8), 12vh, var(--s-10)) var(--section-y);
+  }
+  .lp-hero__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+    gap: clamp(var(--s-6), 5vw, var(--s-9));
+    align-items: center;
+  }
+  .lp-h1 {
+    font-size: var(--fs-h1);
+    line-height: var(--lh-display);
+    letter-spacing: var(--track-display);
+    margin-block: var(--s-4) 0;
+    max-width: 14ch;
+  }
+  .lp-hero__lead {
+    color: var(--text-2);
+    font-size: var(--fs-lg);
+    max-width: 46ch;
+    margin-block-start: var(--s-5);
+  }
+  .lp-cta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-3);
+    margin-block-start: var(--s-7);
+  }
+
+  /* The belt figure: the hero signature. Three stars of Orion's Belt, from real coordinates. */
+  .belt {
+    position: relative;
+    display: grid;
+    gap: var(--s-5);
+    padding: var(--s-6);
+    border: 1px solid var(--border);
+    border-radius: var(--r-tile);
+    background:
+      radial-gradient(120% 90% at 78% 18%, color-mix(in oklab, var(--mintaka) 11%, transparent), transparent 60%),
+      var(--surface);
+  }
+  .belt__fig {
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+  .belt__line {
+    fill: none;
+    stroke: var(--mintaka);
+    stroke-width: 1.5;
+    stroke-dasharray: 3 5;
+    stroke-linecap: round;
+    opacity: 0.8;
+  }
+  .belt__dot {
+    fill: var(--starlight);
+  }
+  .belt__dot--mintaka {
+    fill: var(--sky);
+  }
+  .belt__halo {
+    fill: var(--mintaka);
+    opacity: 0.25;
+  }
+  .belt__caption {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-1);
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--text-2);
+  }
+  .belt__caption b {
+    font-weight: 400;
+    color: var(--text-2);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+  }
+  .belt__label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    fill: var(--text-2);
+    text-anchor: middle;
+    letter-spacing: 0.04em;
+  }
+  .belt__label--mintaka {
+    fill: var(--sky);
+  }
+
+  /* ---- Pillars ---------------------------------------------------------------------------- */
+  .pillars {
+    display: grid;
+    gap: 0;
+    margin-block-start: var(--s-7);
+  }
+  .pillar {
+    display: grid;
+    grid-template-columns: minmax(0, 9rem) minmax(0, 1fr) auto;
+    align-items: baseline;
+    gap: var(--s-4) var(--s-6);
+    padding-block: var(--s-5);
+    border-top: 1px solid var(--border);
+    transition: border-color var(--t-ui) var(--ease-enter);
+  }
+  .pillar:last-child {
+    border-bottom: 1px solid var(--border);
+  }
+  .pillar:hover {
+    border-top-color: var(--border-strong);
+  }
+  .pillar__name {
+    font-size: var(--fs-xl);
+    font-weight: 500;
+    letter-spacing: var(--track-heading);
+  }
+  .pillar__desc {
+    color: var(--text-2);
+    max-width: 52ch;
+  }
+  .pillar__proof {
+    display: block;
+    margin-block-start: var(--s-3);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--text-2);
+  }
+  .pillar__proof::before {
+    content: "";
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-inline-end: 0.5em;
+    border-radius: 50%;
+    background: var(--success);
+    vertical-align: middle;
+  }
+  .pillar__link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-2);
+    font-size: var(--fs-sm);
+    text-decoration: none;
+    color: var(--link);
+    white-space: nowrap;
+  }
+  .pillar__link:hover {
+    color: var(--link-hover);
+  }
+
+  /* ---- Method: the three belt stars ------------------------------------------------------- */
+  .method__belt {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--s-6);
+    margin-block-start: var(--s-8);
+    position: relative;
+  }
+  /* The dashed belt line behind the three nodes. */
+  .method__belt::before {
+    content: "";
+    position: absolute;
+    top: 0.5rem;
+    left: 8%;
+    right: 8%;
+    height: 0;
+    border-top: 1.5px dashed color-mix(in oklab, var(--mintaka) 70%, transparent);
+  }
+  .step {
+    position: relative;
+    padding-block-start: var(--s-6);
+  }
+  .step__node {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 50%;
+    background: var(--starlight);
+    outline: 4px solid var(--void);
+  }
+  .step--accent .step__node {
+    background: var(--sky);
+    box-shadow: 0 0 0 4px color-mix(in oklab, var(--mintaka) 35%, transparent);
+  }
+  .step__index {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--text-2);
+  }
+  .step--accent .step__index {
+    color: var(--sky);
+  }
+  .step__title {
+    font-size: var(--fs-xl);
+    font-weight: 500;
+    margin-block: var(--s-2) var(--s-3);
+  }
+  .step__desc {
+    color: var(--text-2);
+    max-width: 34ch;
+  }
+  .step__coord {
+    display: block;
+    margin-block-start: var(--s-3);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--text-2);
+  }
+
+  /* ---- Lab call-out ----------------------------------------------------------------------- */
+  .lab-cta {
+    display: grid;
+    gap: var(--s-5);
+    padding: clamp(var(--s-7), 6vw, var(--s-9));
+    border: 1px solid var(--border);
+    border-radius: var(--r-tile);
+    background:
+      radial-gradient(90% 120% at 100% 0%, color-mix(in oklab, var(--mintaka) 13%, transparent), transparent 55%),
+      var(--surface);
+  }
+  .lab-cta__title {
+    font-size: var(--fs-h2);
+    max-width: 16ch;
+  }
+  .lab-cta__body {
+    color: var(--text-2);
+    font-size: var(--fs-lg);
+    max-width: 54ch;
+  }
+
+  /* ---- Contact ---------------------------------------------------------------------------- */
+  .contact__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr);
+    gap: clamp(var(--s-6), 5vw, var(--s-9));
+    align-items: end;
+    margin-block-start: var(--s-6);
+  }
+  .contact__body {
+    color: var(--text-2);
+    font-size: var(--fs-lg);
+    max-width: 48ch;
+  }
+  .contact__actions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--s-5);
+  }
+  .contact__direct {
+    font-family: var(--font-mono);
+    font-size: var(--fs-sm);
+  }
+  .contact__direct span {
+    display: block;
+    color: var(--text-2);
+    font-size: var(--fs-xs);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    margin-block-end: var(--s-2);
+  }
+
+  /* ---- Footer ----------------------------------------------------------------------------- */
+  .lp-footer {
+    border-top: 1px solid var(--border);
+    padding-block: var(--s-8);
+    color: var(--text-2);
+  }
+  .lp-footer__top {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: var(--s-6);
+  }
+  .lp-footer__brand svg {
+    height: 1.4rem;
+    width: auto;
+  }
+  .lp-footer__tag {
+    margin-block-start: var(--s-3);
+    color: var(--text-2);
+  }
+  .lp-footer__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-5);
+    font-size: var(--fs-sm);
+  }
+  .lp-footer__links a {
+    color: var(--text-2);
+    text-decoration: none;
+  }
+  .lp-footer__links a:hover {
+    color: var(--text);
+  }
+  .lp-footer__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-2) var(--s-5);
+    align-items: baseline;
+    margin-block-start: var(--s-6);
+    padding-block-start: var(--s-5);
+    border-top: 1px solid var(--border);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+  }
+  .lp-footer__note {
+    max-width: 60ch;
+    color: var(--text-2);
+  }
+  .lp-footer__build {
+    margin-inline-start: auto;
+    color: var(--text-2);
+  }
+  /* Shown only on narrow screens, where the header drops its nav. */
+  .lp-footer__lang {
+    display: none;
+    gap: var(--s-4);
+    margin-block-start: var(--s-5);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+  }
+  .lp-footer__lang a {
+    color: var(--text-2);
+    text-decoration: none;
+  }
+  .lp-footer__lang a[aria-current="page"] {
+    color: var(--text);
+  }
+
+  /* ---- Responsive ------------------------------------------------------------------------- */
+  @media (max-width: 60rem) {
+    .lp-hero__grid,
+    .contact__grid {
+      grid-template-columns: 1fr;
+    }
+    .lp-hero__grid {
+      gap: var(--s-7);
+    }
+    .belt {
+      order: -1;
+    }
+  }
+  @media (max-width: 44rem) {
+    /* The header keeps only the logo and the one action; the lab link lives in the hero and
+       footer, and the language switch moves into the footer. */
+    .lp-nav {
+      display: none;
+    }
+    .lp-footer__lang {
+      display: flex;
+    }
+    .pillar {
+      grid-template-columns: 1fr;
+      gap: var(--s-2);
+    }
+    .pillar__link {
+      margin-block-start: var(--s-2);
+    }
+    .method__belt {
+      grid-template-columns: 1fr;
+      gap: var(--s-7);
+    }
+    .method__belt::before {
+      display: none;
+    }
+  }
+
+  /* ---- Motion: one orchestrated load, then rest ------------------------------------------- */
+  @media (prefers-reduced-motion: no-preference) {
+    .lp-reveal {
+      opacity: 0;
+      animation: lp-rise var(--t-reveal) var(--ease-enter) forwards;
+      animation-delay: var(--lp-delay, 0ms);
+    }
+    /* Stagger without inline styles (the CSP forbids style attributes). */
+    .lp-reveal--1 { --lp-delay: 60ms; }
+    .lp-reveal--2 { --lp-delay: 140ms; }
+    .lp-reveal--3 { --lp-delay: 220ms; }
+    .lp-reveal--4 { --lp-delay: 320ms; }
+    .belt__line {
+      opacity: 0;
+      animation: lp-fade 0.8s var(--ease-enter) 0.15s forwards;
+    }
+    /* Scale-in, not opacity-in: the resting state stays visible even if the animation is
+       interrupted (a captured frame, a stalled load). */
+    .belt__star {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: lp-pop 0.5s var(--ease-enter) backwards;
+    }
+    .belt__star--1 { animation-delay: 0.5s; }
+    .belt__star--2 { animation-delay: 0.75s; }
+    .belt__star--3 { animation-delay: 1s; }
+    .belt__halo {
+      animation: lp-glow 4s ease-in-out 1.3s infinite;
+    }
+  }
+  @keyframes lp-rise {
+    from { opacity: 0; transform: translateY(0.6rem); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes lp-fade {
+    to { opacity: 0.8; }
+  }
+  @keyframes lp-pop {
+    from { opacity: 0.2; transform: scale(0.3); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes lp-glow {
+    0%, 100% { opacity: 0.18; }
+    50% { opacity: 0.4; }
+  }
+}

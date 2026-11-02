@@ -450,3 +450,51 @@ ft-terminal = Open the terminal
 ft-shortcuts = Keyboard shortcuts
 ft-shortcuts-keys = ~ terminal · P proof console
 ft-copyright = © { $year } Mintaka
+
+## Landing page (the studio's front door at /{lang}/studio/; the lab stays at /{lang}/).
+## Reuses hero-eyebrow, hero-title, nav-cta, nav-efficiency/-security/-highload/-design,
+## skip-link, lang-*, ft-made, ft-copyright, ft-tagline, ft-privacy, ft-security.
+
+landing-meta-title = Mintaka — a Rust-first software studio
+landing-meta-description = A software studio from Dushanbe. Fast by proof, secure by attack, scaled to the metal, intuitive by experiment — with a lab that measures every claim, so you need not trust ours.
+landing-to-lab = The lab
+
+landing-hero-lead = We build fast, secure, high-load software — and a studio that proves it. Every promise on this page is measured next door, in a lab you can attack yourself.
+landing-hero-lab = See the proof
+
+landing-pillars-eyebrow = What we do
+landing-pillars-title = Four promises, each with a number behind it.
+landing-pillars-lead = Adjectives are cheap. Here is the evidence — and a door to where we prove it.
+landing-pillar-link = See it in the lab
+
+landing-eff-desc = Rust to the metal. We profile until the hot path is the hardware's limit, not ours.
+landing-eff-proof = app response, p99 under 50 µs
+landing-sec-desc = Zero third-party requests, zero cookies, a strict policy the browser enforces — and a penetration test we ran on ourselves.
+landing-sec-proof = 0 trackers · 0 cookies
+landing-high-desc = Built for the busy hour. We load-test to the point of pain, then engineer past it.
+landing-high-proof = 4,000 requests a second on two cores
+landing-des-desc = Accessible, measured, fast on a cheap phone and a slow network. Speed is how good it feels.
+landing-des-proof = WCAG 2.2 AA · first screen under 14 kB
+
+landing-method-eyebrow = How we work
+landing-method-title = Measure. Build. Prove.
+landing-method-lead = The three stars of Orion's Belt — and the three steps every project passes through.
+landing-measure-title = Measure
+landing-measure-desc = We start with numbers: budgets, baselines, and the physics of the problem.
+landing-build-title = Build
+landing-build-desc = Rust, no shortcuts — reviewed, tested and benchmarked as it grows.
+landing-prove-title = Prove
+landing-prove-desc = We attack it, measure it, and show the receipts. Only then does it ship.
+
+landing-lab-eyebrow = Proof, not promises
+landing-lab-title = Don't take our word for it.
+landing-lab-body = Our lab is a live engineering notebook: a page that measures itself, invites you to attack it, and shows the physics underneath. It is built exactly the way we build for you.
+landing-lab-cta = Open the lab
+
+landing-contact-eyebrow = Start a project
+landing-contact-title = Tell us what you're building.
+landing-contact-body = A short brief is enough. We reply within { $within }. Briefs are encrypted end to end — only our team can read them.
+landing-contact-cta = Write a brief
+landing-contact-direct = Or reach us directly
+
+landing-footer-note = This page runs no JavaScript — dark by design, and built to stay fast on the worst connection you have.

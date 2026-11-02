@@ -81,6 +81,10 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
     // Lab pages inline the long-form stylesheet instead (no hero, instruments or contact form).
     let lab_css = format!("{}{}", css::bundle(&root.join("web/styles/lab.css"))?, css::minify(&fonts.css)?);
     let lab_style_hash = util::csp_hash(lab_css.as_bytes());
+    // The studio landing page inlines its own lean stylesheet (no hero, instruments, islands or
+    // JavaScript), allowed by its own CSP hash.
+    let landing_css = format!("{}{}", css::bundle(&root.join("web/styles/landing.css"))?, css::minify(&fonts.css)?);
+    let landing_style_hash = util::csp_hash(landing_css.as_bytes());
 
     // Lab posts (spec §S11), rendered first: they are part of the build fingerprint.
     let mut lab_posts = BTreeMap::new();
@@ -129,6 +133,7 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
     }
     fingerprint.extend(std::fs::read(root.join("content/site.toml")).unwrap_or_default());
     fingerprint.extend(lab_css.as_bytes());
+    fingerprint.extend(landing_css.as_bytes());
     for post in lab_posts.values().flatten() {
         fingerprint.extend(post.html.as_bytes());
     }
@@ -203,6 +208,7 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
     let mut not_found = BTreeMap::new();
     let host = format!("{}{}", cfg.origin.trim_start_matches("https://").trim_start_matches("http://"), cfg.base);
     let mut lab_pages: Vec<(String, String)> = vec![];
+    let mut landing_pages: Vec<(String, String)> = vec![];
 
     let mut people = vec![];
     for lang in &cfg.langs {
@@ -290,6 +296,27 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
         dist.write(&format!("{lang}/404.html"), html.as_bytes())?;
         not_found.insert(lang.clone(), format!("{lang}/404.html"));
 
+        // The studio landing page (/{lang}/studio/): a lean, no-JavaScript front door that links
+        // to the lab. Its own document and stylesheet, so none of the lab's chrome comes with it.
+        // Rendered after the `page` closure's last use above, which holds `gaps` until then.
+        let landing = pages::landing::Landing {
+            cfg: &cfg,
+            s: &s,
+            lang,
+            build: &build,
+            year: today.0,
+            logo: &logo,
+            sprite: &sprite,
+            font_preloads: fonts.preloads_for(lang).collect(),
+            css: &landing_css,
+        };
+        let landing_html = pages::landing::page(&landing).into_string();
+        for c in fonts.uncovered(&landing_html) {
+            gaps.entry(c).or_default().insert(format!("/{lang}/studio/"));
+        }
+        dist.add(&format!("/{lang}/studio/"), &format!("{lang}/studio/index.html"), landing_html.as_bytes(), HTML, CachePolicy::Document, RouteKind::Page, Some(lang))?;
+        landing_pages.push((format!("/{lang}/studio/"), landing_html));
+
         // The Lab (spec §S11): long-form pages with no JavaScript, and the Atom feed. Their
         // glyphs and the no-script rule are checked after the loop.
         for (path, html) in pages::lab::pages(&ctx, &lab_posts, &lab_css) {
@@ -340,7 +367,7 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
     let short = |d: &mut Dist, url: &str, body: String, ct: &str| d.add(url, url.trim_start_matches('/'), body.as_bytes(), ct, CachePolicy::Short, RouteKind::File, None);
     short(&mut dist, "/robots.txt", well_known::robots(&cfg), content_type_for("txt"))?;
     short(&mut dist, "/humans.txt", well_known::humans(&cfg, &date, &people), content_type_for("txt"))?;
-    short(&mut dist, "/sitemap.xml", well_known::sitemap(&cfg, &["/", "/privacy/"], &lab_urls, &date), content_type_for("xml"))?;
+    short(&mut dist, "/sitemap.xml", well_known::sitemap(&cfg, &["/", "/studio/", "/privacy/"], &lab_urls, &date), content_type_for("xml"))?;
     short(&mut dist, "/.well-known/security.txt", well_known::security_txt(&cfg, days), content_type_for("txt"))?;
     short(&mut dist, "/manifest.webmanifest", well_known::webmanifest(&cfg), content_type_for("webmanifest"))?;
 
@@ -400,6 +427,16 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
     }
     if !lab_pages.is_empty() {
         budget.add("inline Lab CSS (minified)", lab_css.len() as u64, None);
+    }
+    // The studio landing page: the same first-round-trip rule (header + hero) and the whole-page
+    // cap. No JavaScript, so there is nothing more to a first view than the page and its fonts.
+    for (path, html) in &landing_pages {
+        let cut = html.find(r#"<section class="lp-section"#).unwrap_or(html.len());
+        budget.add(format!("{path} first screen (brotli)"), assets::brotli(&html.as_bytes()[..cut])?.len() as u64, Some(14_000));
+        budget.add(format!("{path} whole page (brotli)"), route_size(&dist, path), Some(32_000));
+    }
+    if !landing_pages.is_empty() {
+        budget.add("inline landing CSS (minified)", landing_css.len() as u64, None);
     }
     for lang in lab_posts.iter().filter(|(_, posts)| !posts.is_empty()).map(|(lang, _)| lang) {
         budget.add(format!("{} (brotli)", lab::feed_path(lang)), route_size(&dist, &lab::feed_path(lang)), Some(64_000));
@@ -491,7 +528,13 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
 
     // Every inline stylesheet of every page — each A/B test variant and each 404 page too — is
     // one the CSP allows.
-    let style_src = if lab_pages.is_empty() { vec![style_hash] } else { vec![style_hash, lab_style_hash] };
+    let mut style_src = vec![style_hash];
+    if !lab_pages.is_empty() {
+        style_src.push(lab_style_hash);
+    }
+    if !landing_pages.is_empty() {
+        style_src.push(landing_style_hash);
+    }
     let html_files = dist.routes.iter().filter(|r| r.content_type == HTML).flat_map(|r| std::iter::once(&r.file).chain(r.variants.iter().map(|v| &v.file)));
     for file in html_files.chain(not_found.values()) {
         let html = std::fs::read_to_string(dist.dir.join(file))?;
