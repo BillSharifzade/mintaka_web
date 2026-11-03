@@ -498,3 +498,4 @@ landing-contact-cta = Write a brief
 landing-contact-direct = Or reach us directly
 
 landing-footer-note = This page runs no JavaScript — dark by design, and built to stay fast on the worst connection you have.
+landing-sky-label = The constellation Orion, drawn from real sky coordinates — with Mintaka, the studio's star, alight at the western end of the Belt.

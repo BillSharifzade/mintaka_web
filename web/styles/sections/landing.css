@@ -1,5 +1,29 @@
-/* The studio landing page. One layer, flat specificity, prefixed `lp-`/component classes so
-   nothing here collides with the lab. Depth comes from lightness, never shadows (spec §8). */
+/* The studio landing page. One layer, flat specificity, prefixed `lp-`/`o-`/component classes so
+   nothing here collides with the lab. Depth comes from lightness and from emitted light (glows),
+   never from drop-shadows used as elevation (spec §8). Everything moves with CSS alone: a single
+   orchestrated load, then ambient rest, with scroll-linked reveals where the browser supports
+   them. All motion is gated on `prefers-reduced-motion`, and every animated element rests in its
+   final, visible state so a still capture — or a browser without scroll timelines — shows the
+   finished page. */
+
+/* Animatable custom properties (typed, so they can tween). */
+@property --o-glow {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0.5;
+}
+
+/* Smooth cross-document fades between languages and into the lab. Progressive: ignored where
+   unsupported, and the reduced-motion rule below opts out. */
+@view-transition {
+  navigation: auto;
+}
+@media (prefers-reduced-motion: reduce) {
+  @view-transition {
+    navigation: none;
+  }
+}
+
 @layer studio {
   .lp-sprite {
     position: absolute;
@@ -8,12 +32,60 @@
     overflow: hidden;
   }
 
+  /* ---- Deep-space backdrop ---------------------------------------------------------------- */
+  /* One fixed layer behind the whole page: nebula blooms + a tiled star field, strongest under
+     the hero and faded out down the page so the lower sections stay calm and legible. */
+  .lp-sky {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(130% 80% at 74% 6%, color-mix(in oklab, var(--mintaka) 20%, transparent), transparent 52%),
+      radial-gradient(90% 70% at 16% 0%, color-mix(in oklab, var(--betelgeuse) 10%, transparent), transparent 46%),
+      radial-gradient(150% 130% at 50% -16%, #0b1222, transparent 60%);
+    -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 38%, transparent 94%);
+    mask-image: linear-gradient(to bottom, #000 0, #000 38%, transparent 94%);
+  }
+  .lp-sky::before,
+  .lp-sky::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+  }
+  /* Faint distant stars: four offset dots tiled, two tile sizes for an irregular field. */
+  .lp-sky::before {
+    background-image:
+      radial-gradient(1.4px 1.4px at 24px 32px, #fff, transparent),
+      radial-gradient(1px 1px at 92px 128px, color-mix(in oklab, var(--sky) 70%, #fff), transparent),
+      radial-gradient(1px 1px at 164px 54px, #fff, transparent),
+      radial-gradient(1.2px 1.2px at 210px 170px, color-mix(in oklab, var(--mist) 80%, #fff), transparent);
+    background-size: 240px 240px;
+    opacity: 0.5;
+  }
+  /* A sparser, brighter layer that twinkles. */
+  .lp-sky::after {
+    background-image:
+      radial-gradient(1.6px 1.6px at 60px 180px, #fff, transparent),
+      radial-gradient(1.8px 1.8px at 320px 80px, color-mix(in oklab, var(--sky) 60%, #fff), transparent),
+      radial-gradient(1.4px 1.4px at 440px 260px, #fff, transparent);
+    background-size: 520px 360px;
+    opacity: 0.4;
+  }
+
   /* ---- Shell ------------------------------------------------------------------------------ */
   .lp-wrap {
     width: 100%;
     max-width: var(--max);
     margin-inline: auto;
     padding-inline: var(--gutter);
+  }
+  /* Everything readable sits above the backdrop. */
+  .lp-header,
+  main,
+  .lp-footer {
+    position: relative;
+    z-index: var(--z-content);
   }
 
   .lp-skip {
@@ -36,9 +108,9 @@
     position: sticky;
     top: 0;
     z-index: var(--z-header);
-    background: color-mix(in oklab, var(--void) 86%, transparent);
-    backdrop-filter: blur(10px);
-    border-bottom: 1px solid var(--border);
+    background: color-mix(in oklab, var(--void) 72%, transparent);
+    backdrop-filter: blur(14px) saturate(1.2);
+    border-bottom: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
   }
   .lp-header__inner {
     display: flex;
@@ -61,11 +133,11 @@
     gap: var(--s-5);
     font-size: var(--fs-sm);
   }
-  .lp-nav a {
+  .lp-nav > a {
     color: var(--text-2);
     text-decoration: none;
   }
-  .lp-nav a:hover {
+  .lp-nav > a:hover {
     color: var(--text);
   }
   .lp-lang {
@@ -92,8 +164,10 @@
     --_bg: transparent;
     --_fg: var(--text);
     --_bd: var(--border-strong);
+    position: relative;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: var(--s-2);
     min-height: var(--tap);
     padding: 0 var(--s-5);
@@ -105,10 +179,11 @@
     font-size: var(--fs-sm);
     text-decoration: none;
     white-space: nowrap;
-    transition: background var(--t-micro) var(--ease-enter), border-color var(--t-micro) var(--ease-enter), transform var(--t-micro) var(--ease-enter);
-  }
-  .btn:hover {
-    color: var(--_fg);
+    transition:
+      background var(--t-ui) var(--ease-enter),
+      border-color var(--t-ui) var(--ease-enter),
+      box-shadow var(--t-ui) var(--ease-enter),
+      transform var(--t-micro) var(--ease-enter);
   }
   .btn:active {
     transform: translateY(1px);
@@ -122,10 +197,16 @@
   .btn--cta:hover {
     --_bg: var(--cta-hover);
     --_bd: var(--cta-hover);
+    box-shadow: 0 0 2.6rem -0.5rem color-mix(in oklab, var(--cta-bg) 85%, transparent);
+  }
+  .btn--ghost {
+    --_bg: color-mix(in oklab, var(--starlight) 3%, transparent);
+    backdrop-filter: blur(4px);
   }
   .btn--ghost:hover {
-    --_bd: var(--steel);
-    --_bg: color-mix(in oklab, var(--starlight) 5%, transparent);
+    --_bd: var(--sky);
+    --_bg: color-mix(in oklab, var(--mintaka) 12%, transparent);
+    color: var(--starlight);
   }
   .btn--sm {
     min-height: 2.25rem;
@@ -155,10 +236,17 @@
 
   /* ---- Shared section rhythm -------------------------------------------------------------- */
   .lp-section {
+    position: relative;
     padding-block: var(--section-y);
-    border-top: 1px solid var(--border);
+    border-top: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+  }
+  .lp-head {
+    max-width: 44rem;
   }
   .lp-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6em;
     font-family: var(--font-mono);
     font-size: var(--fs-xs);
     font-weight: 400;
@@ -167,11 +255,18 @@
     color: var(--link);
     margin: 0;
   }
+  .lp-eyebrow::before {
+    content: "";
+    width: 1.6rem;
+    height: 1px;
+    background: currentColor;
+    opacity: 0.6;
+  }
   .lp-h2 {
     font-size: var(--fs-h2);
     letter-spacing: var(--track-heading);
-    max-width: 20ch;
-    margin-block: var(--s-3) 0;
+    max-width: 18ch;
+    margin-block: var(--s-4) 0;
   }
   .lp-lead {
     color: var(--text-2);
@@ -183,25 +278,72 @@
 
   /* ---- Hero ------------------------------------------------------------------------------- */
   .lp-hero {
-    padding-block: clamp(var(--s-8), 12vh, var(--s-10)) var(--section-y);
+    position: relative;
+    isolation: isolate;
+    overflow: clip;
+    padding-block: clamp(var(--s-9), 15vh, 11rem) var(--section-y);
   }
-  .lp-hero__grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
-    gap: clamp(var(--s-6), 5vw, var(--s-9));
+  /* The constellation sits behind the words, pushed to the right, bleeding off the edge. */
+  .lp-hero__sky {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    display: flex;
     align-items: center;
+    justify-content: flex-end;
+    pointer-events: none;
   }
-  .lp-h1 {
-    font-size: var(--fs-h1);
-    line-height: var(--lh-display);
-    letter-spacing: var(--track-display);
-    margin-block: var(--s-4) 0;
-    max-width: 14ch;
+  .o-sky {
+    position: relative;
+    margin: 0;
+    width: min(49vw, 600px);
+    translate: 1% -2%;
+  }
+  .o-sky__fig {
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+  .o-sky__cap {
+    position: absolute;
+    right: var(--gutter);
+    bottom: var(--s-6);
+    z-index: -1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    text-align: right;
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+  }
+  .o-sky__name {
+    color: var(--sky);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+  }
+  .o-sky__coord {
+    color: var(--text-2);
+  }
+
+  .lp-hero__inner {
+    position: relative;
+    max-width: 44rem;
+  }
+  .lp-hero__eyebrow {
+    color: var(--sky);
+  }
+  .lp-hero .lp-h1 {
+    font-size: clamp(2.6rem, 1rem + 6.6vw, 5.6rem);
+    line-height: 1.015;
+    letter-spacing: -0.038em;
+    max-width: 15ch;
+    margin-block: var(--s-5) 0;
+    text-wrap: balance;
   }
   .lp-hero__lead {
     color: var(--text-2);
-    font-size: var(--fs-lg);
-    max-width: 46ch;
+    font-size: clamp(var(--fs-md), 0.9rem + 0.9vw, var(--fs-lg));
+    max-width: 44ch;
     margin-block-start: var(--s-5);
   }
   .lp-cta-row {
@@ -210,125 +352,172 @@
     gap: var(--s-3);
     margin-block-start: var(--s-7);
   }
-
-  /* The belt figure: the hero signature. Three stars of Orion's Belt, from real coordinates. */
-  .belt {
-    position: relative;
-    display: grid;
-    gap: var(--s-5);
-    padding: var(--s-6);
-    border: 1px solid var(--border);
-    border-radius: var(--r-tile);
-    background:
-      radial-gradient(120% 90% at 78% 18%, color-mix(in oklab, var(--mintaka) 11%, transparent), transparent 60%),
-      var(--surface);
-  }
-  .belt__fig {
-    width: 100%;
-    height: auto;
-    overflow: visible;
-  }
-  .belt__line {
-    fill: none;
-    stroke: var(--mintaka);
-    stroke-width: 1.5;
-    stroke-dasharray: 3 5;
-    stroke-linecap: round;
-    opacity: 0.8;
-  }
-  .belt__dot {
-    fill: var(--starlight);
-  }
-  .belt__dot--mintaka {
-    fill: var(--sky);
-  }
-  .belt__halo {
-    fill: var(--mintaka);
-    opacity: 0.25;
-  }
-  .belt__caption {
+  /* The telemetry strip: four measured facts, the foot of the hero. */
+  .lp-ticker {
     display: flex;
-    flex-direction: column;
-    gap: var(--s-1);
-    margin: 0;
-    font-family: var(--font-mono);
-    font-size: var(--fs-xs);
-    color: var(--text-2);
-  }
-  .belt__caption b {
-    font-weight: 400;
-    color: var(--text-2);
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-  }
-  .belt__label {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    fill: var(--text-2);
-    text-anchor: middle;
-    letter-spacing: 0.04em;
-  }
-  .belt__label--mintaka {
-    fill: var(--sky);
-  }
-
-  /* ---- Pillars ---------------------------------------------------------------------------- */
-  .pillars {
-    display: grid;
-    gap: 0;
-    margin-block-start: var(--s-7);
-  }
-  .pillar {
-    display: grid;
-    grid-template-columns: minmax(0, 9rem) minmax(0, 1fr) auto;
-    align-items: baseline;
-    gap: var(--s-4) var(--s-6);
-    padding-block: var(--s-5);
+    flex-wrap: wrap;
+    gap: var(--s-3) var(--s-6);
+    margin-block-start: var(--s-8);
+    padding-block-start: var(--s-5);
     border-top: 1px solid var(--border);
-    transition: border-color var(--t-ui) var(--ease-enter);
-  }
-  .pillar:last-child {
-    border-bottom: 1px solid var(--border);
-  }
-  .pillar:hover {
-    border-top-color: var(--border-strong);
-  }
-  .pillar__name {
-    font-size: var(--fs-xl);
-    font-weight: 500;
-    letter-spacing: var(--track-heading);
-  }
-  .pillar__desc {
-    color: var(--text-2);
-    max-width: 52ch;
-  }
-  .pillar__proof {
-    display: block;
-    margin-block-start: var(--s-3);
     font-family: var(--font-mono);
     font-size: var(--fs-xs);
     color: var(--text-2);
   }
-  .pillar__proof::before {
-    content: "";
-    display: inline-block;
+  .lp-ticker__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55em;
+  }
+  .lp-ticker__dot,
+  .card__dot {
+    flex: none;
     width: 0.5rem;
     height: 0.5rem;
-    margin-inline-end: 0.5em;
     border-radius: 50%;
     background: var(--success);
-    vertical-align: middle;
+    box-shadow: 0 0 0 0.22rem color-mix(in oklab, var(--success) 22%, transparent);
   }
-  .pillar__link {
+
+  /* ---- The constellation ------------------------------------------------------------------ */
+  .o-lines {
+    fill: none;
+    stroke-linecap: round;
+  }
+  .o-line {
+    stroke: color-mix(in oklab, var(--sky) 40%, transparent);
+    stroke-width: 1.1;
+  }
+  .o-line--belt {
+    stroke: color-mix(in oklab, var(--mintaka) 78%, transparent);
+    stroke-width: 1.7;
+  }
+  .o-star {
+    color: var(--starlight);
+  }
+  /* Halos are soft light, not flat disks: a blur turns each circle into a glow around its star. */
+  .o-halo {
+    fill: currentColor;
+    opacity: 0.28;
+    filter: blur(7px);
+  }
+  .o-dot {
+    fill: currentColor;
+  }
+  .o-star--white {
+    color: var(--starlight);
+  }
+  .o-star--rust {
+    color: var(--glow);
+  }
+  .o-star--rust .o-halo {
+    opacity: 0.4;
+  }
+  .o-star--mintaka {
+    color: var(--sky);
+  }
+  .o-star--mintaka .o-halo {
+    opacity: calc(0.22 + 0.26 * var(--o-glow));
+  }
+  .o-star--mintaka .o-dot {
+    filter: drop-shadow(0 0 0.5rem color-mix(in oklab, var(--mintaka) 90%, transparent));
+  }
+  .o-ring {
+    fill: none;
+    stroke: color-mix(in oklab, var(--sky) 85%, transparent);
+    stroke-width: 1.2;
+    opacity: 0.8;
+  }
+
+  /* ---- Pillars: four measured cards ------------------------------------------------------- */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--s-4);
+    margin-block-start: var(--s-7);
+  }
+  .card {
+    --_accent: var(--sky);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-3);
+    padding: var(--s-6);
+    border: 1px solid var(--border);
+    border-radius: var(--r-card);
+    background:
+      radial-gradient(130% 100% at 100% 0%, color-mix(in oklab, var(--_accent) 9%, transparent), transparent 56%),
+      color-mix(in oklab, var(--surface) 70%, transparent);
+    color: var(--text);
+    text-decoration: none;
+    overflow: clip;
+    transition:
+      border-color var(--t-ui) var(--ease-enter),
+      background var(--t-ui) var(--ease-enter),
+      transform var(--t-ui) var(--ease-enter);
+  }
+  .card--eff {
+    --_accent: var(--sky);
+  }
+  .card--sec {
+    --_accent: var(--success);
+  }
+  .card--high {
+    --_accent: var(--glow);
+  }
+  .card--des {
+    --_accent: var(--mintaka);
+  }
+  /* A hairline of the card's accent along the top, lit on hover. */
+  .card::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--_accent), transparent 70%);
+    opacity: 0;
+    transition: opacity var(--t-ui) var(--ease-enter);
+  }
+  .card:hover,
+  .card:focus-visible {
+    border-color: color-mix(in oklab, var(--_accent) 55%, var(--border-strong));
+    background:
+      radial-gradient(130% 100% at 100% 0%, color-mix(in oklab, var(--_accent) 15%, transparent), transparent 56%),
+      color-mix(in oklab, var(--surface) 92%, transparent);
+    transform: translateY(-3px);
+  }
+  .card:hover::before,
+  .card:focus-visible::before {
+    opacity: 0.9;
+  }
+  .card__proof {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6em;
+    font-family: var(--font-mono);
+    font-size: var(--fs-sm);
+    color: var(--text);
+  }
+  .card__name {
+    font-size: var(--fs-2xl);
+    font-weight: 500;
+    letter-spacing: var(--track-heading);
+    margin: 0;
+  }
+  .card__desc {
+    color: var(--text-2);
+    margin: 0;
+  }
+  .card__link {
     display: inline-flex;
     align-items: center;
     gap: var(--s-2);
+    margin-block-start: auto;
+    padding-block-start: var(--s-2);
     font-size: var(--fs-sm);
-    text-decoration: none;
     color: var(--link);
-    white-space: nowrap;
   }
-  .pillar__link:hover {
+  .card:hover .card__link {
     color: var(--link-hover);
   }
 
@@ -340,15 +529,14 @@
     margin-block-start: var(--s-8);
     position: relative;
   }
-  /* The dashed belt line behind the three nodes. */
   .method__belt::before {
     content: "";
     position: absolute;
     top: 0.5rem;
-    left: 8%;
-    right: 8%;
+    left: 7%;
+    right: 7%;
     height: 0;
-    border-top: 1.5px dashed color-mix(in oklab, var(--mintaka) 70%, transparent);
+    border-top: 1.5px dashed color-mix(in oklab, var(--mintaka) 60%, transparent);
   }
   .step {
     position: relative;
@@ -362,11 +550,11 @@
     height: 1rem;
     border-radius: 50%;
     background: var(--starlight);
-    outline: 4px solid var(--void);
+    outline: 5px solid var(--void);
   }
   .step--accent .step__node {
     background: var(--sky);
-    box-shadow: 0 0 0 4px color-mix(in oklab, var(--mintaka) 35%, transparent);
+    box-shadow: 0 0 0 5px color-mix(in oklab, var(--mintaka) 38%, transparent);
   }
   .step__index {
     font-family: var(--font-mono);
@@ -395,16 +583,34 @@
     color: var(--text-2);
   }
 
-  /* ---- Lab call-out ----------------------------------------------------------------------- */
+  /* ---- Lab call-out: a portal to the proof ------------------------------------------------ */
   .lab-cta {
+    position: relative;
     display: grid;
     gap: var(--s-5);
     padding: clamp(var(--s-7), 6vw, var(--s-9));
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-strong);
     border-radius: var(--r-tile);
+    overflow: clip;
+    isolation: isolate;
     background:
-      radial-gradient(90% 120% at 100% 0%, color-mix(in oklab, var(--mintaka) 13%, transparent), transparent 55%),
-      var(--surface);
+      radial-gradient(90% 130% at 100% 0%, color-mix(in oklab, var(--mintaka) 18%, transparent), transparent 55%),
+      color-mix(in oklab, var(--surface) 85%, transparent);
+  }
+  /* A faint star field caught inside the panel, brightest at the lit corner. */
+  .lab-cta::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background-image:
+      radial-gradient(1.4px 1.4px at 30px 40px, #fff, transparent),
+      radial-gradient(1px 1px at 120px 90px, var(--sky), transparent),
+      radial-gradient(1.2px 1.2px at 80px 160px, #fff, transparent);
+    background-size: 180px 180px;
+    opacity: 0.35;
+    -webkit-mask-image: radial-gradient(90% 120% at 100% 0%, #000, transparent 58%);
+    mask-image: radial-gradient(90% 120% at 100% 0%, #000, transparent 58%);
   }
   .lab-cta__title {
     font-size: var(--fs-h2);
@@ -453,6 +659,7 @@
     border-top: 1px solid var(--border);
     padding-block: var(--s-8);
     color: var(--text-2);
+    background: color-mix(in oklab, var(--void) 70%, transparent);
   }
   .lp-footer__top {
     display: flex;
@@ -500,7 +707,6 @@
     margin-inline-start: auto;
     color: var(--text-2);
   }
-  /* Shown only on narrow screens, where the header drops its nav. */
   .lp-footer__lang {
     display: none;
     gap: var(--s-4);
@@ -519,33 +725,40 @@
   }
 
   /* ---- Responsive ------------------------------------------------------------------------- */
+  @media (max-width: 64rem) {
+    .o-sky {
+      width: min(66vw, 440px);
+      translate: 14% -2%;
+      opacity: 0.72;
+    }
+  }
   @media (max-width: 60rem) {
-    .lp-hero__grid,
+    .cards {
+      grid-template-columns: 1fr;
+    }
     .contact__grid {
       grid-template-columns: 1fr;
     }
-    .lp-hero__grid {
-      gap: var(--s-7);
+    /* The constellation becomes a faint full-width backdrop behind the words. */
+    .lp-hero__sky {
+      justify-content: center;
+      align-items: flex-start;
     }
-    .belt {
-      order: -1;
+    .o-sky {
+      width: min(96vw, 520px);
+      translate: 0 2%;
+      opacity: 0.42;
+    }
+    .o-sky__cap {
+      display: none;
     }
   }
   @media (max-width: 44rem) {
-    /* The header keeps only the logo and the one action; the lab link lives in the hero and
-       footer, and the language switch moves into the footer. */
     .lp-nav {
       display: none;
     }
     .lp-footer__lang {
       display: flex;
-    }
-    .pillar {
-      grid-template-columns: 1fr;
-      gap: var(--s-2);
-    }
-    .pillar__link {
-      margin-block-start: var(--s-2);
     }
     .method__belt {
       grid-template-columns: 1fr;
@@ -556,49 +769,91 @@
     }
   }
 
-  /* ---- Motion: one orchestrated load, then rest ------------------------------------------- */
+  /* ---- Motion ----------------------------------------------------------------------------- */
   @media (prefers-reduced-motion: no-preference) {
-    .lp-reveal {
-      opacity: 0;
-      animation: lp-rise var(--t-reveal) var(--ease-enter) forwards;
-      animation-delay: var(--lp-delay, 0ms);
+    /* The orchestrated load: hero words rise in sequence. */
+    .lp-hero__inner > * {
+      animation: lp-rise 0.7s var(--ease-enter) both;
     }
-    /* Stagger without inline styles (the CSP forbids style attributes). */
-    .lp-reveal--1 { --lp-delay: 60ms; }
-    .lp-reveal--2 { --lp-delay: 140ms; }
-    .lp-reveal--3 { --lp-delay: 220ms; }
-    .lp-reveal--4 { --lp-delay: 320ms; }
-    .belt__line {
-      opacity: 0;
-      animation: lp-fade 0.8s var(--ease-enter) 0.15s forwards;
+    .lp-hero__inner > :nth-child(1) { animation-delay: 0.15s; }
+    .lp-hero__inner > :nth-child(2) { animation-delay: 0.26s; }
+    .lp-hero__inner > :nth-child(3) { animation-delay: 0.37s; }
+    .lp-hero__inner > :nth-child(4) { animation-delay: 0.48s; }
+    .lp-hero__inner > :nth-child(5) { animation-delay: 0.62s; }
+
+    /* The star map draws itself: lines ink in, stars ignite, Mintaka keeps breathing. */
+    .o-line {
+      stroke-dasharray: 1;
+      animation: o-draw 1.1s var(--ease-enter) both;
     }
-    /* Scale-in, not opacity-in: the resting state stays visible even if the animation is
-       interrupted (a captured frame, a stalled load). */
-    .belt__star {
+    .o-lines line:nth-child(1) { animation-delay: 0.3s; }
+    .o-lines line:nth-child(2) { animation-delay: 0.42s; }
+    .o-lines line:nth-child(3) { animation-delay: 0.54s; }
+    .o-lines line:nth-child(4) { animation-delay: 0.66s; }
+    .o-lines line:nth-child(5) { animation-delay: 0.78s; }
+    .o-lines line:nth-child(6) { animation-delay: 0.9s; }
+    .o-lines line:nth-child(7) { animation-delay: 1s; }
+    .o-lines line:nth-child(8) { animation-delay: 1.1s; }
+    .o-stars > g {
       transform-box: fill-box;
       transform-origin: center;
-      animation: lp-pop 0.5s var(--ease-enter) backwards;
+      animation: o-pop 0.6s var(--ease-enter) both;
     }
-    .belt__star--1 { animation-delay: 0.5s; }
-    .belt__star--2 { animation-delay: 0.75s; }
-    .belt__star--3 { animation-delay: 1s; }
-    .belt__halo {
-      animation: lp-glow 4s ease-in-out 1.3s infinite;
+    .o-stars > g:nth-child(1) { animation-delay: 0.5s; }
+    .o-stars > g:nth-child(2) { animation-delay: 0.62s; }
+    .o-stars > g:nth-child(3) { animation-delay: 0.74s; }
+    .o-stars > g:nth-child(4) { animation-delay: 1.3s; } /* Mintaka, last and brightest */
+    .o-stars > g:nth-child(5) { animation-delay: 0.86s; }
+    .o-stars > g:nth-child(6) { animation-delay: 0.98s; }
+    .o-stars > g:nth-child(7) { animation-delay: 1.1s; }
+    .o-stars > g:nth-child(8) { animation-delay: 1.22s; }
+    .o-star--mintaka {
+      animation: o-breathe 5s ease-in-out 1.6s infinite;
+    }
+    .o-ring {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: o-ring 0.9s var(--ease-enter) 1.5s backwards;
+    }
+    .lp-sky::after {
+      animation: lp-twinkle 7s ease-in-out infinite alternate;
+    }
+
+    /* Scroll-linked reveals, only where the browser can drive an animation from scroll position.
+       Inside @supports, so a browser without scroll timelines never hides the content. */
+    @supports (animation-timeline: view()) {
+      .lp-in {
+        opacity: 0;
+        animation: lp-rise 0.9s var(--ease-enter) both;
+        animation-timeline: view();
+        animation-range: entry 6% cover 24%;
+      }
     }
   }
+
   @keyframes lp-rise {
-    from { opacity: 0; transform: translateY(0.6rem); }
+    from { opacity: 0; transform: translateY(1.4rem); }
     to { opacity: 1; transform: none; }
   }
-  @keyframes lp-fade {
-    to { opacity: 0.8; }
+  @keyframes o-draw {
+    from { stroke-dashoffset: 1; }
+    to { stroke-dashoffset: 0; }
   }
-  @keyframes lp-pop {
-    from { opacity: 0.2; transform: scale(0.3); }
+  @keyframes o-pop {
+    from { opacity: 0; transform: scale(0.2); }
     to { opacity: 1; transform: scale(1); }
   }
-  @keyframes lp-glow {
-    0%, 100% { opacity: 0.18; }
-    50% { opacity: 0.4; }
+  @keyframes o-ring {
+    from { opacity: 0; transform: scale(0.2); }
+    60% { opacity: 0.9; }
+    to { opacity: 0.8; transform: scale(1); }
+  }
+  @keyframes o-breathe {
+    0%, 100% { --o-glow: 0.25; }
+    50% { --o-glow: 1; }
+  }
+  @keyframes lp-twinkle {
+    from { opacity: 0.22; }
+    to { opacity: 0.55; }
   }
 }

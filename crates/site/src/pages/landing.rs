@@ -1,7 +1,8 @@
 //! The studio landing page (`/{lang}/studio/`): the company's front door. A distinct, lean page
 //! — its own small stylesheet, no islands and no JavaScript at all (like the Lab, spec §9.5) —
-//! that links to the lab for the proof. Signature: Orion's Belt, drawn from the real star
-//! coordinates (`crate::orion`), with the company's star, Mintaka, picked out.
+//! that links to the lab for the proof. Signature: the whole constellation of Orion, projected
+//! from the real star coordinates (`crate::orion`), with the company's star, Mintaka, picked out
+//! and alight. Everything moves with CSS alone; nothing here needs a script to be seen.
 
 use maud::{DOCTYPE, Markup, PreEscaped, html};
 
@@ -52,6 +53,59 @@ fn arrow() -> Markup {
     html! {
         svg class="arrow" viewBox="0 0 16 16" aria-hidden="true" focusable="false" {
             path d="M4.5 11.5 L11.5 4.5 M6 4.5 H11.5 V10" {}
+        }
+    }
+}
+
+/// A short coordinate, trimmed: SVG geometry rounded to 0.1 so the markup stays small.
+fn fmt(v: f64) -> String {
+    let r = (v * 10.0).round() / 10.0;
+    if (r - r.round()).abs() < f64::EPSILON {
+        format!("{}", r as i64)
+    } else {
+        format!("{r}")
+    }
+}
+
+/// The hero signature: the full figure of Orion, projected from real J2000 coordinates
+/// (`crate::orion`), drawn as a star map. Each star carries its real colour — Betelgeuse warm,
+/// Rigel and the Belt blue-white — and Mintaka, the studio's star, is picked out and alight.
+/// Decorative detail lives in CSS; the SVG is only geometry, so it degrades to a still star map.
+fn constellation(l: &Landing) -> Markup {
+    let s = l.s;
+    let width = 740.0;
+    let margin = 104.0;
+    let (stars, height) = orion::layout(width, margin);
+    let find = |id: &str| -> (f64, f64) {
+        stars.iter().find(|(st, ..)| st.id == id).map(|(_, x, y, _)| (*x, *y)).unwrap_or((0.0, 0.0))
+    };
+    let tint = |t: orion::Tint| match t {
+        orion::Tint::Rust => "o-star o-star--rust",
+        orion::Tint::Blue => "o-star o-star--mintaka",
+        orion::Tint::Starlight => "o-star o-star--white",
+    };
+    html! {
+        svg class="o-sky__fig" viewBox=(format!("0 0 {} {}", fmt(width), fmt(height)))
+            role="img" aria-label=(s.t("landing-sky-label")) preserveAspectRatio="xMidYMid meet" {
+            g class="o-lines" {
+                @for (a, b, belt) in orion::LINES {
+                    @let (ax, ay) = find(a);
+                    @let (bx, by) = find(b);
+                    @let cls = if belt { "o-line o-line--belt" } else { "o-line" };
+                    line class=(cls) x1=(fmt(ax)) y1=(fmt(ay)) x2=(fmt(bx)) y2=(fmt(by)) pathLength="1" {}
+                }
+            }
+            g class="o-stars" {
+                @for (st, x, y, r) in &stars {
+                    g class=(tint(st.tint)) {
+                        circle class="o-halo" cx=(fmt(*x)) cy=(fmt(*y)) r=(fmt(r * 2.6)) {}
+                        circle class="o-dot" cx=(fmt(*x)) cy=(fmt(*y)) r=(fmt(r.max(3.2))) {}
+                        @if st.id == "mintaka" {
+                            circle class="o-ring" cx=(fmt(*x)) cy=(fmt(*y)) r=(fmt(r * 1.9)) {}
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -109,6 +163,7 @@ pub fn page(l: &Landing) -> Markup {
             }
             body {
                 svg class="lp-sprite" aria-hidden="true" focusable="false" { (l.sprite) }
+                div class="lp-sky" aria-hidden="true" {}
                 a class="lp-skip" href="#main" { (s.t("skip-link")) }
                 (header(l))
                 main id="main" tabindex="-1" {
@@ -151,42 +206,35 @@ fn header(l: &Landing) -> Markup {
 
 fn hero(l: &Landing) -> Markup {
     let s = l.s;
-    let mintaka = orion::star("mintaka");
+    let m = orion::star("mintaka");
+    // The four measured facts, shown as a quiet telemetry strip at the foot of the hero. Each is a
+    // claim the lab proves; the colours and dots are decoration, the words are the evidence.
+    let proofs = ["landing-eff-proof", "landing-sec-proof", "landing-high-proof", "landing-des-proof"];
     html! {
         section class="lp-hero" {
-            div class="lp-wrap lp-hero__grid" {
-                div {
-                    p class="lp-eyebrow lp-reveal lp-reveal--1" { (s.t("hero-eyebrow")) }
-                    h1 class="lp-h1 lp-reveal lp-reveal--2" { (s.t("hero-title")) }
-                    p class="lp-hero__lead lp-reveal lp-reveal--3" { (s.t("landing-hero-lead")) }
-                    div class="lp-cta-row lp-reveal lp-reveal--4" {
-                        a class="btn btn--cta btn--lg" href="#start" { (s.t("nav-cta")) }
-                        a class="btn btn--ghost btn--lg" href=(l.lab()) {
-                            (s.t("landing-hero-lab")) (arrow())
-                        }
+            div class="lp-hero__sky" {
+                figure class="o-sky" { (constellation(l)) }
+            }
+            div class="o-sky__cap" aria-hidden="true" {
+                span class="o-sky__name" { "Mintaka" }
+                span class="o-sky__coord" { (m.ra_label()) " · " (m.dec_label()) }
+            }
+            div class="lp-wrap lp-hero__inner" {
+                p class="lp-eyebrow lp-hero__eyebrow" { (s.t("hero-eyebrow")) }
+                h1 class="lp-h1" { (s.t("hero-title")) }
+                p class="lp-hero__lead" { (s.t("landing-hero-lead")) }
+                div class="lp-cta-row" {
+                    a class="btn btn--cta btn--lg" href="#start" { (s.t("nav-cta")) }
+                    a class="btn btn--ghost btn--lg" href=(l.lab()) {
+                        (s.t("landing-hero-lab")) (arrow())
                     }
                 }
-                figure class="belt lp-reveal lp-reveal--3" {
-                    svg class="belt__fig" viewBox="0 0 320 180" role="img" aria-labelledby="belt-title" {
-                        title id="belt-title" { "Orion's Belt: Alnitak, Alnilam and Mintaka, from their real sky coordinates." }
-                        polyline class="belt__line" points="46,128 160,92 274,56" {}
-                        g class="belt__star belt__star--1" {
-                            circle class="belt__dot" cx="46" cy="128" r="5" {}
-                            text class="belt__label" x="46" y="152" { "Alnitak" }
+                ul class="lp-ticker" role="list" aria-label=(s.t("landing-pillars-eyebrow")) {
+                    @for p in proofs {
+                        li class="lp-ticker__item" {
+                            span class="lp-ticker__dot" aria-hidden="true" {}
+                            (s.t(p))
                         }
-                        g class="belt__star belt__star--2" {
-                            circle class="belt__dot" cx="160" cy="92" r="5" {}
-                            text class="belt__label" x="160" y="116" { "Alnilam" }
-                        }
-                        g class="belt__star belt__star--3" {
-                            circle class="belt__halo" cx="274" cy="56" r="22" {}
-                            circle class="belt__dot belt__dot--mintaka" cx="274" cy="56" r="7" {}
-                            text class="belt__label belt__label--mintaka" x="274" y="34" { "Mintaka" }
-                        }
-                    }
-                    figcaption class="belt__caption" {
-                        b { "Orion's Belt" }
-                        p { (mintaka.ra_label()) " · " (mintaka.dec_label()) }
                     }
                 }
             }
@@ -196,30 +244,33 @@ fn hero(l: &Landing) -> Markup {
 
 fn pillars(l: &Landing) -> Markup {
     let s = l.s;
-    // (nav string id for the name, description id, proof id, lab anchor it is proven at).
+    // (nav string id for the name, description id, proof id, lab anchor it is proven at, tint).
     let rows = [
-        ("nav-efficiency", "landing-eff-desc", "landing-eff-proof", "#efficiency"),
-        ("nav-security", "landing-sec-desc", "landing-sec-proof", "#security"),
-        ("nav-highload", "landing-high-desc", "landing-high-proof", "#highload"),
-        ("nav-design", "landing-des-desc", "landing-des-proof", "#design"),
+        ("nav-efficiency", "landing-eff-desc", "landing-eff-proof", "#efficiency", "card--eff"),
+        ("nav-security", "landing-sec-desc", "landing-sec-proof", "#security", "card--sec"),
+        ("nav-highload", "landing-high-desc", "landing-high-proof", "#highload", "card--high"),
+        ("nav-design", "landing-des-desc", "landing-des-proof", "#design", "card--des"),
     ];
     html! {
-        section class="lp-section" aria-labelledby="pillars-title" {
+        section class="lp-section lp-pillars" aria-labelledby="pillars-title" {
             div class="lp-wrap" {
-                p class="lp-eyebrow" { (s.t("landing-pillars-eyebrow")) }
-                h2 class="lp-h2" id="pillars-title" { (s.t("landing-pillars-title")) }
-                p class="lp-lead" { (s.t("landing-pillars-lead")) }
-                div class="pillars" {
-                    @for (name_id, desc_id, proof_id, anchor) in rows {
+                div class="lp-head" {
+                    p class="lp-eyebrow lp-in" { (s.t("landing-pillars-eyebrow")) }
+                    h2 class="lp-h2 lp-in" id="pillars-title" { (s.t("landing-pillars-title")) }
+                    p class="lp-lead lp-in" { (s.t("landing-pillars-lead")) }
+                }
+                div class="cards" {
+                    @for (name_id, desc_id, proof_id, anchor, tint) in rows {
                         @let name = s.t(name_id);
-                        div class="pillar" {
-                            h3 class="pillar__name" { (name) }
-                            div {
-                                p class="pillar__desc" { (s.t(desc_id)) }
-                                span class="pillar__proof" { (s.t(proof_id)) }
+                        a class=(format!("card lp-in {tint}")) href=(l.lab_at(anchor))
+                          aria-label=(format!("{name}: {}", s.t("landing-pillar-link"))) {
+                            span class="card__proof" {
+                                span class="card__dot" aria-hidden="true" {}
+                                (s.t(proof_id))
                             }
-                            a class="pillar__link" href=(l.lab_at(anchor))
-                              aria-label=(format!("{}: {name}", s.t("landing-pillar-link"))) {
+                            h3 class="card__name" { (name) }
+                            p class="card__desc" { (s.t(desc_id)) }
+                            span class="card__link" aria-hidden="true" {
                                 (s.t("landing-pillar-link")) (arrow())
                             }
                         }
@@ -239,15 +290,17 @@ fn method(l: &Landing) -> Markup {
         ("mintaka", "landing-prove-title", "landing-prove-desc", true),
     ];
     html! {
-        section class="lp-section" aria-labelledby="method-title" {
+        section class="lp-section lp-method" aria-labelledby="method-title" {
             div class="lp-wrap" {
-                p class="lp-eyebrow" { (s.t("landing-method-eyebrow")) }
-                h2 class="lp-h2" id="method-title" { (s.t("landing-method-title")) }
-                p class="lp-lead" { (s.t("landing-method-lead")) }
+                div class="lp-head" {
+                    p class="lp-eyebrow lp-in" { (s.t("landing-method-eyebrow")) }
+                    h2 class="lp-h2 lp-in" id="method-title" { (s.t("landing-method-title")) }
+                    p class="lp-lead lp-in" { (s.t("landing-method-lead")) }
+                }
                 ol class="method__belt" role="list" {
                     @for (star_id, title_id, desc_id, accent) in steps {
                         @let star = orion::star(star_id);
-                        li class=(if accent { "step step--accent" } else { "step" }) {
+                        li class=(if accent { "step step--accent lp-in" } else { "step lp-in" }) {
                             span class="step__node" aria-hidden="true" {}
                             p class="step__index" { (star.id) }
                             h3 class="step__title" { (s.t(title_id)) }
@@ -264,9 +317,9 @@ fn method(l: &Landing) -> Markup {
 fn lab_callout(l: &Landing) -> Markup {
     let s = l.s;
     html! {
-        section class="lp-section" aria-labelledby="lab-title" {
+        section class="lp-section lp-lab" aria-labelledby="lab-title" {
             div class="lp-wrap" {
-                div class="lab-cta" {
+                div class="lab-cta lp-in" {
                     p class="lp-eyebrow" { (s.t("landing-lab-eyebrow")) }
                     h2 class="lab-cta__title" id="lab-title" { (s.t("landing-lab-title")) }
                     p class="lab-cta__body" { (s.t("landing-lab-body")) }
@@ -287,11 +340,13 @@ fn contact(l: &Landing) -> Markup {
     let body = s.ta("landing-contact-body", &[("within", within.into())]);
     let direct = l.cfg.contact.direct();
     html! {
-        section id="start" class="lp-section" aria-labelledby="start-title" {
+        section id="start" class="lp-section lp-contact" aria-labelledby="start-title" {
             div class="lp-wrap" {
-                p class="lp-eyebrow" { (s.t("landing-contact-eyebrow")) }
-                h2 class="lp-h2" id="start-title" { (s.t("landing-contact-title")) }
-                div class="contact__grid" {
+                div class="lp-head" {
+                    p class="lp-eyebrow lp-in" { (s.t("landing-contact-eyebrow")) }
+                    h2 class="lp-h2 lp-in" id="start-title" { (s.t("landing-contact-title")) }
+                }
+                div class="contact__grid lp-in" {
                     p class="contact__body" { (body) }
                     div class="contact__actions" {
                         a class="btn btn--cta btn--lg" href=(l.lab_at("#contact")) {
