@@ -81,8 +81,8 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
     // Lab pages inline the long-form stylesheet instead (no hero, instruments or contact form).
     let lab_css = format!("{}{}", css::bundle(&root.join("web/styles/lab.css"))?, css::minify(&fonts.css)?);
     let lab_style_hash = util::csp_hash(lab_css.as_bytes());
-    // The studio landing page inlines its own lean stylesheet (no hero, instruments, islands or
-    // JavaScript), allowed by its own CSP hash.
+    // The studio landing page inlines its own stylesheet (none of the lab's hero, instruments or
+    // islands), allowed by its own CSP hash.
     let landing_css = format!("{}{}", css::bundle(&root.join("web/styles/landing.css"))?, css::minify(&fonts.css)?);
     let landing_style_hash = util::csp_hash(landing_css.as_bytes());
 
@@ -137,11 +137,25 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
     for post in lab_posts.values().flatten() {
         fingerprint.extend(post.html.as_bytes());
     }
+    // The studio landing page's one script (web/studio/, first-party): its URL is in the page.
+    let studio_js = js.named.get("studio").cloned().context("esbuild output has no web/studio/studio.ts entry")?;
+    fingerprint.extend(studio_js.as_bytes());
     let build = format!("{date}.{}", util::short_hash(&fingerprint).to_lowercase());
+    // Its compressed size, as the footer states it ("this page runs N kB of JavaScript").
+    let studio_brotli = {
+        let file = studio_js.rsplit('/').next().unwrap_or_default();
+        let bytes = std::fs::read(opts.js_dir.join(file)).with_context(|| format!("reading {file}"))?;
+        assets::brotli(&bytes)?.len() as u64
+    };
 
     let (sprite, logo_vb) = svg::brand_symbol(root, "mintaka-logo-horizontal-on-dark.svg", "logo")?;
     let logo = svg::use_symbol("logo", &logo_vb, "logo");
     let mark = svg::brand(root, "mintaka-mark-full-on-dark.svg", "mark", None)?;
+    // The landing page inlines the brand files with their colours as classes: its logo changes
+    // colourway with the chapter beneath it, and its script draws the mark's own shape.
+    let landing_logo = svg::brand_classed(root, "mintaka-logo-horizontal-on-dark.svg", "logo")?;
+    let landing_mark = svg::brand_classed(root, "mintaka-mark-full-on-dark.svg", "mark")?;
+    let landing_wordmark = svg::brand_classed(root, "mintaka-wordmark-on-dark.svg", "wordmark")?;
 
     let mut named = js.named.clone();
     named.insert("islands.css".into(), islands_css_url.clone());
@@ -296,19 +310,24 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
         dist.write(&format!("{lang}/404.html"), html.as_bytes())?;
         not_found.insert(lang.clone(), format!("{lang}/404.html"));
 
-        // The studio landing page (/{lang}/studio/): a lean, no-JavaScript front door that links
-        // to the lab. Its own document and stylesheet, so none of the lab's chrome comes with it.
-        // Rendered after the `page` closure's last use above, which holds `gaps` until then.
+        // The studio landing page (/{lang}/studio/): the company's front door, linking to the lab.
+        // Its own document, stylesheet and one first-party script, so none of the lab's chrome
+        // comes with it. Rendered after the `page` closure's last use above, which holds `gaps`.
+        let kb = format!("{:.1}", studio_brotli as f64 / 1000.0);
         let landing = pages::landing::Landing {
             cfg: &cfg,
             s: &s,
             lang,
             build: &build,
             year: today.0,
-            logo: &logo,
-            sprite: &sprite,
+            logo: &landing_logo,
+            mark: &landing_mark,
+            wordmark: &landing_wordmark,
+            portraits: &portraits,
             font_preloads: fonts.preloads_for(lang).collect(),
             css: &landing_css,
+            script: &studio_js,
+            script_kb: if lang == "en" { kb } else { kb.replace('.', ",") },
         };
         let landing_html = pages::landing::page(&landing).into_string();
         for c in fonts.uncovered(&landing_html) {
@@ -429,11 +448,14 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
         budget.add("inline Lab CSS (minified)", lab_css.len() as u64, None);
     }
     // The studio landing page: the same first-round-trip rule (header + hero) and the whole-page
-    // cap. No JavaScript, so there is nothing more to a first view than the page and its fonts.
+    // cap. The first screen is complete without its script (which only adds motion and
+    // measurements), so the script is capped on its own, and together with the page.
     for (path, html) in &landing_pages {
-        let cut = html.find(r#"<section class="lp-section"#).unwrap_or(html.len());
+        let cut = html.find(r#"<section id="measured""#).context("studio landing page lost its first-screen marker")?;
         budget.add(format!("{path} first screen (brotli)"), assets::brotli(&html.as_bytes()[..cut])?.len() as u64, Some(14_000));
-        budget.add(format!("{path} whole page (brotli)"), route_size(&dist, path), Some(32_000));
+        let whole = route_size(&dist, path);
+        budget.add(format!("{path} whole page (brotli)"), whole, Some(32_000));
+        budget.add(format!("{path} page + its script (brotli)"), whole + route_size(&dist, &studio_js), Some(40_000));
     }
     if !landing_pages.is_empty() {
         budget.add("inline landing CSS (minified)", landing_css.len() as u64, None);
@@ -467,6 +489,8 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
             // bundle) on the first start and builds the hand-input panel on first opening: about
             // 0.45 kB here for 1.6 kB brotli less HTML on every Russian page view.
             "fuzzer" => Some(21_500),
+            // The studio landing page's motion, star chart and self-measurement (web/studio/).
+            "studio" => Some(16_000),
             _ => None,
         }
     };

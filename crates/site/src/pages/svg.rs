@@ -32,6 +32,23 @@ pub fn brand(root: &Path, file: &str, class: &str, label: Option<&str>) -> Resul
     Ok(PreEscaped(svg.replacen("<svg", &attrs, 1)))
 }
 
+/// A brand-kit SVG inlined with its three colours turned into classes — `lg-s` (Starlight: the
+/// shape and the letters), `lg-b` (Betelgeuse) and `lg-m` (Mintaka) — so a stylesheet can switch it
+/// between the kit's colourways (on-dark, on-light, on-blue, on-rust) without a second file.
+/// Decorative (`aria-hidden`): the element around it carries the name.
+pub fn brand_classed(root: &Path, file: &str, class: &str) -> Result<Markup> {
+    let svg = brand(root, file, class, None)?.into_string();
+    let svg = svg
+        .replace(r#" id="wordmark""#, "")
+        .replace(r##"fill="#F4F5F7""##, r#"class="lg-s""#)
+        .replace(r##"fill="#E2552D""##, r#"class="lg-b""#)
+        .replace(r##"fill="#3D7BFF""##, r#"class="lg-m""#);
+    if svg.contains("fill=\"#") {
+        anyhow::bail!("{file}: a colour outside the brand palette — brand_classed knows Starlight, Betelgeuse and Mintaka");
+    }
+    Ok(PreEscaped(svg))
+}
+
 /// A brand-kit SVG as a `<symbol>` (defined once per page) and the `<svg><use>` that shows it.
 pub fn brand_symbol(root: &Path, file: &str, id: &str) -> Result<(Markup, String)> {
     let path = root.join("assets/brand/logo").join(file);

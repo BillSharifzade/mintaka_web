@@ -1,6 +1,7 @@
-/* The studio landing page (/{lang}/studio/). Its own lean stylesheet — the brand tokens and the
-   base reset, then the landing's own layer — inlined into the page and allowed by its own CSP
-   hash. No lab components, no islands, no JavaScript: everything the page needs is here. */
+/* The studio landing page (/{lang}/studio/). Its own stylesheet — the brand tokens and the base
+   reset, then the landing's own layer — inlined into the page and allowed by its own CSP hash. No
+   lab components or islands: everything the page needs to read and look right is here; its one
+   script (web/studio/) only adds motion and measurements. */
 @layer tokens, base, studio;
 
 @import "./tokens.css";

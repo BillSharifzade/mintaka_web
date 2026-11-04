@@ -459,17 +459,20 @@ landing-meta-title = Mintaka — a Rust-first software studio
 landing-meta-description = A software studio from Dushanbe. Fast by proof, secure by attack, scaled to the metal, intuitive by experiment — with a lab that measures every claim, so you need not trust ours.
 landing-to-lab = The lab
 
-landing-hero-lead = We build fast, secure, high-load software — and a studio that proves it. Every promise on this page is measured next door, in a lab you can attack yourself.
+landing-hero-lead = We build high-load Rust backends and the fast interfaces on top of them — tuned for cheap phones and unstable networks. Every promise on this page is measured next door, in a lab you can attack yourself.
 landing-hero-lab = See the proof
 
 landing-pillars-eyebrow = What we do
 landing-pillars-title = Four promises, each with a number behind it.
-landing-pillars-lead = Adjectives are cheap. Here is the evidence — and a door to where we prove it.
-landing-pillar-link = See it in the lab
+landing-pillars-lead = We take on new products, performance rescues, security audits, design and AI integration. Each promise below comes with a number from our own production system.
+landing-des-title = Interfaces that feel instant, even on a cheap phone
+landing-high-title = Systems that hold at peak traffic
+landing-sec-title = Software hardened by attacking it first
+landing-eff-title = Backends that answer in microseconds
 
 landing-eff-desc = Rust to the metal. We profile until the hot path is the hardware's limit, not ours.
 landing-eff-proof = app response, p99 under 50 µs
-landing-sec-desc = Zero third-party requests, zero cookies, a strict policy the browser enforces — and a penetration test we ran on ourselves.
+landing-sec-desc = A strict policy the browser enforces on every page — and a penetration test we ran on ourselves.
 landing-sec-proof = 0 trackers · 0 cookies
 landing-high-desc = Built for the busy hour. We load-test to the point of pain, then engineer past it.
 landing-high-proof = 4,000 requests a second on two cores
@@ -486,16 +489,31 @@ landing-build-desc = Rust, no shortcuts — reviewed, tested and benchmarked as 
 landing-prove-title = Prove
 landing-prove-desc = We attack it, measure it, and show the receipts. Only then does it ship.
 
-landing-lab-eyebrow = Proof, not promises
 landing-lab-title = Don't take our word for it.
 landing-lab-body = Our lab is a live engineering notebook: a page that measures itself, invites you to attack it, and shows the physics underneath. It is built exactly the way we build for you.
 landing-lab-cta = Open the lab
 
-landing-contact-eyebrow = Start a project
 landing-contact-title = Tell us what you're building.
-landing-contact-body = A short brief is enough. We reply within { $within }. Briefs are encrypted end to end — only our team can read them.
-landing-contact-cta = Write a brief
 landing-contact-direct = Or reach us directly
 
-landing-footer-note = This page runs no JavaScript — dark by design, and built to stay fast on the worst connection you have.
-landing-sky-label = The constellation Orion, drawn from real sky coordinates — with Mintaka, the studio's star, alight at the western end of the Belt.
+landing-footer-note = This page runs { $kb } kB of JavaScript — all of it ours, and none of it needed to read a word.
+landing-sky-label = The constellation Orion, from real sky coordinates, drawn into the Mintaka mark: an hourglass with Betelgeuse in rust at one corner and Mintaka, the studio's star, in blue on the Belt.
+landing-here = Dushanbe · 38°33′ N 68°47′ E
+
+landing-eff-unit = µs
+landing-eff-caption = The time our server spends on a request, at the 99th percentile — under a steady 4,000 requests a second.
+landing-sec-caption = Third-party requests, trackers or cookies on this site.
+landing-high-unit = req/s
+landing-high-caption = On a two-core machine in Dushanbe, with the processor under a third busy.
+landing-des-caption = The first screen of this page, compressed — and every page audited to WCAG 2.2 AA.
+
+landing-readout-title = This page, measured in your browser
+landing-readout-note = Read just now from your browser's own timing records. Nothing leaves your device.
+landing-readout-html = The page, compressed
+landing-readout-total = Everything it loaded
+landing-readout-js = JavaScript, all ours
+landing-readout-third = Third-party requests
+landing-readout-ttfb = First byte
+landing-readout-fcp = First paint
+landing-unit-kb = kB
+landing-unit-ms = ms

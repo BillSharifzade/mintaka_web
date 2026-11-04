@@ -167,7 +167,8 @@ fn esbuild(root: &Path, release: bool) -> Result<PathBuf> {
     if !bin.exists() {
         bail!("esbuild not found — run `npm install` in {}", root.display());
     }
-    let mut entries = vec!["web/main.ts".to_owned()];
+    // The lab's boot script, and the studio landing page's own (it shares no code with the lab).
+    let mut entries = vec!["web/main.ts".to_owned(), "web/studio/studio.ts".to_owned()];
     let mut workers = vec![];
     find(&root.join("web"), &mut |p| {
         if p.to_string_lossy().ends_with(".worker.ts") {

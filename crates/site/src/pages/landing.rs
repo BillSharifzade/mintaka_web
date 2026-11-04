@@ -1,30 +1,49 @@
-//! The studio landing page (`/{lang}/studio/`): the company's front door. A distinct, lean page
-//! — its own small stylesheet, no islands and no JavaScript at all (like the Lab, spec §9.5) —
-//! that links to the lab for the proof. Signature: the whole constellation of Orion, projected
-//! from the real star coordinates (`crate::orion`), with the company's star, Mintaka, picked out
-//! and alight. Everything moves with CSS alone; nothing here needs a script to be seen.
+//! The studio landing page (`/{lang}/studio/`): the company's front door.
+//!
+//! Signature: the constellation of Orion, from real J2000 coordinates, constructs itself into the
+//! Mintaka mark — and then the page passes *through* the mark. Every chapter is one of its colours
+//! (the Void sky, the Starlight body, Mintaka blue, Betelgeuse rust), and every change of chapter
+//! is a part of the mark growing to fill the screen: the body, then Mintaka, then Betelgeuse.
+//!
+//! Progressive enhancement, strictly: every word, link and portrait is in this HTML and the page
+//! reads completely with no script and with motion off. One small first-party module
+//! (`web/studio/`, no third-party code) adds the construction, the scroll scenes, the live star
+//! chart under the pointer and the page's measurements of itself.
 
 use maud::{DOCTYPE, Markup, PreEscaped, html};
+use serde_json::json;
+use std::collections::BTreeMap;
 
 use crate::config::SiteConfig;
 use crate::i18n::Strings;
 use crate::orion;
+use crate::pages::Portrait;
 
-/// Everything the landing template needs. Deliberately small: no island data, no main script.
+/// Everything the landing template needs. No island data, no lab chrome.
 pub struct Landing<'a> {
     pub cfg: &'a SiteConfig,
     pub s: &'a Strings,
     pub lang: &'a str,
     pub build: &'a str,
     pub year: i64,
-    /// The brand logo `<use>` markup (built once in the generator).
+    /// The horizontal logo, inlined with its colours as classes: it changes colourway with the
+    /// chapter beneath it.
     pub logo: &'a Markup,
-    /// The `<symbol>` sprite the logo `<use>` resolves against (rendered once, hidden).
-    pub sprite: &'a Markup,
+    /// The full mark, inlined the same way: the hero's resting figure, and the shape the script
+    /// draws its construction towards.
+    pub mark: &'a Markup,
+    /// The wordmark, inlined: the footer's sign-off.
+    pub wordmark: &'a Markup,
+    /// Team portraits by member id.
+    pub portraits: &'a BTreeMap<String, Portrait>,
     /// Preloaded font URLs for this language.
     pub font_preloads: Vec<&'a str>,
     /// Minified landing CSS, inlined in the one `<style>` (its hash is in the CSP).
     pub css: &'a str,
+    /// The page's one script (first-party, `web/studio/`).
+    pub script: &'a str,
+    /// Its compressed size, already formatted for this language ("6.2" / "6,2"), for the footer.
+    pub script_kb: String,
 }
 
 impl Landing<'_> {
@@ -47,8 +66,8 @@ impl Landing<'_> {
     }
 }
 
-/// A small north-east arrow for links that leave for the lab. Inline SVG, not a font glyph, so it
-/// never depends on font coverage.
+/// A north-east arrow for links that leave for the lab. Inline SVG, so it never depends on font
+/// coverage.
 fn arrow() -> Markup {
     html! {
         svg class="arrow" viewBox="0 0 16 16" aria-hidden="true" focusable="false" {
@@ -57,57 +76,92 @@ fn arrow() -> Markup {
     }
 }
 
-/// A short coordinate, trimmed: SVG geometry rounded to 0.1 so the markup stays small.
-fn fmt(v: f64) -> String {
-    let r = (v * 10.0).round() / 10.0;
-    if (r - r.round()).abs() < f64::EPSILON {
-        format!("{}", r as i64)
-    } else {
-        format!("{r}")
+/// A heading's words, each in a clipping box so it can rise into view. Plain spans and spaces, so
+/// the heading reads exactly as written to assistive technology and with no script.
+fn words(text: &str) -> Markup {
+    html! {
+        @for (i, w) in text.split(' ').filter(|w| !w.is_empty()).enumerate() {
+            @if i > 0 { " " }
+            span class="w" { span class="wi" { (w) } }
+        }
     }
 }
 
-/// The hero signature: the full figure of Orion, projected from real J2000 coordinates
-/// (`crate::orion`), drawn as a star map. Each star carries its real colour — Betelgeuse warm,
-/// Rigel and the Belt blue-white — and Mintaka, the studio's star, is picked out and alight.
-/// Decorative detail lives in CSS; the SVG is only geometry, so it degrades to a still star map.
-fn constellation(l: &Landing) -> Markup {
-    let s = l.s;
-    let width = 740.0;
-    let margin = 104.0;
-    let (stars, height) = orion::layout(width, margin);
-    let find = |id: &str| -> (f64, f64) {
-        stars.iter().find(|(st, ..)| st.id == id).map(|(_, x, y, _)| (*x, *y)).unwrap_or((0.0, 0.0))
-    };
-    let tint = |t: orion::Tint| match t {
-        orion::Tint::Rust => "o-star o-star--rust",
-        orion::Tint::Blue => "o-star o-star--mintaka",
-        orion::Tint::Starlight => "o-star o-star--white",
-    };
+/// A button whose label rolls on hover: the visible label and an identical copy below it, which
+/// assistive technology never hears twice.
+fn button(href: &str, label: &str, class: &str, tail: Option<Markup>) -> Markup {
     html! {
-        svg class="o-sky__fig" viewBox=(format!("0 0 {} {}", fmt(width), fmt(height)))
-            role="img" aria-label=(s.t("landing-sky-label")) preserveAspectRatio="xMidYMid meet" {
-            g class="o-lines" {
-                @for (a, b, belt) in orion::LINES {
-                    @let (ax, ay) = find(a);
-                    @let (bx, by) = find(b);
-                    @let cls = if belt { "o-line o-line--belt" } else { "o-line" };
-                    line class=(cls) x1=(fmt(ax)) y1=(fmt(ay)) x2=(fmt(bx)) y2=(fmt(by)) pathLength="1" {}
-                }
+        a class=(class) href=(href) data-magnetic {
+            span class="btn__in" {
+                span class="btn__t" { (label) }
+                span class="btn__t" aria-hidden="true" { (label) }
             }
-            g class="o-stars" {
-                @for (st, x, y, r) in &stars {
-                    g class=(tint(st.tint)) {
-                        circle class="o-halo" cx=(fmt(*x)) cy=(fmt(*y)) r=(fmt(r * 2.6)) {}
-                        circle class="o-dot" cx=(fmt(*x)) cy=(fmt(*y)) r=(fmt(r.max(3.2))) {}
-                        @if st.id == "mintaka" {
-                            circle class="o-ring" cx=(fmt(*x)) cy=(fmt(*y)) r=(fmt(r * 1.9)) {}
-                        }
-                    }
-                }
-            }
+            @if let Some(t) = tail { (t) }
         }
     }
+}
+
+/// Mark the Tajik word in the name story with `lang="tg"`.
+fn word_tg(text: &str) -> Markup {
+    let word = "минтақа";
+    match text.find(word) {
+        Some(i) => html! { (&text[..i]) span lang="tg" { (word) } (&text[i + word.len()..]) },
+        None => html! { (text) },
+    }
+}
+
+/// A whole number grouped the way the page's language writes it: 4,000 / 4 000.
+fn group(n: u32, lang: &str) -> String {
+    let digits = n.to_string();
+    if digits.len() <= 3 {
+        return digits;
+    }
+    let sep = if lang == "en" { "," } else { "\u{a0}" };
+    let (head, tail) = digits.split_at(digits.len() - 3);
+    format!("{head}{sep}{tail}")
+}
+
+fn round(v: f64, places: i32) -> f64 {
+    let f = 10f64.powi(places);
+    (v * f).round() / f
+}
+
+/// What the star chart in the hero needs, as JSON for the script: each star's name and fact (in
+/// this language), its catalogue coordinates, where it really is and where the logo's construction
+/// puts it — both in the mark's own units — plus the fit between the two and the projection centre,
+/// so the script can turn any point under the pointer back into right ascension and declination.
+///
+/// The fit is one rotation and one scale about Alnilam (both systems have it at 0,0), by least
+/// squares over the seven stars the logo uses: z = Σ conj(p)·q / Σ |p|².
+fn sky_data(s: &Strings) -> String {
+    let logo = |id: &str| orion::LOGO.iter().find(|(i, ..)| *i == id).map(|(_, x, y)| (*x, *y));
+    let (mut re, mut im, mut nn) = (0.0, 0.0, 0.0);
+    for st in &orion::STARS {
+        if let Some((qx, qy)) = logo(st.id) {
+            let (px, py) = orion::project(st);
+            re += px * qx + py * qy;
+            im += px * qy - py * qx;
+            nn += px * px + py * py;
+        }
+    }
+    let (a, b) = (re / nn, im / nn);
+    let stars: Vec<serde_json::Value> = orion::STARS
+        .iter()
+        .map(|st| {
+            let (px, py) = orion::project(st);
+            json!({
+                "id": st.id,
+                "n": s.t(&format!("star-{}", st.id)),
+                "f": s.t(&format!("star-{}-fact", st.id)),
+                "c": format!("{} · {}", st.ra_label(), st.dec_label()),
+                "s": [round(a * px - b * py, 1), round(a * py + b * px, 1)],
+                "l": logo(st.id).map(|(x, y)| [x, y]),
+                "r": st.r,
+            })
+        })
+        .collect();
+    let c = orion::star("alnilam");
+    json!({ "fit": [round(a, 5), round(b, 5)], "c0": [round(c.ra_deg(), 5), round(c.dec_deg(), 5)], "stars": stars }).to_string()
 }
 
 pub fn page(l: &Landing) -> Markup {
@@ -120,9 +174,10 @@ pub fn page(l: &Landing) -> Markup {
     let title = s.t("landing-meta-title");
     let description = s.t("landing-meta-description");
     let canonical = l.abs(&format!("/{}/studio/", l.lang));
-    // The view-source greeting an engineer reading our HTML meets first (no-JavaScript variant).
+    // The view-source greeting an engineer reading our HTML meets first.
     let greeting = format!(
-        "<!--\n      ●            Mintaka · software at the edge of physics\n       ╲   ·\n        ╲ ·  ●     A studio that measures its own claims.\n    · ·  ●         This page runs no JavaScript at all.\n        ╱    ╲\n       ●      ●    The lab proves the rest: {}\n-->\n",
+        "<!--\n      ●            Mintaka · software at the edge of physics\n       ╲   ·\n        ╲ ·  ●     A studio that measures its own claims.\n    · ·  ●         Every word here reads with no script; the one module this\n        ╱    ╲     page loads is ours, line for line ({} kB).\n       ●      ●    The lab proves the rest: {}\n-->\n",
+        l.script_kb,
         l.lab()
     );
 
@@ -160,17 +215,17 @@ pub fn page(l: &Landing) -> Markup {
                 meta property="og:locale" content=(og_locale);
                 meta name="twitter:card" content="summary_large_image";
                 style { (PreEscaped(l.css)) }
+                script type="module" src=(l.script) {}
             }
             body {
-                svg class="lp-sprite" aria-hidden="true" focusable="false" { (l.sprite) }
-                div class="lp-sky" aria-hidden="true" {}
-                a class="lp-skip" href="#main" { (s.t("skip-link")) }
+                a class="skip" href="#main" { (s.t("skip-link")) }
                 (header(l))
                 main id="main" tabindex="-1" {
                     (hero(l))
-                    (pillars(l))
+                    (measured(l))
                     (method(l))
-                    (lab_callout(l))
+                    (lab(l))
+                    (people(l))
                     (contact(l))
                 }
                 (footer(l))
@@ -182,23 +237,23 @@ pub fn page(l: &Landing) -> Markup {
 fn header(l: &Landing) -> Markup {
     let s = l.s;
     html! {
-        header class="lp-header" {
-            div class="lp-wrap lp-header__inner" {
-                a class="lp-logo" href=(l.studio_in(l.lang)) aria-label="Mintaka" { (l.logo) }
-                nav class="lp-nav" aria-label=(s.t("nav-label")) {
-                    a href=(l.lab()) { (s.t("landing-to-lab")) }
+        header class="hd" data-theme="void" {
+            div class="hd__in" {
+                a class="hd__logo" href=(l.studio_in(l.lang)) aria-label="Mintaka" { (l.logo) }
+                nav class="hd__nav" aria-label=(s.t("nav-label")) {
+                    a class="hd__link" href=(l.lab()) { (s.t("landing-to-lab")) }
                     @if l.cfg.langs.len() > 1 {
-                        span class="lp-lang" {
+                        span class="hd__lang" {
                             @for al in &l.cfg.langs {
-                                a href=(l.studio_in(al)) hreflang=(al) lang=(al)
+                                a href=(l.studio_in(al)) hreflang=(al) lang=(al) title=(s.t(&format!("lang-name-{al}")))
                                   aria-current=[(al == l.lang).then_some("page")] {
-                                    (s.t(&format!("lang-name-{al}")))
+                                    (al.to_uppercase())
                                 }
                             }
                         }
                     }
                 }
-                a class="btn btn--cta btn--sm" href="#start" { (s.t("nav-cta")) }
+                (button("#start", &s.t("nav-cta"), "btn btn--cta btn--sm", None))
             }
         }
     }
@@ -207,33 +262,31 @@ fn header(l: &Landing) -> Markup {
 fn hero(l: &Landing) -> Markup {
     let s = l.s;
     let m = orion::star("mintaka");
-    // The four measured facts, shown as a quiet telemetry strip at the foot of the hero. Each is a
-    // claim the lab proves; the colours and dots are decoration, the words are the evidence.
-    let proofs = ["landing-eff-proof", "landing-sec-proof", "landing-high-proof", "landing-des-proof"];
     html! {
-        section class="lp-hero" {
-            div class="lp-hero__sky" {
-                figure class="o-sky" { (constellation(l)) }
-            }
-            div class="o-sky__cap" aria-hidden="true" {
-                span class="o-sky__name" { "Mintaka" }
-                span class="o-sky__coord" { (m.ra_label()) " · " (m.dec_label()) }
-            }
-            div class="lp-wrap lp-hero__inner" {
-                p class="lp-eyebrow lp-hero__eyebrow" { (s.t("hero-eyebrow")) }
-                h1 class="lp-h1" { (s.t("hero-title")) }
-                p class="lp-hero__lead" { (s.t("landing-hero-lead")) }
-                div class="lp-cta-row" {
-                    a class="btn btn--cta btn--lg" href="#start" { (s.t("nav-cta")) }
-                    a class="btn btn--ghost btn--lg" href=(l.lab()) {
-                        (s.t("landing-hero-lab")) (arrow())
+        section class="ch hero" data-theme="void" data-scene="hero" aria-labelledby="hero-title" {
+            div class="hero__pin" {
+                div class="hero__stars" aria-hidden="true" {}
+                canvas class="hero__sky" aria-hidden="true" data-sky=(sky_data(s)) {}
+                div class="hero__fig" role="img" aria-label=(s.t("landing-sky-label")) { (l.mark) }
+                div class="wrap hero__copy" {
+                    p class="eyebrow hero__eyebrow" { (s.t("hero-eyebrow")) }
+                    h1 class="hero__title" id="hero-title" { (words(&s.t("hero-title"))) }
+                    p class="hero__lead" { (s.t("landing-hero-lead")) }
+                    div class="hero__cta" {
+                        (button("#start", &s.t("nav-cta"), "btn btn--cta btn--lg", None))
+                        a class="go" href=(l.lab()) { span { (s.t("landing-hero-lab")) } (arrow()) }
                     }
                 }
-                ul class="lp-ticker" role="list" aria-label=(s.t("landing-pillars-eyebrow")) {
-                    @for p in proofs {
-                        li class="lp-ticker__item" {
-                            span class="lp-ticker__dot" aria-hidden="true" {}
-                            (s.t(p))
+                div class="wrap hero__foot" {
+                    p { span class="hero__star" { (s.t("star-mintaka")) } " · " (m.ra_label()) " · " (m.dec_label()) }
+                    p class="hero__here" { (s.t("landing-here")) }
+                    // The sky twinkles for as long as the page is open: a way to stop it (WCAG 2.2.2).
+                    // Shown by the script, which is what animates it.
+                    button class="pause" type="button" hidden aria-label=(s.t("hero-motion-pause"))
+                        data-pause=(s.t("hero-motion-pause")) data-play=(s.t("hero-motion-play")) {
+                        svg class="pause__icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false" {
+                            path class="pause__bars" d="M5.5 3.5v9M10.5 3.5v9" {}
+                            path class="pause__play" d="M5.5 3.2v9.6l7.5-4.8z" {}
                         }
                     }
                 }
@@ -242,36 +295,72 @@ fn hero(l: &Landing) -> Markup {
     }
 }
 
-fn pillars(l: &Landing) -> Markup {
+fn measured(l: &Landing) -> Markup {
     let s = l.s;
-    // (nav string id for the name, description id, proof id, lab anchor it is proven at, tint).
-    let rows = [
-        ("nav-efficiency", "landing-eff-desc", "landing-eff-proof", "#efficiency", "card--eff"),
-        ("nav-security", "landing-sec-desc", "landing-sec-proof", "#security", "card--sec"),
-        ("nav-highload", "landing-high-desc", "landing-high-proof", "#highload", "card--high"),
-        ("nav-design", "landing-des-desc", "landing-des-proof", "#design", "card--des"),
+    // (pillar, what we build, figure prefix, figure, unit, what the figure is, how we do it). The
+    // proof for each lives in the lab, which the lab chapter below links to.
+    let rows: [(&str, &str, &str, u32, &str, &str, &str); 4] = [
+        ("efficiency", "landing-eff-title", "<", 50, "landing-eff-unit", "landing-eff-caption", "landing-eff-desc"),
+        ("security", "landing-sec-title", "", 0, "", "landing-sec-caption", "landing-sec-desc"),
+        ("highload", "landing-high-title", "", 4000, "landing-high-unit", "landing-high-caption", "landing-high-desc"),
+        ("design", "landing-des-title", "<", 14, "landing-unit-kb", "landing-des-caption", "landing-des-desc"),
+    ];
+    // The page's own numbers, read in the visitor's browser by the script (hidden without it).
+    let metrics = [
+        ("html", "landing-readout-html", "landing-unit-kb"),
+        ("total", "landing-readout-total", "landing-unit-kb"),
+        ("js", "landing-readout-js", "landing-unit-kb"),
+        ("third", "landing-readout-third", ""),
+        ("ttfb", "landing-readout-ttfb", "landing-unit-ms"),
+        ("fcp", "landing-readout-fcp", "landing-unit-ms"),
     ];
     html! {
-        section class="lp-section lp-pillars" aria-labelledby="pillars-title" {
-            div class="lp-wrap" {
-                div class="lp-head" {
-                    p class="lp-eyebrow lp-in" { (s.t("landing-pillars-eyebrow")) }
-                    h2 class="lp-h2 lp-in" id="pillars-title" { (s.t("landing-pillars-title")) }
-                    p class="lp-lead lp-in" { (s.t("landing-pillars-lead")) }
+        section id="measured" class="ch measured" data-theme="light" aria-labelledby="measured-title" {
+            div class="wrap" {
+                header class="head" {
+                    p class="eyebrow" data-reveal { (s.t("landing-pillars-eyebrow")) }
+                    h2 class="h2" id="measured-title" data-split { (words(&s.t("landing-pillars-title"))) }
+                    p class="lead" data-reveal { (s.t("landing-pillars-lead")) }
                 }
-                div class="cards" {
-                    @for (name_id, desc_id, proof_id, anchor, tint) in rows {
-                        @let name = s.t(name_id);
-                        a class=(format!("card lp-in {tint}")) href=(l.lab_at(anchor))
-                          aria-label=(format!("{name}: {}", s.t("landing-pillar-link"))) {
-                            span class="card__proof" {
-                                span class="card__dot" aria-hidden="true" {}
-                                (s.t(proof_id))
+                ol class="rows" role="list" {
+                    @for (pillar, title, pre, num, unit, caption, desc) in rows {
+                        li class="row" data-reveal {
+                            div class="row__fig" {
+                                p class="fig" {
+                                    @if !pre.is_empty() { span class="fig__pre" { (pre) } }
+                                    @if num > 0 {
+                                        span class="fig__num" data-count=(num) { (group(num, l.lang)) }
+                                    } @else {
+                                        span class="fig__num" { "0" }
+                                    }
+                                    @if !unit.is_empty() { span class="fig__unit" { (s.t(unit)) } }
+                                }
+                                p class="row__cap" { (s.t(caption)) }
                             }
-                            h3 class="card__name" { (name) }
-                            p class="card__desc" { (s.t(desc_id)) }
-                            span class="card__link" aria-hidden="true" {
-                                (s.t("landing-pillar-link")) (arrow())
+                            div class="row__text" {
+                                p class="row__name" { (s.t(&format!("nav-{pillar}"))) }
+                                h3 class="row__title" { (s.t(title)) }
+                                p class="row__desc" { (s.t(desc)) }
+                            }
+                        }
+                    }
+                }
+                div class="readout" role="group" hidden data-reveal aria-labelledby="readout-title" {
+                    div class="readout__head" {
+                        h3 class="readout__title" id="readout-title" {
+                            span class="live" aria-hidden="true" {}
+                            (s.t("landing-readout-title"))
+                        }
+                        p class="readout__note" { (s.t("landing-readout-note")) }
+                    }
+                    dl class="readout__grid" {
+                        @for (key, label, unit) in metrics {
+                            div class="metric" {
+                                dt { (s.t(label)) }
+                                dd {
+                                    span class="metric__v" data-m=(key) { "—" }
+                                    @if !unit.is_empty() { " " span class="metric__u" { (s.t(unit)) } }
+                                }
                             }
                         }
                     }
@@ -283,81 +372,199 @@ fn pillars(l: &Landing) -> Markup {
 
 fn method(l: &Landing) -> Markup {
     let s = l.s;
-    // The three belt stars, west to east as the eye reads them, each a step.
+    // The three belt stars, west to east as the eye reads them, each a step. The staircase they
+    // form on a wide screen rises at the belt's own 1:2 slope.
     let steps = [
-        ("alnitak", "landing-measure-title", "landing-measure-desc", false),
-        ("alnilam", "landing-build-title", "landing-build-desc", false),
-        ("mintaka", "landing-prove-title", "landing-prove-desc", true),
+        ("alnitak", "landing-measure-title", "landing-measure-desc"),
+        ("alnilam", "landing-build-title", "landing-build-desc"),
+        ("mintaka", "landing-prove-title", "landing-prove-desc"),
     ];
     html! {
-        section class="lp-section lp-method" aria-labelledby="method-title" {
-            div class="lp-wrap" {
-                div class="lp-head" {
-                    p class="lp-eyebrow lp-in" { (s.t("landing-method-eyebrow")) }
-                    h2 class="lp-h2 lp-in" id="method-title" { (s.t("landing-method-title")) }
-                    p class="lp-lead lp-in" { (s.t("landing-method-lead")) }
-                }
-                ol class="method__belt" role="list" {
-                    @for (star_id, title_id, desc_id, accent) in steps {
-                        @let star = orion::star(star_id);
-                        li class=(if accent { "step step--accent lp-in" } else { "step lp-in" }) {
-                            span class="step__node" aria-hidden="true" {}
-                            p class="step__index" { (star.id) }
-                            h3 class="step__title" { (s.t(title_id)) }
-                            p class="step__desc" { (s.t(desc_id)) }
-                            span class="step__coord" { (star.ra_label()) " · " (star.dec_label()) }
-                        }
+        section id="method" class="ch method" data-theme="light" data-scene="belt" aria-labelledby="method-title" {
+            div class="method__pin" {
+                div class="wrap method__in" {
+                    header class="head method__head" {
+                        p class="eyebrow" data-reveal { (s.t("landing-method-eyebrow")) }
+                        h2 class="sr" id="method-title" { (s.t("landing-method-title")) }
+                        p class="lead" data-reveal { (s.t("landing-method-lead")) }
                     }
-                }
-            }
-        }
-    }
-}
-
-fn lab_callout(l: &Landing) -> Markup {
-    let s = l.s;
-    html! {
-        section class="lp-section lp-lab" aria-labelledby="lab-title" {
-            div class="lp-wrap" {
-                div class="lab-cta lp-in" {
-                    p class="lp-eyebrow" { (s.t("landing-lab-eyebrow")) }
-                    h2 class="lab-cta__title" id="lab-title" { (s.t("landing-lab-title")) }
-                    p class="lab-cta__body" { (s.t("landing-lab-body")) }
-                    div {
-                        a class="btn btn--cta btn--lg" href=(l.lab()) {
-                            (s.t("landing-lab-cta")) (arrow())
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-fn contact(l: &Landing) -> Markup {
-    let s = l.s;
-    let within = l.cfg.contact.reply_within.as_str();
-    let body = s.ta("landing-contact-body", &[("within", within.into())]);
-    let direct = l.cfg.contact.direct();
-    html! {
-        section id="start" class="lp-section lp-contact" aria-labelledby="start-title" {
-            div class="lp-wrap" {
-                div class="lp-head" {
-                    p class="lp-eyebrow lp-in" { (s.t("landing-contact-eyebrow")) }
-                    h2 class="lp-h2 lp-in" id="start-title" { (s.t("landing-contact-title")) }
-                }
-                div class="contact__grid lp-in" {
-                    p class="contact__body" { (body) }
-                    div class="contact__actions" {
-                        a class="btn btn--cta btn--lg" href=(l.lab_at("#contact")) {
-                            (s.t("landing-contact-cta")) (arrow())
-                        }
-                        @if let Some((href, text)) = direct.first() {
-                            p class="contact__direct" {
-                                span { (s.t("landing-contact-direct")) }
-                                a href=(href) { (text) }
+                    ol class="steps" role="list" {
+                        @for (i, (star, title, desc)) in steps.iter().enumerate() {
+                            li class=(format!("step step--{}", i + 1)) {
+                                span class=(if *star == "mintaka" { "step__star step__star--m" } else { "step__star" }) aria-hidden="true" {}
+                                p class="step__name" { (s.t(&format!("star-{star}"))) }
+                                h3 class="step__title" { (s.t(title)) }
+                                p class="step__desc" { (s.t(desc)) }
                             }
                         }
+                    }
+                }
+                svg class="belt" aria-hidden="true" focusable="false" {
+                    path class="belt__ext" d="M0 0" {}
+                    path class="belt__line" d="M0 0" {}
+                }
+                div class="burst burst--blue" aria-hidden="true" {}
+            }
+        }
+    }
+}
+
+fn lab(l: &Landing) -> Markup {
+    let s = l.s;
+    // The lab's live instruments — the proof behind the promises above — each named by its own
+    // title there and linked to its section.
+    let rows = [
+        ("physics-instrument-title", "#physics"),
+        ("eff-race-title", "#efficiency"),
+        ("sec-fuzz-title", "#security"),
+        ("hl-lab-title", "#highload"),
+        ("ds-laws-title", "#design"),
+    ];
+    html! {
+        section id="lab" class="ch lab" data-theme="blue" aria-labelledby="lab-title" {
+            div class="wrap" {
+                header class="head" {
+                    p class="eyebrow" data-reveal { (s.t("landing-to-lab")) }
+                    h2 class="h2" id="lab-title" data-split { (words(&s.t("landing-lab-title"))) }
+                    p class="lead lead--wide" data-reveal { (s.t("landing-lab-body")) }
+                }
+                ul class="exps" role="list" {
+                    @for (title, anchor) in rows {
+                        li class="exp" data-reveal {
+                            a class="exp__a" href=(l.lab_at(anchor)) {
+                                span class="exp__title" { (s.t(title)) }
+                                span class="exp__go" aria-hidden="true" { (arrow()) }
+                            }
+                        }
+                    }
+                }
+                div class="lab__cta" data-reveal {
+                    (button(&l.lab(), &s.t("landing-lab-cta"), "btn btn--cta btn--lg", Some(arrow())))
+                }
+            }
+        }
+    }
+}
+
+fn people(l: &Landing) -> Markup {
+    let s = l.s;
+    html! {
+        section id="people" class="ch people" data-theme="blue" aria-labelledby="people-title" {
+            div class="wrap" {
+                header class="head" {
+                    p class="eyebrow" data-reveal { (s.t("team-eyebrow")) }
+                    h2 class="h2" id="people-title" data-split { (words(&s.t("team-title"))) }
+                }
+                ul class="founders" role="list" {
+                    @for m in &l.cfg.team {
+                        @let name = s.t(&format!("team-{}-name", m.id));
+                        @let photo_key = format!("team-{}-photo", m.id);
+                        @let alt = if s.has(&photo_key) { s.t(&photo_key) } else { s.ta("team-photo-alt", &[("name", name.clone().into())]) };
+                        li class="founder" data-reveal {
+                            @if let Some(p) = l.portraits.get(&m.id) {
+                                picture class="founder__photo" {
+                                    source type="image/avif" srcset=(p.avif);
+                                    img src=(p.webp) width="224" height="224" loading="lazy" decoding="async" alt=(alt);
+                                }
+                            }
+                            div class="founder__text" {
+                                p class="founder__role" { (s.t(&format!("team-{}-role", m.id))) }
+                                h3 class="founder__name" { (name) }
+                                p class="founder__line" { (s.t(&format!("team-{}-line", m.id))) }
+                            }
+                        }
+                    }
+                }
+                div class="story" {
+                    h3 class="eyebrow story__title" data-reveal { (s.t("team-name-title")) }
+                    ul class="story__facts" role="list" {
+                        li data-reveal { span class="story__dot" aria-hidden="true" {} (s.t("team-name-star")) }
+                        li data-reveal { span class="story__dot" aria-hidden="true" {} (word_tg(&s.t("team-name-word"))) }
+                        li data-reveal { span class="story__dot story__dot--m" aria-hidden="true" {} (s.t("team-name-pass")) }
+                    }
+                    p class="story__end" data-split { (words(&s.t("team-name-end"))) }
+                }
+            }
+        }
+    }
+}
+
+/// The last chapter, and every "Start a project" on the page lands here: the brief form itself.
+/// A plain HTML form — it works with no script — posting to the same endpoint as the lab's form
+/// (`/api/contact`, which answers a form post with a redirect to `/{lang}/sent/`). Same fields,
+/// minus the timeline: the shorter the form, the likelier the brief.
+fn contact(l: &Landing) -> Markup {
+    let s = l.s;
+    let c = &l.cfg.contact;
+    let kinds = ["new-product", "performance", "security-audit", "design", "ai", "not-sure"];
+    let optional = html! { " " span class="field__opt" { "(" (s.t("ct-optional")) ")" } };
+    let field = |name: &str, label: Markup, input: Markup, hint: Option<String>| -> Markup {
+        html! {
+            div class="field" {
+                label class="field__label" for=(format!("b-{name}")) { (label) }
+                @if let Some(h) = hint { p class="field__hint" id=(format!("bh-{name}")) { (h) } }
+                (input)
+            }
+        }
+    };
+    html! {
+        section id="start" class="ch contact" data-theme="rust" aria-labelledby="start-title" {
+            div class="wrap contact__grid" {
+                div class="contact__intro" {
+                    h2 class="contact__title" id="start-title" data-split { (words(&s.t("landing-contact-title"))) }
+                    p class="contact__body" data-reveal { (s.ta("ct-lead", &[("within", c.reply_within.as_str().into())])) }
+                    @if let Some((href, text)) = c.direct().first() {
+                        p class="contact__direct" data-reveal {
+                            span { (s.t("landing-contact-direct")) }
+                            a href=(href) { (text) }
+                        }
+                    }
+                }
+                form class="brief" method="post" action=(l.url("/api/contact")) data-reveal {
+                    input type="hidden" name="lang" value=(l.lang);
+                    fieldset class="brief__group" {
+                        legend class="field__label" { (s.t("ct-kind")) }
+                        div class="chips" {
+                            @for k in kinds {
+                                label class="chip" {
+                                    input class="sr" type="checkbox" name="kind" value=(k);
+                                    span { (s.t(&format!("ct-kind-{k}"))) }
+                                }
+                            }
+                        }
+                    }
+                    (field("message", html! { (s.t("ct-message")) (optional) },
+                        html! { textarea class="input" id="b-message" name="message" maxlength="5000" rows="4" aria-describedby="bh-message" {} },
+                        Some(s.t("ct-message-hint"))))
+                    div class="brief__row" {
+                        (field("name", html! { (s.t("ct-name")) },
+                            html! { input class="input" id="b-name" name="name" required maxlength="120" autocomplete="name"; },
+                            None))
+                        (field("company", html! { (s.t("ct-company")) (optional) },
+                            html! { input class="input" id="b-company" name="company" maxlength="120" autocomplete="organization"; },
+                            None))
+                    }
+                    p class="brief__rule" id="bh-contact" { (s.t("ct-contact-rule")) }
+                    div class="brief__row" {
+                        (field("email", html! { (s.t("ct-email")) },
+                            html! { input class="input" id="b-email" name="email" type="email" maxlength="254" autocomplete="email" aria-describedby="bh-contact"; },
+                            None))
+                        (field("telegram", html! { (s.t("ct-telegram")) },
+                            html! { input class="input" id="b-telegram" name="telegram" maxlength="33" autocomplete="off" spellcheck="false" autocapitalize="none" placeholder="@" aria-describedby="bh-contact"; },
+                            None))
+                    }
+                    div class="brief__trap" aria-hidden="true" {
+                        label { (s.t("ct-trap")) input name="website" tabindex="-1" autocomplete="off"; }
+                    }
+                    div class="brief__send" {
+                        button class="btn btn--cta btn--xl" type="submit" data-magnetic {
+                            span class="btn__in" {
+                                span class="btn__t" { (s.t("ct-send")) }
+                                span class="btn__t" aria-hidden="true" { (s.t("ct-send")) }
+                            }
+                            (arrow())
+                        }
+                        p class="brief__privacy" { (s.t("ct-privacy")) }
                     }
                 }
             }
@@ -368,36 +575,80 @@ fn contact(l: &Landing) -> Markup {
 fn footer(l: &Landing) -> Markup {
     let s = l.s;
     html! {
-        footer class="lp-footer" {
-            div class="lp-wrap" {
-                div class="lp-footer__top" {
-                    div class="lp-footer__brand" {
-                        a href=(l.studio_in(l.lang)) aria-label="Mintaka" { (l.logo) }
-                        p class="lp-footer__tag" { (s.t("ft-tagline")) }
+        footer class="ft" data-theme="void" {
+            div class="wrap" {
+                div class="ft__mark" aria-hidden="true" { (l.wordmark) }
+                div class="ft__grid" {
+                    div class="ft__brand" {
+                        p class="ft__tag" { (s.t("ft-tagline")) }
                         p { (s.t("ft-made")) }
                     }
-                    div class="lp-footer__links" {
+                    div class="ft__links" {
                         a href=(l.lab()) { (s.t("landing-to-lab")) }
                         a href=(l.url(&format!("/{}/privacy/", l.lang))) { (s.t("ft-privacy")) }
                         a href=(l.url("/.well-known/security.txt")) { (s.t("ft-security")) }
                     }
-                }
-                @if l.cfg.langs.len() > 1 {
-                    nav class="lp-footer__lang" aria-label=(s.t("lang-switch")) {
-                        @for al in &l.cfg.langs {
-                            a href=(l.studio_in(al)) hreflang=(al) lang=(al)
-                              aria-current=[(al == l.lang).then_some("page")] {
-                                (s.t(&format!("lang-name-{al}")))
+                    @if l.cfg.langs.len() > 1 {
+                        nav class="ft__lang" aria-label=(s.t("lang-switch")) {
+                            @for al in &l.cfg.langs {
+                                a href=(l.studio_in(al)) hreflang=(al) lang=(al)
+                                  aria-current=[(al == l.lang).then_some("page")] {
+                                    (s.t(&format!("lang-name-{al}")))
+                                }
                             }
                         }
                     }
                 }
-                div class="lp-footer__meta" {
-                    p class="lp-footer__note" { (s.t("landing-footer-note")) }
-                    span class="lp-footer__build" { (s.t("ft-build")) " " (l.build) }
+                div class="ft__meta" {
+                    p class="ft__note" { (s.ta("landing-footer-note", &[("kb", l.script_kb.clone().into())])) }
+                    p { (s.ta("ft-copyright", &[("year", l.year.into())])) " · " (s.t("ft-build")) " " span class="ft__build" { (l.build) } }
                 }
-                p { (s.ta("ft-copyright", &[("year", l.year.into())])) }
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn numbers_group_by_language() {
+        assert_eq!(group(14, "en"), "14");
+        assert_eq!(group(4000, "en"), "4,000");
+        assert_eq!(group(4000, "ru"), "4\u{a0}000");
+    }
+
+    #[test]
+    fn headings_split_into_words_and_read_the_same() {
+        let html = words("Software at the edge").into_string();
+        assert_eq!(html.matches(r#"class="w""#).count(), 4);
+        let text: String = html.split('<').map(|part| part.split_once('>').map_or(part, |(_, t)| t)).collect();
+        assert_eq!(text, "Software at the edge");
+    }
+
+    #[test]
+    fn the_sky_fits_the_logo() {
+        // The fitted real sky lands near the logo's construction points (the brand board says the
+        // shoulders and feet tilt as they do in the real sky): every star within 30 units.
+        let fit: serde_json::Value = {
+            let (mut re, mut im, mut nn) = (0.0, 0.0, 0.0);
+            for st in &orion::STARS {
+                if let Some((_, qx, qy)) = orion::LOGO.iter().find(|(i, ..)| *i == st.id) {
+                    let (px, py) = orion::project(st);
+                    re += px * qx + py * qy;
+                    im += px * qy - py * qx;
+                    nn += px * px + py * py;
+                }
+            }
+            json!([re / nn, im / nn])
+        };
+        let (a, b) = (fit[0].as_f64().unwrap(), fit[1].as_f64().unwrap());
+        for (id, qx, qy) in orion::LOGO {
+            let (px, py) = orion::project(orion::star(id));
+            let (x, y) = (a * px - b * py, a * py + b * px);
+            let d = ((x - qx).powi(2) + (y - qy).powi(2)).sqrt();
+            assert!(d < 30.0, "{id} is {d:.1} units from its construction point");
         }
     }
 }
