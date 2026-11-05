@@ -39,6 +39,11 @@ the inlined logo's colours are classes (`lg-s`, `lg-b`, `lg-m`, see `svg::brand_
   - `scenes.ts` — one scroll loop: pinned scenes (CSS `position: sticky`), the header's colourway,
     the footer's wordmark (`.in` once a third of it shows). Native scrolling throughout; nothing
     hijacks the wheel. Measuring reads everything before it writes anything.
+  - `glide.ts` — in-page links ("Start a project") glide to their section, eased evenly in and
+    out over 0.55–1.9 s (≈ 1.7 s from the hero to the brief), instead of the browser's smooth
+    scroll, which covers 60 % of that distance in its first half second. The address, Back, the
+    landing spot and the keyboard's starting point stay the browser's own (it pushes the fragment
+    first and finishes with a native fragment navigation); any wheel, touch, press or key stops it.
   - `reveal.ts`, `readout.ts` — reveals and counters, the page's own measurements (Resource and
     Navigation Timing; nothing is sent).
 
@@ -47,11 +52,12 @@ the inlined logo's colours are classes (`lg-s`, `lg-b`, `lg-m`, see `svg::brand_
 - **Reads without the script.** Every word, link and portrait is in the HTML; without the script
   the mark is a still SVG and the chapters simply follow each other.
 - **Motion off means off.** With `prefers-reduced-motion: reduce` there is no `.motion`: no
-  construction, no pinned scenes, no reveals; the script only measures and colours the header.
+  construction, no pinned scenes, no reveals, no glide (in-page links jump); the script only
+  measures and colours the header.
 - **No third-party code**, and the CSP stays as strict as the lab's (`script-src 'self'`, Trusted
   Types; the script sets styles through the CSSOM, never `style` attributes).
 - **Budgets** (release builds fail over them): first screen ≤ 14 kB and whole page ≤ 32 kB
-  compressed, page + script ≤ 40 kB, script ≤ 17 kB minified. The footer states the script's real
+  compressed, page + script ≤ 40 kB, script ≤ 18 kB minified. The footer states the script's real
   compressed size, computed at build time.
 - **Lean by construction.** The page's stylesheet drops the shared tokens it never reads
   (`css::prune_custom_properties`). Pages not written in Cyrillic draw their few Russian and Tajik

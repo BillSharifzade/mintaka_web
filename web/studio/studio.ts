@@ -7,8 +7,10 @@
  *   scenes.ts    one scroll loop: the pinned scenes, the header's colourway, the footer
  *   reveal.ts    blocks and words rising into view, figures counting up
  *   readout.ts   this page's own numbers, from the browser's timing records
+ *   glide.ts     in-page links glide to their section, evenly, instead of bursting off
  */
 
+import { glide } from './glide.ts';
 import { readout } from './readout.ts';
 import { reveal } from './reveal.ts';
 import { beltScene, heroScene, run, type Scene } from './scenes.ts';
@@ -52,6 +54,7 @@ if (motion) {
   if (belt) scenes.push(beltScene(belt));
   run(header, scenes);
   reveal(lang);
+  glide();
   // The pinned tracks have just grown the page: return to the anchor the link pointed at.
   if (location.hash.length > 1) document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView();
 } else {

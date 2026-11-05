@@ -495,8 +495,10 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
             // Raised from 16 kB on 2026-11-04 for the flight into the mark (a sky in depth, streaks,
             // the body's own stars), the reticle that locks onto whole dots and turns Void over the
             // body, and the footer's letters: ~2.2 kB minified, of which dropping the magnetic,
-            // rolling buttons paid back ~0.7 kB. Still ~6.9 kB brotli.
-            "studio" => Some(17_000),
+            // rolling buttons paid back ~0.7 kB. Raised again on 2026-11-05 for the glide that takes
+            // "Start a project" to the brief evenly instead of the browser's burst: ~0.9 kB
+            // minified. Still ~7.3 kB brotli.
+            "studio" => Some(18_000),
             _ => None,
         }
     };

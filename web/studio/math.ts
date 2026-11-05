@@ -11,6 +11,10 @@ export const easeInOut = (t: number): number => (t < 0.5 ? 4 * t * t * t : 1 - (
 /** A small overshoot for things that land (the mark's dots). */
 export const easeOutBack = (t: number): number => 1 + 2.2 * (t - 1) ** 3 + 1.2 * (t - 1) ** 2;
 export const easeOutExpo = (t: number): number => (t >= 1 ? 1 : 1 - 2 ** (-10 * t));
+/** Even in and out: the peak speed is only π/2 the average, for a glide the eye can follow. */
+export const easeInOutSine = (t: number): number => (1 - Math.cos(Math.PI * t)) / 2;
+/** How long an in-page glide of `d` pixels takes, ms: 0.55 s plus a little per pixel, at most 1.9 s. */
+export const glideMs = (d: number): number => Math.min(1900, 550 + Math.sqrt(d) * 12);
 
 /** A locale the browser can format numbers in: Tajik writes numbers as Russian does. */
 export function numberLocale(lang: string): string {
