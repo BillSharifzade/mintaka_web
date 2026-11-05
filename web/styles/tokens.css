@@ -43,7 +43,9 @@
     --grid-line-major: rgb(58 63 73 / 0.45); /* Slate */
 
     /* Type */
-    --font-sans: "Space Grotesk", "Onest", "Space Grotesk Fallback", system-ui, sans-serif;
+    /* Cyrillic comes from Onest; on pages not written in it, a few quoted words (the language
+       names, a Tajik word) come first from a small cut of it — see crates/site/src/fonts.rs. */
+    --font-sans: "Space Grotesk", var(--font-cyr, "Onest"), "Space Grotesk Fallback", system-ui, sans-serif;
     --font-mono: "IBM Plex Mono", "Onest", "IBM Plex Mono Fallback", ui-monospace, monospace;
     --fs-xs: 0.8125rem; /* 13 — eyebrows, instrument bars */
     --fs-sm: 0.875rem; /* 14 */

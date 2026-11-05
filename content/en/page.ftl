@@ -302,6 +302,7 @@ team-photo-alt = Portrait of { $name }
 team-bilol-name = Sharifzoda Bilol
 team-bilol-role = Founder
 team-bilol-line = I architect high-load Rust backends for fintech, telecom and government, and tune them for low-end phones on unstable networks.
+team-bilol-photo = Sharifzoda Bilol's eye behind his glasses, a screen of code reflected in the lens
 team-amirhamza-name = Amirhamza Sayfiddinzoda
 team-amirhamza-role = Co-founder
 team-amirhamza-line = I take web products from architecture to release, in React, Node.js, Python and Go, and teach others to do the same.
@@ -495,6 +496,8 @@ landing-lab-cta = Open the lab
 
 landing-contact-title = Tell us what you're building.
 landing-contact-direct = Or reach us directly
+landing-team-title = From Dushanbe to Orion.
+landing-team-site = Visit website
 
 landing-footer-note = This page runs { $kb } kB of JavaScript — all of it ours, and none of it needed to read a word.
 landing-sky-label = The constellation Orion, from real sky coordinates, drawn into the Mintaka mark: an hourglass with Betelgeuse in rust at one corner and Mintaka, the studio's star, in blue on the Belt.

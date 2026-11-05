@@ -83,7 +83,9 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
     let lab_style_hash = util::csp_hash(lab_css.as_bytes());
     // The studio landing page inlines its own stylesheet (none of the lab's hero, instruments or
     // islands), allowed by its own CSP hash.
-    let landing_css = format!("{}{}", css::bundle(&root.join("web/styles/landing.css"))?, css::minify(&fonts.css)?);
+    // The shared tokens declare far more custom properties than this one page reads; its script
+    // reads none, so the unread ones are dropped.
+    let landing_css = css::prune_custom_properties(&format!("{}{}", css::bundle(&root.join("web/styles/landing.css"))?, css::minify(&fonts.css)?));
     let landing_style_hash = util::csp_hash(landing_css.as_bytes());
 
     // Lab posts (spec §S11), rendered first: they are part of the build fingerprint.
@@ -490,7 +492,11 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
             // 0.45 kB here for 1.6 kB brotli less HTML on every Russian page view.
             "fuzzer" => Some(21_500),
             // The studio landing page's motion, star chart and self-measurement (web/studio/).
-            "studio" => Some(16_000),
+            // Raised from 16 kB on 2026-11-04 for the flight into the mark (a sky in depth, streaks,
+            // the body's own stars), the reticle that locks onto whole dots and turns Void over the
+            // body, and the footer's letters: ~2.2 kB minified, of which dropping the magnetic,
+            // rolling buttons paid back ~0.7 kB. Still ~6.9 kB brotli.
+            "studio" => Some(17_000),
             _ => None,
         }
     };

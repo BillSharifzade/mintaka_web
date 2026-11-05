@@ -31,6 +31,17 @@ struct FaceDef {
     preload: &'static [&'static str],
 }
 
+/// Small cuts of Onest's two Cyrillic files for pages not written in Cyrillic: an English page
+/// shows only a few Russian and Tajik words (the language names, the Tajik word in the name story,
+/// one lab post), a Russian one only Tajik's six extra letters (both cases). Same outlines, same
+/// weight axis — so the words look exactly as before, for 8.6 kB instead of 26 kB (English) and
+/// 2.5 kB instead of 10.5 kB (Russian). Each face's unicode-range is read from its own file, and a
+/// letter they lack falls through to the full Onest, so new copy can never render wrong.
+///
+/// Made with fontTools: `pyftsubset onest-cyrillic[-ext]-wght-normal.woff2 --flavor=woff2
+/// --layout-features='*' --unicodes=…` (the letters above, in both cases).
+const NAMES: &str = "";
+
 const FACES: &[FaceDef] = &[
     FaceDef { family: "Space Grotesk", file: "space-grotesk-latin-wght-normal.woff2", weight: "300 700", range: LATIN, role: Role::Sans, preload: &["en", "ru"] },
     FaceDef { family: "Space Grotesk", file: "space-grotesk-latin-ext-wght-normal.woff2", weight: "300 700", range: LATIN_EXT, role: Role::Sans, preload: &[] },
@@ -40,7 +51,15 @@ const FACES: &[FaceDef] = &[
     FaceDef { family: "IBM Plex Mono", file: "ibm-plex-mono-latin-400-normal.woff2", weight: "400", range: LATIN, role: Role::Mono, preload: &[] },
     FaceDef { family: "IBM Plex Mono", file: "ibm-plex-mono-cyrillic-400-normal.woff2", weight: "400", range: CYRILLIC, role: Role::Mono, preload: &[] },
     FaceDef { family: "IBM Plex Mono", file: "ibm-plex-mono-cyrillic-ext-400-normal.woff2", weight: "400", range: CYRILLIC_EXT, role: Role::Mono, preload: &[] },
+    // The cuts (see NAMES): English pages put "Onest Names" before Onest, Russian ones "Onest Ext
+    // Names" (the same file as the second face, as its own family so it brings no basic letters).
+    FaceDef { family: "Onest Names", file: "onest-names-cyrillic-wght-normal.woff2", weight: "100 900", range: NAMES, role: Role::Sans, preload: &[] },
+    FaceDef { family: "Onest Names", file: "onest-names-cyrillic-ext-wght-normal.woff2", weight: "100 900", range: NAMES, role: Role::Sans, preload: &[] },
+    FaceDef { family: "Onest Ext Names", file: "onest-names-cyrillic-ext-wght-normal.woff2", weight: "100 900", range: NAMES, role: Role::Sans, preload: &[] },
 ];
+
+/// Which cut comes first in the sans stack (`--font-cyr`, tokens.css), by page language.
+const CYR_STACKS: &[(&str, &str)] = &[("en", r#""Onest Names","Onest""#), ("ru", r#""Onest Ext Names","Onest""#)];
 
 /// Metrics of the local fonts we adjust to look like the web fonts while those load
 /// (OS/2 xAvgCharWidth and hhea metrics, font units).
@@ -69,12 +88,21 @@ impl Fonts {
         let mut sans = BTreeSet::new();
         let mut mono = BTreeSet::new();
         let mut fallback_source: [Option<FaceInfo>; 2] = [None, None];
+        let mut urls: Vec<(&str, String)> = Vec::new();
 
         for def in FACES {
             let path = root.join("assets/fonts").join(def.file);
             let bytes = std::fs::read(&path).with_context(|| format!("reading {}", path.display()))?;
             let info = inspect_woff2(&bytes).with_context(|| format!("parsing {}", path.display()))?;
-            let ranges = parse_unicode_range(def.range)?;
+            // A cut covers exactly what its file holds.
+            let own;
+            let range = if def.range == NAMES {
+                own = unicode_range_of(&info.codepoints);
+                own.as_str()
+            } else {
+                def.range
+            };
+            let ranges = parse_unicode_range(range)?;
             let covered: BTreeSet<u32> = info.codepoints.iter().copied().filter(|c| ranges.iter().any(|(a, b)| c >= a && c <= b)).collect();
             match def.role {
                 Role::Sans => sans.extend(&covered),
@@ -86,15 +114,26 @@ impl Fonts {
             }
 
             let stem = def.file.trim_end_matches(".woff2").trim_end_matches("-normal").trim_end_matches("-wght");
-            let url = dist.add_hashed(&format!("fonts/{stem}"), "woff2", &bytes, content_type_for("woff2"))?;
+            // One route per file, however many faces use it.
+            let url = match urls.iter().find(|(f, _)| *f == def.file) {
+                Some((_, u)) => u.clone(),
+                None => {
+                    let u = dist.add_hashed(&format!("fonts/{stem}"), "woff2", &bytes, content_type_for("woff2"))?;
+                    urls.push((def.file, u.clone()));
+                    u
+                }
+            };
             for lang in def.preload {
                 preloads.push((*lang, url.clone()));
             }
             let _ = write!(
                 css,
                 "@font-face{{font-family:\"{}\";src:url({url}) format(\"woff2\");font-weight:{};font-style:normal;font-display:swap;unicode-range:{}}}",
-                def.family, def.weight, def.range
+                def.family, def.weight, range
             );
+        }
+        for (lang, stack) in CYR_STACKS {
+            let _ = write!(css, ":root:lang({lang}){{--font-cyr:{stack}}}");
         }
 
         // Fallback faces sized to the web fonts' metrics, so swapping causes no layout shift.
@@ -152,6 +191,24 @@ impl Fonts {
             .filter(|c| !self.sans.contains(&(*c as u32)) && !self.mono.contains(&(*c as u32)))
             .collect()
     }
+}
+
+/// A unicode-range descriptor for a set of code points, runs merged: "U+0410,U+0414-0415".
+fn unicode_range_of(codepoints: &[u32]) -> String {
+    let mut cps: Vec<u32> = codepoints.to_vec();
+    cps.sort_unstable();
+    cps.dedup();
+    let mut out: Vec<String> = Vec::new();
+    let mut i = 0;
+    while i < cps.len() {
+        let mut j = i;
+        while j + 1 < cps.len() && cps[j + 1] == cps[j] + 1 {
+            j += 1;
+        }
+        out.push(if i == j { format!("U+{:04X}", cps[i]) } else { format!("U+{:04X}-{:04X}", cps[i], cps[j]) });
+        i = j + 1;
+    }
+    out.join(",")
 }
 
 #[derive(Clone)]
@@ -389,6 +446,33 @@ fn decode_entities(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unicode_ranges_merge_runs() {
+        assert_eq!(unicode_range_of(&[0x0414, 0x0410, 0x0415, 0x0416, 0x049B]), "U+0410,U+0414-0416,U+049B");
+        assert_eq!(parse_unicode_range(&unicode_range_of(&[0x0410, 0x0411])).unwrap(), vec![(0x0410, 0x0411)]);
+    }
+
+    #[test]
+    fn the_cuts_hold_only_what_their_full_files_hold() {
+        // Same letters as the full Onest files, and every letter they hold in both cases.
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/fonts");
+        let cps = |f: &str| inspect_woff2(&std::fs::read(root.join(f)).unwrap()).unwrap().codepoints;
+        for (cut, full) in [
+            ("onest-names-cyrillic-wght-normal.woff2", "onest-cyrillic-wght-normal.woff2"),
+            ("onest-names-cyrillic-ext-wght-normal.woff2", "onest-cyrillic-ext-wght-normal.woff2"),
+        ] {
+            let (c, f) = (cps(cut), cps(full));
+            assert!(!c.is_empty() && c.len() < f.len() / 2, "{cut}: {} of {}", c.len(), f.len());
+            for cp in &c {
+                assert!(f.contains(cp), "{cut} has U+{cp:04X}, which {full} lacks");
+                let ch = char::from_u32(*cp).unwrap();
+                for other in ch.to_uppercase().chain(ch.to_lowercase()) {
+                    assert!(c.contains(&(other as u32)), "{cut} has {ch} but not {other}");
+                }
+            }
+        }
+    }
 
     #[test]
     fn base128_decodes() {

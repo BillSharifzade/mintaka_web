@@ -6,11 +6,9 @@
  *   sky.ts       the hero: Orion constructs itself into the mark; a star chart under the pointer
  *   scenes.ts    one scroll loop: the pinned scenes, the header's colourway, the footer
  *   reveal.ts    blocks and words rising into view, figures counting up
- *   magnetic.ts  buttons that lean towards the pointer
  *   readout.ts   this page's own numbers, from the browser's timing records
  */
 
-import { magnetic } from './magnetic.ts';
 import { readout } from './readout.ts';
 import { reveal } from './reveal.ts';
 import { beltScene, heroScene, run, type Scene } from './scenes.ts';
@@ -54,7 +52,6 @@ if (motion) {
   if (belt) scenes.push(beltScene(belt));
   run(header, scenes);
   reveal(lang);
-  if (fine) magnetic();
   // The pinned tracks have just grown the page: return to the anchor the link pointed at.
   if (location.hash.length > 1) document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView();
 } else {

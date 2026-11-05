@@ -5,8 +5,9 @@
  * each scene's progress through its track.
  *
  * Also here: the header takes the colourway of the chapter beneath it (a scene can override it
- * while a part of the mark is filling the screen), hides while the reader scrolls down, and the
- * footer's wordmark rises as the page slides off it.
+ * while a part of the mark is filling the screen) and hides while the reader scrolls down; and the
+ * footer's wordmark plays its letters in (CSS, `.in`) once the page has slid far enough off it, and
+ * resets when the footer is covered again.
  */
 
 import { clamp, easeIn, lerp } from './math.ts';
@@ -34,6 +35,11 @@ export function run(header: HTMLElement | null, scenes: Scene[]): void {
   let vh = innerHeight;
   let docH = 0;
   let footH = 0;
+  // The wordmark's place in the footer: its bottom edge's distance from the footer's bottom, and
+  // its height. The page slides off the footer from the bottom up, so the wordmark shows last.
+  let markBelow = 0;
+  let markH = 1;
+  let markIn = false;
   let lastY = scrollY;
   let hidden = false;
   let queued = false;
@@ -73,8 +79,12 @@ export function run(header: HTMLElement | null, scenes: Scene[]): void {
       }
     }
     if (wordmark && footH) {
-      const f = clamp(1 - (docH - (y + vh)) / footH);
-      wordmark.style.translate = `0 ${((1 - f) * 38).toFixed(2)}%`;
+      // How much of the footer shows, in pixels, and how much of the wordmark that uncovers.
+      const shown = clamp(1 - (docH - (y + vh)) / footH) * footH;
+      // In once a third of it shows; reset only when the footer is covered again.
+      if ((shown - markBelow) / markH > 0.3) markIn = true;
+      else if (shown <= 0) markIn = false;
+      wordmark.classList.toggle('in', markIn);
     }
   };
 
@@ -85,15 +95,22 @@ export function run(header: HTMLElement | null, scenes: Scene[]): void {
       const r = ch.getBoundingClientRect();
       return [r.top + y, r.bottom + y];
     });
+    // All the page's reads first; the scenes' own measuring (which writes) last.
     for (const s of scenes) {
       const r = s.el.getBoundingClientRect();
       s.top = r.top + y;
       s.len = Math.max(1, r.height - vh);
-      s.measure();
       s.p = -1;
     }
     docH = document.documentElement.scrollHeight;
     footH = footer?.offsetHeight ?? 0;
+    if (footer && wordmark) {
+      const f = footer.getBoundingClientRect();
+      const m = wordmark.getBoundingClientRect();
+      markBelow = f.bottom - m.bottom;
+      markH = Math.max(1, m.height);
+    }
+    for (const s of scenes) s.measure();
     tick();
   };
 
@@ -163,11 +180,13 @@ export function beltScene(el: HTMLElement): Scene {
     ...base(el),
     measure() {
       if (!pin || !line || stars.length < 3) return;
+      // Every read before any write, so measuring never forces a second layout.
       const pr = pin.getBoundingClientRect();
       pts = stars.map((s) => {
         const r = s.getBoundingClientRect();
         return [r.left + r.width / 2 - pr.left, r.top + r.height / 2 - pr.top];
       });
+      r0 = (stars[2]?.offsetWidth ?? 28) / 2;
       const [p0, p1, p2] = pts as [[number, number], [number, number], [number, number]];
       const l1 = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
       const l2 = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
@@ -185,7 +204,6 @@ export function beltScene(el: HTMLElement): Scene {
       ext?.setAttribute('d', `M${e0x!.toFixed(1)} ${e0y!.toFixed(1)}L${p0[0].toFixed(1)} ${p0[1].toFixed(1)}M${p2[0].toFixed(1)} ${p2[1].toFixed(1)}L${e2x!.toFixed(1)} ${e2y!.toFixed(1)}`);
       line.style.strokeDasharray = wide.matches ? total.toFixed(1) : '';
       if (!wide.matches) line.style.strokeDashoffset = '';
-      r0 = (stars[2]?.offsetWidth ?? 28) / 2;
       cover = Math.hypot(Math.max(p2[0], pr.width - p2[0]), Math.max(p2[1], pr.height - p2[1]));
       if (burst && !wide.matches) burst.style.visibility = 'hidden';
     },

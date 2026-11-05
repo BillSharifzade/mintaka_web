@@ -34,10 +34,12 @@ function count(el: HTMLElement, fmt: Intl.NumberFormat, delay: number): void {
   const duration = 1100;
   let start = 0;
   el.textContent = fmt.format(0);
+  // One text node, rewritten in place: no new node a frame.
+  const text = el.firstChild as Text;
   const step = (now: number) => {
     if (!start) start = now + delay;
     const t = Math.min(1, Math.max(0, (now - start) / duration));
-    el.textContent = fmt.format(Math.round(target * easeOutExpo(t)));
+    text.data = fmt.format(Math.round(target * easeOutExpo(t)));
     if (t < 1) requestAnimationFrame(step);
   };
   requestAnimationFrame(step);

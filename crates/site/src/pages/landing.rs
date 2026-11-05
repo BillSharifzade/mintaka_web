@@ -87,16 +87,129 @@ fn words(text: &str) -> Markup {
     }
 }
 
-/// A button whose label rolls on hover: the visible label and an identical copy below it, which
-/// assistive technology never hears twice.
+/// A link that looks like a button.
 fn button(href: &str, label: &str, class: &str, tail: Option<Markup>) -> Markup {
     html! {
-        a class=(class) href=(href) data-magnetic {
-            span class="btn__in" {
-                span class="btn__t" { (label) }
-                span class="btn__t" aria-hidden="true" { (label) }
-            }
+        a class=(class) href=(href) {
+            (label)
             @if let Some(t) = tail { (t) }
+        }
+    }
+}
+
+/// A language as the switcher names it. Tajik's language code is `tg`, which the links keep (in
+/// `hreflang` and `lang`, where browsers, search engines and screen readers need it), but readers
+/// in Tajikistan know it by the country's TJ.
+fn lang_code(lang: &str) -> String {
+    match lang {
+        "tg" => "TJ".to_owned(),
+        other => other.to_uppercase(),
+    }
+}
+
+/// The stars the logo's corners stand on (Bellatrix, Rigel, Saiph), left faintly in its body: the
+/// mark's own construction, quietly showing. The hero's canvas reads these circles (`lg-f`) and
+/// draws the same dots, so the still figure and the drawn one stay identical.
+fn mark_with_stars(mark: &Markup) -> Markup {
+    let dots: String = ["bellatrix", "rigel", "saiph"]
+        .iter()
+        .filter_map(|id| {
+            let (_, x, y) = orion::LOGO.iter().find(|(i, ..)| i == id)?;
+            Some(format!(r#"<circle class="lg-f" cx="{x}" cy="{y}" r="{:.2}"/>"#, faint_r(id)))
+        })
+        .collect();
+    PreEscaped(mark.0.replacen("</g></svg>", &format!("{dots}</g></svg>"), 1))
+}
+
+/// A corner star's faint dot, in mark units: by its brightness on the brand board (Rigel, the
+/// brightest of the three, is the largest).
+fn faint_r(id: &str) -> f64 {
+    2.2 + orion::star(id).r * 0.16
+}
+
+/// The wordmark with each letter its own path (the brand file draws all seven as one), so the
+/// footer can raise them one by one; the dot of the i — Mintaka — lands last, with a ring.
+///
+/// The brand path is a run of absolute subpaths (`M…`); a subpath whose box lies inside the one
+/// before it is that letter's counter (the bowls of the two a's) and stays with it.
+fn wordmark_letters(wordmark: &Markup) -> Markup {
+    let svg = &wordmark.0;
+    let Some(start) = svg.find(r#"<path d=""#).map(|i| i + 9) else { return wordmark.clone() };
+    let Some(len) = svg[start..].find('"') else { return wordmark.clone() };
+    let d = &svg[start..start + len];
+    let bbox = |sub: &str| {
+        let nums: Vec<f64> = sub
+            .split(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-'))
+            .filter(|t| !t.is_empty())
+            .filter_map(|t| t.parse().ok())
+            .collect();
+        nums.chunks(2).filter(|p| p.len() == 2).fold([f64::MAX, f64::MAX, f64::MIN, f64::MIN], |b, p| {
+            [b[0].min(p[0]), b[1].min(p[1]), b[2].max(p[0]), b[3].max(p[1])]
+        })
+    };
+    let mut letters: Vec<(String, [f64; 4])> = Vec::new();
+    for sub in d.split('M').filter(|s| !s.trim().is_empty()) {
+        let sub = format!("M{sub}");
+        let b = bbox(&sub);
+        match letters.last_mut() {
+            Some((path, outer)) if b[0] >= outer[0] && b[1] >= outer[1] && b[2] <= outer[2] && b[3] <= outer[3] => path.push_str(&sub),
+            _ => letters.push((sub, b)),
+        }
+    }
+    let paths: String = letters.iter().map(|(p, _)| format!(r#"<path class="lg-s wm-l" d="{p}"/>"#)).collect();
+    // The original path ends at its closing `/>`; swap it for the letters.
+    let Some(end) = svg[start..].find("/>").map(|i| start + i + 2) else { return wordmark.clone() };
+    let mut out = String::with_capacity(svg.len() + 400);
+    out.push_str(&svg[..start - 9]);
+    out.push_str(&paths);
+    out.push_str(&svg[end..]);
+    // Mintaka, the i's dot, lands last; a copy of it underneath rings out as it does.
+    if let Some(a) = out.find("<circle ")
+        && let Some(b) = out[a..].find("/>").map(|i| a + i + 2)
+    {
+        let dot = out[a..b].to_owned();
+        let ping = dot.replace(r#"class="lg-m""#, r#"class="wm-ping""#);
+        let dot = dot.replace(r#"class="lg-m""#, r#"class="lg-m wm-dot""#);
+        out.replace_range(a..b, &format!("{ping}{dot}"));
+    }
+    PreEscaped(out)
+}
+
+/// Right ascension and declination to the minute: "5h 14m", "−8° 12′".
+fn ra_short(st: &orion::Star) -> String {
+    format!("{}h {:02}m", st.ra.0, st.ra.1)
+}
+fn dec_short(st: &orion::Star) -> String {
+    let sign = if st.dec.0 < 0.0 { "−" } else { "+" };
+    format!("{sign}{}° {:02}′", st.dec.1, st.dec.2)
+}
+
+/// A small chart of Orion beside the chapter's heading: the legend to the four promises below it,
+/// each of which stands under one of its stars, as the lab's sections do. Real positions, from the
+/// same catalogue as the hero; the promise's star lights up while the reader is on its row.
+fn legend(s: &Strings, stars: &[&str]) -> Markup {
+    let (pts, h) = orion::layout(200.0, 18.0);
+    let at = |id: &str| pts.iter().find(|(st, ..)| st.id == id).map(|(_, x, y, _)| (*x, *y)).unwrap_or_default();
+    html! {
+        svg class="lgd" viewBox=(format!("0 0 200 {h:.0}")) aria-hidden="true" focusable="false" {
+            @for (a, b, _) in orion::LINES {
+                @let ((ax, ay), (bx, by)) = (at(a), at(b));
+                path class="lgd__line" d=(format!("M{ax:.1} {ay:.1}L{bx:.1} {by:.1}")) pathLength="1" {}
+            }
+            @for (st, x, y, _) in &pts {
+                g class=(format!("lgd__star lgd__star--{}", st.id)) {
+                    circle cx=(format!("{x:.1}")) cy=(format!("{y:.1}")) r=(format!("{:.2}", 1.2 + st.r * 0.12)) {}
+                    @if stars.contains(&st.id) {
+                        // Labels sit where the figure's lines are not: for the stars at the edges
+                        // (Betelgeuse, Rigel), to their left — Betelgeuse's out into the margin.
+                        @let left = *x > 150.0 || *x < 30.0;
+                        text x=(format!("{:.1}", if left { x - 8.0 } else { x + 8.0 })) y=(format!("{:.1}", y + 2.6))
+                            text-anchor=[left.then_some("end")] {
+                            (s.t(&format!("star-{}", st.id)).to_uppercase())
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -247,7 +360,7 @@ fn header(l: &Landing) -> Markup {
                             @for al in &l.cfg.langs {
                                 a href=(l.studio_in(al)) hreflang=(al) lang=(al) title=(s.t(&format!("lang-name-{al}")))
                                   aria-current=[(al == l.lang).then_some("page")] {
-                                    (al.to_uppercase())
+                                    (lang_code(al))
                                 }
                             }
                         }
@@ -267,7 +380,7 @@ fn hero(l: &Landing) -> Markup {
             div class="hero__pin" {
                 div class="hero__stars" aria-hidden="true" {}
                 canvas class="hero__sky" aria-hidden="true" data-sky=(sky_data(s)) {}
-                div class="hero__fig" role="img" aria-label=(s.t("landing-sky-label")) { (l.mark) }
+                div class="hero__fig" role="img" aria-label=(s.t("landing-sky-label")) { (mark_with_stars(l.mark)) }
                 div class="wrap hero__copy" {
                     p class="eyebrow hero__eyebrow" { (s.t("hero-eyebrow")) }
                     h1 class="hero__title" id="hero-title" { (words(&s.t("hero-title"))) }
@@ -295,16 +408,30 @@ fn hero(l: &Landing) -> Markup {
     }
 }
 
+/// One of the four promises: its pillar (as the lab names it), the star it stands under there, what
+/// we build, its figure (prefix, number, unit), what the figure is, and how we do it. Text fields are
+/// string keys.
+struct Promise {
+    pillar: &'static str,
+    star: &'static str,
+    title: &'static str,
+    pre: &'static str,
+    num: u32,
+    unit: &'static str,
+    caption: &'static str,
+    desc: &'static str,
+}
+
 fn measured(l: &Landing) -> Markup {
     let s = l.s;
-    // (pillar, what we build, figure prefix, figure, unit, what the figure is, how we do it). The
-    // proof for each lives in the lab, which the lab chapter below links to.
-    let rows: [(&str, &str, &str, u32, &str, &str, &str); 4] = [
-        ("efficiency", "landing-eff-title", "<", 50, "landing-eff-unit", "landing-eff-caption", "landing-eff-desc"),
-        ("security", "landing-sec-title", "", 0, "", "landing-sec-caption", "landing-sec-desc"),
-        ("highload", "landing-high-title", "", 4000, "landing-high-unit", "landing-high-caption", "landing-high-desc"),
-        ("design", "landing-des-title", "<", 14, "landing-unit-kb", "landing-des-caption", "landing-des-desc"),
+    // The proof for each promise lives in the lab, which the lab chapter below links to.
+    let rows = [
+        Promise { pillar: "efficiency", star: "rigel", title: "landing-eff-title", pre: "<", num: 50, unit: "landing-eff-unit", caption: "landing-eff-caption", desc: "landing-eff-desc" },
+        Promise { pillar: "security", star: "saiph", title: "landing-sec-title", pre: "", num: 0, unit: "", caption: "landing-sec-caption", desc: "landing-sec-desc" },
+        Promise { pillar: "highload", star: "betelgeuse", title: "landing-high-title", pre: "", num: 4000, unit: "landing-high-unit", caption: "landing-high-caption", desc: "landing-high-desc" },
+        Promise { pillar: "design", star: "meissa", title: "landing-des-title", pre: "<", num: 14, unit: "landing-unit-kb", caption: "landing-des-caption", desc: "landing-des-desc" },
     ];
+    let stars: Vec<&str> = rows.iter().map(|r| r.star).collect();
     // The page's own numbers, read in the visitor's browser by the script (hidden without it).
     let metrics = [
         ("html", "landing-readout-html", "landing-unit-kb"),
@@ -317,14 +444,16 @@ fn measured(l: &Landing) -> Markup {
     html! {
         section id="measured" class="ch measured" data-theme="light" aria-labelledby="measured-title" {
             div class="wrap" {
-                header class="head" {
+                header class="head head--chart" {
                     p class="eyebrow" data-reveal { (s.t("landing-pillars-eyebrow")) }
                     h2 class="h2" id="measured-title" data-split { (words(&s.t("landing-pillars-title"))) }
                     p class="lead" data-reveal { (s.t("landing-pillars-lead")) }
+                    div class="head__chart" data-reveal { (legend(s, &stars)) }
                 }
                 ol class="rows" role="list" {
-                    @for (pillar, title, pre, num, unit, caption, desc) in rows {
-                        li class="row" data-reveal {
+                    @for Promise { pillar, star, title, pre, num, unit, caption, desc } in rows {
+                        @let st = orion::star(star);
+                        li class=(format!("row row--{star}")) data-reveal {
                             div class="row__fig" {
                                 p class="fig" {
                                     @if !pre.is_empty() { span class="fig__pre" { (pre) } }
@@ -338,7 +467,15 @@ fn measured(l: &Landing) -> Markup {
                                 p class="row__cap" { (s.t(caption)) }
                             }
                             div class="row__text" {
-                                p class="row__name" { (s.t(&format!("nav-{pillar}"))) }
+                                p class="row__name" {
+                                    span { (s.t(&format!("nav-{pillar}"))) }
+                                    // The promise's star, as on a chart's legend: a quiet aside.
+                                    span class="row__star" aria-hidden="true" {
+                                        i class="row__dot" {}
+                                        (s.t(&format!("star-{star}")))
+                                        span class="row__radec" { (ra_short(st)) " · " (dec_short(st)) }
+                                    }
+                                }
                                 h3 class="row__title" { (s.t(title)) }
                                 p class="row__desc" { (s.t(desc)) }
                             }
@@ -453,7 +590,7 @@ fn people(l: &Landing) -> Markup {
             div class="wrap" {
                 header class="head" {
                     p class="eyebrow" data-reveal { (s.t("team-eyebrow")) }
-                    h2 class="h2" id="people-title" data-split { (words(&s.t("team-title"))) }
+                    h2 class="h2" id="people-title" data-split { (words(&s.t("landing-team-title"))) }
                 }
                 ul class="founders" role="list" {
                     @for m in &l.cfg.team {
@@ -471,6 +608,12 @@ fn people(l: &Landing) -> Markup {
                                 p class="founder__role" { (s.t(&format!("team-{}-role", m.id))) }
                                 h3 class="founder__name" { (name) }
                                 p class="founder__line" { (s.t(&format!("team-{}-line", m.id))) }
+                                @if !m.site.is_empty() {
+                                    // Whose site, for a screen reader listing links out of context.
+                                    a class="btn btn--line btn--sm founder__site" href=(m.site) {
+                                        (s.t("landing-team-site")) span class="sr" { ", " (name) } (arrow())
+                                    }
+                                }
                             }
                         }
                     }
@@ -511,7 +654,11 @@ fn contact(l: &Landing) -> Markup {
         section id="start" class="ch contact" data-theme="rust" aria-labelledby="start-title" {
             div class="wrap contact__grid" {
                 div class="contact__intro" {
-                    h2 class="contact__title" id="start-title" data-split { (words(&s.t("landing-contact-title"))) }
+                    // A long first word ("Расскажите,") would outgrow its column at the largest
+                    // size and run into the form: such a title is sized by the column instead.
+                    @let title = s.t("landing-contact-title");
+                    @let long = title.split(' ').any(|w| w.chars().count() >= 10);
+                    h2 class=(if long { "contact__title contact__title--long" } else { "contact__title" }) id="start-title" data-split { (words(&title)) }
                     p class="contact__body" data-reveal { (s.ta("ct-lead", &[("within", c.reply_within.as_str().into())])) }
                     @if let Some((href, text)) = c.direct().first() {
                         p class="contact__direct" data-reveal {
@@ -557,13 +704,7 @@ fn contact(l: &Landing) -> Markup {
                         label { (s.t("ct-trap")) input name="website" tabindex="-1" autocomplete="off"; }
                     }
                     div class="brief__send" {
-                        button class="btn btn--cta btn--xl" type="submit" data-magnetic {
-                            span class="btn__in" {
-                                span class="btn__t" { (s.t("ct-send")) }
-                                span class="btn__t" aria-hidden="true" { (s.t("ct-send")) }
-                            }
-                            (arrow())
-                        }
+                        button class="btn btn--cta btn--xl" type="submit" { (s.t("ct-send")) (arrow()) }
                         p class="brief__privacy" { (s.t("ct-privacy")) }
                     }
                 }
@@ -577,7 +718,7 @@ fn footer(l: &Landing) -> Markup {
     html! {
         footer class="ft" data-theme="void" {
             div class="wrap" {
-                div class="ft__mark" aria-hidden="true" { (l.wordmark) }
+                div class="ft__mark" aria-hidden="true" { (wordmark_letters(l.wordmark)) }
                 div class="ft__grid" {
                     div class="ft__brand" {
                         p class="ft__tag" { (s.t("ft-tagline")) }
@@ -617,6 +758,38 @@ mod tests {
         assert_eq!(group(14, "en"), "14");
         assert_eq!(group(4000, "en"), "4,000");
         assert_eq!(group(4000, "ru"), "4\u{a0}000");
+    }
+
+    #[test]
+    fn tajik_is_tj_to_the_eye_and_tg_to_the_machine() {
+        assert_eq!(lang_code("tg"), "TJ");
+        assert_eq!(lang_code("ru"), "RU");
+    }
+
+    #[test]
+    fn the_wordmark_splits_into_its_seven_letters() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let wm = crate::pages::svg::brand_classed(&root, "mintaka-wordmark-on-dark.svg", "wordmark").unwrap();
+        let out = wordmark_letters(&wm).into_string();
+        // m, i, n, t, a, k, a — each a's bowl stays with its letter.
+        assert_eq!(out.matches(r#"class="lg-s wm-l""#).count(), 7, "{out}");
+        assert_eq!(out.matches(r#"class="wm-ping""#).count(), 1);
+        assert_eq!(out.matches(r#"class="lg-m wm-dot""#).count(), 1);
+        // Nothing of the brand path is lost: the same numbers, in the same order.
+        let digits = |s: &str| s.chars().filter(|c| c.is_ascii_digit()).count();
+        assert_eq!(digits(&out) - digits(&wm.0), digits(r#"cx="98.5" cy="-63.2" r="8.51""#));
+    }
+
+    #[test]
+    fn the_corner_stars_sit_inside_the_mark() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let mark = crate::pages::svg::brand_classed(&root, "mintaka-mark-full-on-dark.svg", "mark").unwrap();
+        let out = mark_with_stars(&mark).into_string();
+        assert_eq!(out.matches(r#"class="lg-f""#).count(), 3);
+        // Each dot clears the body's edges, which pass at least 8.8 units from its centre.
+        for id in ["bellatrix", "rigel", "saiph"] {
+            assert!(faint_r(id) < 6.0, "{id}");
+        }
     }
 
     #[test]
