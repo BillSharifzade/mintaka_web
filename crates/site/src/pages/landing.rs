@@ -128,7 +128,7 @@ fn faint_r(id: &str) -> f64 {
 }
 
 /// The wordmark with each letter its own path (the brand file draws all seven as one), so the
-/// footer can raise them one by one; the dot of the i — Mintaka — lands last, with a ring.
+/// footer can raise them one by one; the dot of the i — Mintaka — lands last.
 ///
 /// The brand path is a run of absolute subpaths (`M…`); a subpath whose box lies inside the one
 /// before it is that letter's counter (the bowls of the two a's) and stays with it.
@@ -163,16 +163,8 @@ fn wordmark_letters(wordmark: &Markup) -> Markup {
     out.push_str(&svg[..start - 9]);
     out.push_str(&paths);
     out.push_str(&svg[end..]);
-    // Mintaka, the i's dot, lands last; a copy of it underneath rings out as it does.
-    if let Some(a) = out.find("<circle ")
-        && let Some(b) = out[a..].find("/>").map(|i| a + i + 2)
-    {
-        let dot = out[a..b].to_owned();
-        let ping = dot.replace(r#"class="lg-m""#, r#"class="wm-ping""#);
-        let dot = dot.replace(r#"class="lg-m""#, r#"class="lg-m wm-dot""#);
-        out.replace_range(a..b, &format!("{ping}{dot}"));
-    }
-    PreEscaped(out)
+    // Mintaka, the i's dot, lands last.
+    PreEscaped(out.replacen(r#"class="lg-m""#, r#"class="lg-m wm-dot""#, 1))
 }
 
 /// Right ascension and declination to the minute: "5h 14m", "−8° 12′".
@@ -519,13 +511,20 @@ fn method(l: &Landing) -> Markup {
     html! {
         section id="method" class="ch method" data-theme="light" data-scene="belt" aria-labelledby="method-title" {
             div class="method__pin" {
-                div class="wrap method__in" {
+                // Two-word titles (Чен кардан) take two lines: such a staircase is a little taller,
+                // so a short screen narrows it a little more.
+                @let tall = steps.iter().any(|(_, title, _)| s.t(title).contains(' '));
+                div class=(if tall { "wrap method__in method__in--tall" } else { "wrap method__in" }) {
                     header class="head method__head" {
                         p class="eyebrow" data-reveal { (s.t("landing-method-eyebrow")) }
                         h2 class="sr" id="method-title" { (s.t("landing-method-title")) }
                         p class="lead" data-reveal { (s.t("landing-method-lead")) }
                     }
-                    ol class="steps" role="list" {
+                    // The staircase's columns are narrow; a title with a word of eight letters or
+                    // more (Построить), or of two words (Чен кардан), is set smaller when a short
+                    // screen narrows them.
+                    @let long = tall || steps.iter().any(|(_, title, _)| s.t(title).split(' ').any(|w| w.chars().count() >= 8));
+                    ol class=(if long { "steps steps--long" } else { "steps" }) role="list" {
                         @for (i, (star, title, desc)) in steps.iter().enumerate() {
                             li class=(format!("step step--{}", i + 1)) {
                                 span class=(if *star == "mintaka" { "step__star step__star--m" } else { "step__star" }) aria-hidden="true" {}
@@ -609,9 +608,12 @@ fn people(l: &Landing) -> Markup {
                                 h3 class="founder__name" { (name) }
                                 p class="founder__line" { (s.t(&format!("team-{}-line", m.id))) }
                                 @if !m.site.is_empty() {
-                                    // Whose site, for a screen reader listing links out of context.
-                                    a class="btn btn--line btn--sm founder__site" href=(m.site) {
-                                        (s.t("landing-team-site")) span class="sr" { ", " (name) } (arrow())
+                                    // In a new tab, so the studio's page stays open behind it; a
+                                    // screen reader hears whose site it is and that a tab opens.
+                                    a class="btn btn--line btn--sm founder__site" href=(m.site) target="_blank" rel="noopener" {
+                                        (s.t("landing-team-site"))
+                                        span class="sr" { ", " (name) " (" (s.t("landing-new-tab")) ")" }
+                                        (arrow())
                                     }
                                 }
                             }
@@ -773,11 +775,10 @@ mod tests {
         let out = wordmark_letters(&wm).into_string();
         // m, i, n, t, a, k, a — each a's bowl stays with its letter.
         assert_eq!(out.matches(r#"class="lg-s wm-l""#).count(), 7, "{out}");
-        assert_eq!(out.matches(r#"class="wm-ping""#).count(), 1);
         assert_eq!(out.matches(r#"class="lg-m wm-dot""#).count(), 1);
         // Nothing of the brand path is lost: the same numbers, in the same order.
         let digits = |s: &str| s.chars().filter(|c| c.is_ascii_digit()).count();
-        assert_eq!(digits(&out) - digits(&wm.0), digits(r#"cx="98.5" cy="-63.2" r="8.51""#));
+        assert_eq!(digits(&out), digits(&wm.0));
     }
 
     #[test]

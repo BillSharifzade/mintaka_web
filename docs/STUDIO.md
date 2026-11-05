@@ -34,7 +34,7 @@ the inlined logo's colours are classes (`lg-s`, `lg-b`, `lg-m`, see `svg::brand_
     a star anywhere on its dot, and turns Void over the mark's body), and the flight into the
     mark: a sky in depth (some stars between us and the mark stream past in streaks while the
     scroll is fast), a slight bank, the body's own faint stars on the way in. It draws nothing
-    once the body covers the screen, and the idle twinkle runs at 30 frames a second.
+    once the body covers the screen, and the idle twinkle runs at 20 frames a second.
   - `astro.ts` — the projection, its inverse and the coordinate format (tested in `astro.test.ts`).
   - `scenes.ts` — one scroll loop: pinned scenes (CSS `position: sticky`), the header's colourway,
     the footer's wordmark (`.in` once a third of it shows). Native scrolling throughout; nothing
@@ -58,6 +58,13 @@ the inlined logo's colours are classes (`lg-s`, `lg-b`, `lg-m`, see `svg::brand_
   words (the language names, the Tajik word in the name story) from small cuts of Onest
   (`fonts.rs`, "Onest Names"): 8.6 kB instead of 26 kB on English pages, 2.5 kB instead of 10.5 kB
   on Russian ones, with identical outlines; a letter the cuts lack falls through to the full font.
+  The Latin fonts are cut the same way to the characters the site writes (Space Grotesk 15 kB
+  instead of 22, IBM Plex Mono 9.7 instead of 14.7), declared after their full files so browsers
+  try them first. Code and key styles live in `base-code.css`, which only the lab imports.
+- **Every screen.** Pinned scenes use the small viewport (`svh`), so a phone's toolbar never
+  covers them. The hero has its own arrangements for short phones held upright, phones held
+  sideways (words and mark side by side), tablets held upright (mark above the words) and short
+  desktop windows; long Russian step titles shrink only when a short screen narrows the staircase.
 - **Every number is sourced or live.** < 50 µs and 4,000 req/s: the production benchmark of
   2026-10-30 (docs/MILESTONE-4.md, 2-vCPU VM, 25–28 % CPU). < 14 kB: this page's own budget. The
   readout is measured in the visitor's browser.

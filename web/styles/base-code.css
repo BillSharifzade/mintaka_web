@@ -1,0 +1,24 @@
+/* Code and keys, for the pages that show them (the lab; not the studio page, which has none).
+   Part of the base layer, split out of base.css so the studio page doesn't carry it. */
+@layer base {
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--font-mono);
+    font-size: 0.92em;
+    font-feature-settings: "zero" 1;
+  }
+
+  kbd {
+    display: inline-block;
+    min-width: 1.6em;
+    padding: 0 0.35em;
+    border: 1px solid var(--border-strong);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    text-align: center;
+    line-height: 1.5;
+    color: var(--text);
+  }
+}

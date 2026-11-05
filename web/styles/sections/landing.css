@@ -242,9 +242,12 @@
       scale 0.16s var(--ease-out);
   }
 
-  .btn:hover {
-    background: var(--c-cta-h);
-    color: var(--c-cta-fg);
+  /* Hover colours only where there is hover: on a phone, a tapped control would keep them. */
+  @media (hover: hover) {
+    .btn:hover {
+      background: var(--c-cta-h);
+      color: var(--c-cta-fg);
+    }
   }
 
   /* An outlined button, for the quieter links (a founder's site). */
@@ -254,10 +257,12 @@
     box-shadow: inset 0 0 0 1px currentColor;
   }
 
-  .btn--line:hover {
-    background: var(--c-fg);
-    color: var(--c-bg);
-    box-shadow: inset 0 0 0 1px var(--c-fg);
+  @media (hover: hover) {
+    .btn--line:hover {
+      background: var(--c-fg);
+      color: var(--c-bg);
+      box-shadow: inset 0 0 0 1px var(--c-fg);
+    }
   }
 
   .btn:active {
@@ -422,9 +427,11 @@
     color: inherit;
   }
 
-  .hd__link:hover::after {
-    scale: 1 1;
-    transform-origin: left;
+  @media (hover: hover) {
+    .hd__link:hover::after {
+      scale: 1 1;
+      transform-origin: left;
+    }
   }
 
   .hd__lang {
@@ -444,9 +451,11 @@
     transition: box-shadow 0.25s ease;
   }
 
-  .hd__lang a:hover {
-    color: inherit;
-    box-shadow: inset 0 -1px 0 currentColor;
+  @media (hover: hover) {
+    .hd__lang a:hover {
+      color: inherit;
+      box-shadow: inset 0 -1px 0 currentColor;
+    }
   }
 
   .hd__lang a[aria-current="page"] {
@@ -470,10 +479,12 @@
     height: 200vh;
   }
 
+  /* The pin is the small viewport's height (svh): a phone's toolbar never covers its foot, and
+     the toolbar sliding away never resizes the sky. */
   .motion .hero__pin {
     position: sticky;
     top: 0;
-    height: 100vh;
+    height: 100svh;
     min-height: 0;
   }
 
@@ -522,7 +533,7 @@
     z-index: 0;
     top: 50%;
     right: max(var(--pad), calc((100% - var(--wrap)) / 2 + var(--pad)));
-    height: min(70vh, 46rem);
+    height: min(70svh, 46rem);
     aspect-ratio: 157.03 / 237.01;
     translate: 0 -46%;
     animation: fig-in 1s var(--ease-out) 1.1s backwards;
@@ -622,9 +633,11 @@
       box-shadow 0.25s ease;
   }
 
-  .pause:hover {
-    color: var(--c-fg);
-    box-shadow: inset 0 0 0 1px var(--c-line);
+  @media (hover: hover) {
+    .pause:hover {
+      color: var(--c-fg);
+      box-shadow: inset 0 0 0 1px var(--c-line);
+    }
   }
 
   .pause__icon {
@@ -781,18 +794,22 @@
   }
 
   /* The row the reader is on lights its star on the chart. */
-  .measured:has(.row--rigel:hover) .lgd__star--rigel circle,
-  .measured:has(.row--saiph:hover) .lgd__star--saiph circle,
-  .measured:has(.row--betelgeuse:hover) .lgd__star--betelgeuse circle,
-  .measured:has(.row--meissa:hover) .lgd__star--meissa circle {
-    scale: 1.9;
+  @media (hover: hover) {
+    .measured:has(.row--rigel:hover) .lgd__star--rigel circle,
+    .measured:has(.row--saiph:hover) .lgd__star--saiph circle,
+    .measured:has(.row--betelgeuse:hover) .lgd__star--betelgeuse circle,
+    .measured:has(.row--meissa:hover) .lgd__star--meissa circle {
+      scale: 1.9;
+    }
   }
 
-  .measured:has(.row--rigel:hover) .lgd__star--rigel text,
-  .measured:has(.row--saiph:hover) .lgd__star--saiph text,
-  .measured:has(.row--betelgeuse:hover) .lgd__star--betelgeuse text,
-  .measured:has(.row--meissa:hover) .lgd__star--meissa text {
-    fill: var(--c-fg);
+  @media (hover: hover) {
+    .measured:has(.row--rigel:hover) .lgd__star--rigel text,
+    .measured:has(.row--saiph:hover) .lgd__star--saiph text,
+    .measured:has(.row--betelgeuse:hover) .lgd__star--betelgeuse text,
+    .measured:has(.row--meissa:hover) .lgd__star--meissa text {
+      fill: var(--c-fg);
+    }
   }
 
   .rows {
@@ -902,8 +919,10 @@
     height: 0.3125rem;
   }
 
-  .row:hover .row__dot {
-    scale: 1.6;
+  @media (hover: hover) {
+    .row:hover .row__dot {
+      scale: 1.6;
+    }
   }
 
   .row__title {
@@ -1179,6 +1198,20 @@
       font-size: clamp(2.5rem, 6.4cqw, 6.75rem);
     }
 
+    /* Longer words (Измерить, Построить) take a smaller size once a short screen narrows the
+       staircase below ~900 px, so they still fit their column. */
+    @container (max-width: 57rem) {
+      .steps--long .step__title {
+        font-size: clamp(1.5rem, 5cqw, 5.5rem);
+      }
+
+      /* …and their long words in the descriptions (нишондиҳандаҳои) too. */
+      .steps--long .step__desc {
+        font-size: 0.875rem;
+        overflow-wrap: break-word;
+      }
+    }
+
     .motion .method {
       height: 240vh;
     }
@@ -1188,7 +1221,7 @@
       top: 0;
       display: flex;
       align-items: center;
-      height: 100vh;
+      height: 100svh;
       padding-block: calc(var(--hd) + 1rem) 1.5rem;
     }
 
@@ -1196,8 +1229,12 @@
        narrower staircase rather than a clipped one. */
     .motion .method__in {
       width: 100%;
-      max-width: calc((100vh - 24rem) * 3);
+      max-width: calc((100svh - 24rem) * 3);
       margin-inline: auto;
+    }
+
+    .motion .method__in--tall {
+      max-width: calc((100svh - 26rem) * 3);
     }
 
     .motion .step > :not(.step__star) {
@@ -1517,8 +1554,10 @@
       box-shadow 0.25s ease;
   }
 
-  .input:hover {
-    background: rgb(244 245 247 / 0.24);
+  @media (hover: hover) {
+    .input:hover {
+      background: rgb(244 245 247 / 0.24);
+    }
   }
 
   .input:focus-visible {
@@ -1565,8 +1604,10 @@
       scale 0.16s var(--ease-out);
   }
 
-  .chip:hover {
-    background: rgb(10 11 13 / 0.08);
+  @media (hover: hover) {
+    .chip:hover {
+      background: rgb(10 11 13 / 0.08);
+    }
   }
 
   .chip:active {
@@ -1621,12 +1662,6 @@
     overflow: visible;
   }
 
-  .wm-ping {
-    fill: none;
-    stroke: var(--mintaka);
-    stroke-width: 1.4;
-    opacity: 0;
-  }
 
   .ft__grid {
     display: grid;
@@ -1663,9 +1698,11 @@
     text-decoration-color: var(--c-line);
   }
 
-  .ft__links a:hover,
-  .ft__lang a:hover {
-    text-decoration-color: currentColor;
+  @media (hover: hover) {
+    .ft__links a:hover,
+    .ft__lang a:hover {
+      text-decoration-color: currentColor;
+    }
   }
 
   .ft__lang a[aria-current="page"] {
@@ -1736,14 +1773,13 @@
   .motion .head__chart .lgd__line:nth-child(3n) { transition-delay: 0.65s; }
 
   /* The footer's sign-off: the letters rise out of the line one by one, then Mintaka — the dot
-     of the i — lands with a ring. Played each time the page slides off the footer. */
+     of the i — lands. Played each time the page slides off the footer. */
   .motion .ft__mark {
     clip-path: inset(-60% -5% 0 -5%);
   }
 
   .motion .wm-l,
-  .motion .wm-dot,
-  .motion .wm-ping {
+  .motion .wm-dot {
     transform-box: fill-box;
     transform-origin: 50% 50%;
   }
@@ -1774,9 +1810,6 @@
     transition-delay: 0.62s;
   }
 
-  .motion .ft__mark.in .wm-ping {
-    animation: ping 1.5s var(--ease-out) 0.85s;
-  }
 
   @media (prefers-reduced-motion: reduce) {
     .hero__eyebrow,
@@ -1847,7 +1880,7 @@
     .hero__fig {
       top: calc(var(--hd) + 0.75rem);
       right: var(--pad);
-      height: min(24vh, 13rem);
+      height: min(24svh, 13rem);
       translate: none;
     }
 
@@ -1900,9 +1933,14 @@
 
   /* Short laptop screens: the pinned hero has exactly one screen to fit in. */
   @media (min-width: 48.01rem) and (max-height: 840px) {
+    /* The words centre in the space between the header and the coordinates line. */
+    .hero__pin {
+      padding-bottom: 4rem;
+    }
+
     .hero__title {
       margin-block: 1rem 1.25rem;
-      font-size: clamp(3rem, 12.5vh, 7.5rem);
+      font-size: clamp(3rem, 12.5svh, 7.5rem);
     }
 
     .hero__lead {
@@ -1914,13 +1952,13 @@
     }
 
     .hero__fig {
-      height: 62vh;
+      height: 62svh;
     }
   }
 
   @media (max-width: 48rem) and (max-height: 760px) {
     .hero__fig {
-      height: 19vh;
+      height: 19svh;
     }
   }
 
@@ -1939,6 +1977,181 @@
 
     .ft__grid {
       grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  /* Short phones held upright (320×568, 360×640, 375×667): the same hero, set a little tighter so
+     the words clear the header above and the coordinates below. */
+  @media (max-width: 48rem) and (max-height: 700px) {
+    .hero__pin {
+      padding-bottom: 4.25rem;
+    }
+
+    .hero__title {
+      margin-bottom: 0.75rem;
+    }
+
+    .hero__lead {
+      font-size: 0.9375rem;
+      line-height: 1.38;
+    }
+
+    .hero__cta {
+      gap: 0.5rem 1.25rem;
+      margin-top: 1rem;
+    }
+  }
+
+  @media (max-width: 22.5rem) and (max-height: 700px) {
+    .hero__pin {
+      padding-bottom: 6.25rem;
+    }
+
+    .hero__title {
+      font-size: 2.25rem;
+    }
+
+    .hero__lead {
+      font-size: 0.875rem;
+    }
+
+    .hero__cta .btn--lg {
+      min-height: 3rem;
+      padding-block: 0.8em;
+    }
+  }
+
+  /* Tablets held upright (iPad 768–1024 wide, taller than wide): the mark keeps the top of the
+     screen, the words the bottom — as on a phone, with room for a larger mark. */
+  @media (min-width: 40rem) and (max-aspect-ratio: 5/6) {
+    .hero__pin {
+      justify-content: flex-end;
+      padding-bottom: 6rem;
+    }
+
+    .hero__fig {
+      top: calc(var(--hd) + 2rem);
+      right: var(--pad);
+      height: min(40svh, 36rem);
+      translate: none;
+    }
+
+    .hero__copy > * {
+      max-width: min(46rem, 88%);
+    }
+  }
+
+  /* Short desktop windows (a laptop with toolbars or the developer panel open). */
+  @media (min-width: 48.01rem) and (max-height: 720px) {
+    .hero__title {
+      margin-block: 0.5rem 1rem;
+      font-size: clamp(2.5rem, 11svh, 6rem);
+    }
+
+    .hero__lead {
+      font-size: 1rem;
+    }
+
+    .hero__cta {
+      margin-top: 1.25rem;
+    }
+
+    .hero__fig {
+      height: 58svh;
+    }
+  }
+
+  /* Phones held sideways (568×320 … 932×430): one short screen, so words and mark sit side by
+     side, the mark sized by the height and the words given the width it leaves. */
+  @media (orientation: landscape) and (max-height: 31.25rem) {
+    :root {
+      --hd: 3.25rem;
+    }
+
+    .hd__logo .logo {
+      height: 1.4rem;
+    }
+
+    .hero__pin {
+      justify-content: center;
+      padding-block: var(--hd) 2.25rem;
+    }
+
+    .hero__fig {
+      top: calc(50% + (var(--hd) - 2.25rem) / 2);
+      right: var(--pad);
+      height: calc(100svh - var(--hd) - 4.25rem);
+      translate: 0 -50%;
+    }
+
+    /* The words' column ends where the mark (its height × the mark's 0.6626 aspect) begins. */
+    .hero__copy > *,
+    .hero__lead {
+      max-width: calc(100% - (100svh - var(--hd) - 4.25rem) * 0.6626 - 2rem);
+    }
+
+    .hero__eyebrow {
+      display: none;
+    }
+
+    .hero__title {
+      max-width: 20ch;
+      margin-block: 0 0.6rem;
+      font-size: clamp(1.6rem, 9svh, 3rem);
+    }
+
+    .hero__lead {
+      font-size: 0.8125rem;
+      line-height: 1.32;
+    }
+
+    .hero__cta {
+      gap: 0.5rem 1.25rem;
+      margin-top: 0.7rem;
+    }
+
+    .hero__cta .btn--lg {
+      min-height: 2.75rem;
+      padding: 0.7em 1.15em;
+      font-size: 0.9375rem;
+    }
+
+    .hero__foot {
+      flex-wrap: nowrap;
+      padding-block: 0.55rem;
+      font-size: 0.625rem;
+    }
+
+    .hero__foot > p:first-child {
+      flex-basis: auto;
+    }
+
+    .hero__here {
+      margin-left: auto;
+      margin-right: 0;
+    }
+  }
+
+  /* The smallest screens keep the coordinates line to Mintaka's own (Dushanbe is in the footer). */
+  @media (max-width: 22.5rem), (orientation: landscape) and (max-height: 22rem) {
+    .hero__here {
+      display: none;
+    }
+
+    /* The coordinates and the pause control then share one line. */
+    .hero__foot > p:first-child {
+      flex: 1 1 0;
+    }
+  }
+
+  /* The shortest of them (568×320). */
+  @media (orientation: landscape) and (max-height: 22rem) {
+    .hero__lead {
+      line-height: 1.26;
+    }
+
+    .hero__cta .btn--lg {
+      min-height: 2.5rem;
     }
   }
 }

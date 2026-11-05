@@ -6,6 +6,7 @@
 
 @import "./tokens.css";
 @import "./base.css";
+@import "./base-code.css";
 @import "./components.css";
 @import "./sections/layout.css";
 @import "./sections/hero.css";

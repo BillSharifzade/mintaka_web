@@ -498,6 +498,7 @@ landing-contact-title = Tell us what you're building.
 landing-contact-direct = Or reach us directly
 landing-team-title = From Dushanbe to Orion.
 landing-team-site = Visit website
+landing-new-tab = opens in a new tab
 
 landing-footer-note = This page runs { $kb } kB of JavaScript — all of it ours, and none of it needed to read a word.
 landing-sky-label = The constellation Orion, from real sky coordinates, drawn into the Mintaka mark: an hourglass with Betelgeuse in rust at one corner and Mintaka, the studio's star, in blue on the Belt.

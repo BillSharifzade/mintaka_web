@@ -259,8 +259,9 @@ export function sky(pin: HTMLElement, canvas: HTMLCanvasElement, fig: HTMLElemen
   function frame(now: number) {
     raf = 0;
     const settled = ze === zq && flow === 0;
-    // Idle — only the twinkle moving: thirty frames a second look the same and cost half.
-    if (settled && clock - t0 > 4200 && now - moved > 600 && now - drawn < 30) {
+    // Idle — only the twinkle moving, each star over seconds: twenty frames a second look the
+    // same and cost a third.
+    if (settled && clock - t0 > 4200 && now - moved > 600 && now - drawn < 48) {
       raf = requestAnimationFrame(frame);
       return;
     }

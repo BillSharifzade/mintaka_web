@@ -31,7 +31,17 @@ struct FaceDef {
     preload: &'static [&'static str],
 }
 
-/// Small cuts of Onest's two Cyrillic files for pages not written in Cyrillic: an English page
+/// A face whose unicode-range is exactly what its file holds (read from its `cmap`): the cuts.
+///
+/// **The site's own Latin.** Space Grotesk and IBM Plex Mono are also shipped cut down to the
+/// characters the site writes (every page, string and script, both cases, the spaces numbers use):
+/// 15 kB instead of 22 kB, 9.7 kB instead of 14.7 kB. Each cut is declared after its full file, in
+/// the same family, so browsers try it first (CSS Fonts: overlapping faces are tried last-declared
+/// first) and fetch the full file only for a character the cut lacks — a name typed into the form.
+///
+/// Made like the Onest cuts below, with `--unicodes` from the built site.
+///
+/// **Onest's Cyrillic.** Small cuts of Onest's two Cyrillic files for pages not written in Cyrillic: an English page
 /// shows only a few Russian and Tajik words (the language names, the Tajik word in the name story,
 /// one lab post), a Russian one only Tajik's six extra letters (both cases). Same outlines, same
 /// weight axis — so the words look exactly as before, for 8.6 kB instead of 26 kB (English) and
@@ -40,10 +50,10 @@ struct FaceDef {
 ///
 /// Made with fontTools: `pyftsubset onest-cyrillic[-ext]-wght-normal.woff2 --flavor=woff2
 /// --layout-features='*' --unicodes=…` (the letters above, in both cases).
-const NAMES: &str = "";
+const CUT: &str = "";
 
 const FACES: &[FaceDef] = &[
-    FaceDef { family: "Space Grotesk", file: "space-grotesk-latin-wght-normal.woff2", weight: "300 700", range: LATIN, role: Role::Sans, preload: &["en", "ru"] },
+    FaceDef { family: "Space Grotesk", file: "space-grotesk-latin-wght-normal.woff2", weight: "300 700", range: LATIN, role: Role::Sans, preload: &[] },
     FaceDef { family: "Space Grotesk", file: "space-grotesk-latin-ext-wght-normal.woff2", weight: "300 700", range: LATIN_EXT, role: Role::Sans, preload: &[] },
     FaceDef { family: "Onest", file: "onest-cyrillic-wght-normal.woff2", weight: "100 900", range: CYRILLIC, role: Role::Sans, preload: &["ru", "tg"] },
     FaceDef { family: "Onest", file: "onest-cyrillic-ext-wght-normal.woff2", weight: "100 900", range: CYRILLIC_EXT, role: Role::Sans, preload: &["tg"] },
@@ -51,11 +61,15 @@ const FACES: &[FaceDef] = &[
     FaceDef { family: "IBM Plex Mono", file: "ibm-plex-mono-latin-400-normal.woff2", weight: "400", range: LATIN, role: Role::Mono, preload: &[] },
     FaceDef { family: "IBM Plex Mono", file: "ibm-plex-mono-cyrillic-400-normal.woff2", weight: "400", range: CYRILLIC, role: Role::Mono, preload: &[] },
     FaceDef { family: "IBM Plex Mono", file: "ibm-plex-mono-cyrillic-ext-400-normal.woff2", weight: "400", range: CYRILLIC_EXT, role: Role::Mono, preload: &[] },
-    // The cuts (see NAMES): English pages put "Onest Names" before Onest, Russian ones "Onest Ext
-    // Names" (the same file as the second face, as its own family so it brings no basic letters).
-    FaceDef { family: "Onest Names", file: "onest-names-cyrillic-wght-normal.woff2", weight: "100 900", range: NAMES, role: Role::Sans, preload: &[] },
-    FaceDef { family: "Onest Names", file: "onest-names-cyrillic-ext-wght-normal.woff2", weight: "100 900", range: NAMES, role: Role::Sans, preload: &[] },
-    FaceDef { family: "Onest Ext Names", file: "onest-names-cyrillic-ext-wght-normal.woff2", weight: "100 900", range: NAMES, role: Role::Sans, preload: &[] },
+    // The cuts (see CUT). The site's Latin, after the full files of the same families: the first
+    // tried, and the one the first screen preloads.
+    FaceDef { family: "Space Grotesk", file: "space-grotesk-site-wght-normal.woff2", weight: "300 700", range: CUT, role: Role::Sans, preload: &["en", "ru"] },
+    FaceDef { family: "IBM Plex Mono", file: "ibm-plex-mono-site-400-normal.woff2", weight: "400", range: CUT, role: Role::Mono, preload: &[] },
+    // English pages put "Onest Names" before Onest, Russian ones "Onest Ext Names" (the same file
+    // as the second face, as its own family so it brings no basic letters).
+    FaceDef { family: "Onest Names", file: "onest-names-cyrillic-wght-normal.woff2", weight: "100 900", range: CUT, role: Role::Sans, preload: &[] },
+    FaceDef { family: "Onest Names", file: "onest-names-cyrillic-ext-wght-normal.woff2", weight: "100 900", range: CUT, role: Role::Sans, preload: &[] },
+    FaceDef { family: "Onest Ext Names", file: "onest-names-cyrillic-ext-wght-normal.woff2", weight: "100 900", range: CUT, role: Role::Sans, preload: &[] },
 ];
 
 /// Which cut comes first in the sans stack (`--font-cyr`, tokens.css), by page language.
@@ -96,7 +110,7 @@ impl Fonts {
             let info = inspect_woff2(&bytes).with_context(|| format!("parsing {}", path.display()))?;
             // A cut covers exactly what its file holds.
             let own;
-            let range = if def.range == NAMES {
+            let range = if def.range == CUT {
                 own = unicode_range_of(&info.codepoints);
                 own.as_str()
             } else {
@@ -459,18 +473,26 @@ mod tests {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/fonts");
         let cps = |f: &str| inspect_woff2(&std::fs::read(root.join(f)).unwrap()).unwrap().codepoints;
         for (cut, full) in [
+            ("space-grotesk-site-wght-normal.woff2", "space-grotesk-latin-wght-normal.woff2"),
+            ("ibm-plex-mono-site-400-normal.woff2", "ibm-plex-mono-latin-400-normal.woff2"),
             ("onest-names-cyrillic-wght-normal.woff2", "onest-cyrillic-wght-normal.woff2"),
             ("onest-names-cyrillic-ext-wght-normal.woff2", "onest-cyrillic-ext-wght-normal.woff2"),
         ] {
             let (c, f) = (cps(cut), cps(full));
-            assert!(!c.is_empty() && c.len() < f.len() / 2, "{cut}: {} of {}", c.len(), f.len());
+            assert!(!c.is_empty() && c.len() < f.len(), "{cut}: {} of {}", c.len(), f.len());
             for cp in &c {
                 assert!(f.contains(cp), "{cut} has U+{cp:04X}, which {full} lacks");
                 let ch = char::from_u32(*cp).unwrap();
-                for other in ch.to_uppercase().chain(ch.to_lowercase()) {
+                // Its other case too, wherever the full file has it (text-transform needs both).
+                for other in ch.to_uppercase().chain(ch.to_lowercase()).filter(|o| f.contains(&(*o as u32))) {
                     assert!(c.contains(&(other as u32)), "{cut} has {ch} but not {other}");
                 }
             }
+        }
+        // Every printable ASCII character is in the Latin cuts.
+        for cut in ["space-grotesk-site-wght-normal.woff2", "ibm-plex-mono-site-400-normal.woff2"] {
+            let c = cps(cut);
+            assert!((0x20..0x7F).all(|cp| c.contains(&cp)), "{cut} lacks some ASCII");
         }
     }
 
