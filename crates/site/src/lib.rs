@@ -6,6 +6,7 @@
 
 pub mod assets;
 pub mod budget;
+pub mod city;
 pub mod config;
 pub mod css;
 pub mod fonts;
@@ -187,6 +188,14 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
             named.insert(format!("{stem}.bin"), url);
             wasm_sizes.push((format!("{stem}.bin"), bytes.len() as u64));
         }
+    }
+    // The lab's opening experiment: Dushanbe's streets, compact (crates/site/src/city.rs).
+    if let Ok(bytes) = std::fs::read(root.join("assets/data/dushanbe.bin")) {
+        let graph = routing::Graph::from_bytes(&bytes).map_err(|e| anyhow::anyhow!("dushanbe.bin: {e}"))?;
+        let (city, _) = city::encode(&graph);
+        let url = dist.add_hashed("data/city", "bin", &city, "application/octet-stream")?;
+        named.insert("city.bin".to_owned(), url);
+        wasm_sizes.push(("city.bin".to_owned(), city.len() as u64));
     }
     // Lazy string bundles (content/{lang}/islands/lazy/): one JSON file per bundle and language,
     // named `strings/<name>.<lang>` for `loadStrings()` in web/shared/i18n.ts.
@@ -468,9 +477,9 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
     let js_limit = |name: &str| -> Option<u64> {
         match name {
             "main" => Some(4_000),
-            // The hero is a small core plus exactly one renderer chunk: together ≤ 25 kB.
-            "hero" => Some(6_000),
-            "webgpu" | "webgl" => Some(19_000),
+            // The opening experiment: the city file's decoder, Dijkstra and A*, the nearest-
+            // intersection grid and the three canvases (web/city/). Its streets are a data file.
+            "city" => Some(12_000),
             // Raised from 6 kB on 2026-10-30: the panel's rows and their text arrive on first opening
             // (a lazy string bundle), ~0.3 kB of code here for 1.4–2.0 kB brotli less HTML on every
             // page view.
@@ -506,14 +515,17 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
         let name = file.split('.').next().unwrap_or(file);
         budget.add(format!("{file} (minified)"), *bytes, js_limit(name));
     }
-    // First view: boot, hero core and its renderer (WebGL2, the larger one), HUD, nav, console, the
+    // First view: boot, the opening experiment (web/city/ and its streets), HUD, nav, console, the
     // two idle-time modules every view loads (real-user measurements, offline mode), and the shared
     // chunks they import.
     let first_js = js.files.iter().map(|(f, _)| f.as_str()).filter(|f| {
-        ["main", "hero", "webgl", "hud", "nav", "console", "rum", "offline"].contains(&f.split('.').next().unwrap_or(f))
+        ["main", "city", "hud", "nav", "console", "rum", "offline"].contains(&f.split('.').next().unwrap_or(f))
     });
     for file in js.with_imports(first_js) {
         first_view += route_size(&dist, &format!("/assets/{file}"));
+    }
+    if let Some(url) = named.get("city.bin") {
+        first_view += route_size(&dist, url);
     }
     for (name, bytes) in &wasm_sizes {
         let (label, limit) = if name.ends_with(".bin") { (format!("{name} (lazy data, raw)"), 3_000_000) } else { (format!("{name}.wasm (lazy)"), 250_000) };
@@ -528,8 +540,11 @@ pub fn build(opts: &BuildOptions) -> Result<Report> {
         first_view += route_size(&dist, "/sw.js");
     }
     budget.add("islands CSS (minified)", islands_css.len() as u64, None);
+    // Raised from 100 kB on 2026-11-09: the lab now opens with a live experiment, its streets a
+    // 28 kB file fetched after the first paint. The page itself fell by ~10 kB and the first screen
+    // by ~2.5 kB in the same change; Cyrillic pages also carry Onest.
     for (lang, page) in &first_view_page {
-        budget.add(format!("/{lang}/ first full view, compressed (HTML, fonts, boot, hero, HUD, RUM, offline)"), first_view + page, Some(100_000));
+        budget.add(format!("/{lang}/ first full view, compressed (HTML, fonts, boot, city map, HUD, RUM, offline)"), first_view + page, Some(110_000));
     }
 
     // Report and enforce.

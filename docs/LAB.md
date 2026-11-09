@@ -1,74 +1,50 @@
-# The lab: the observatory and the bench
+# The lab
 
-The home page (`/{lang}/`) is the lab: every claim the studio makes is an instrument the visitor runs.
-Its design (2026-11-05) follows one idea — a real laboratory has two rooms.
+The home page (`/{lang}/`) is the lab and nothing else: no team, no brief form, no pitch. It opens
+with an experiment already running, then the instruments, then the lab notes. Starting a project
+happens on the studio page; the header's "Start a project" and the terminal's `contact` go there.
+(Rebuilt 2026-11-09; the particle hourglass it replaces is gone.)
 
-## Two rooms
+## The opening experiment: Dushanbe, searched live
 
-- **The observatory** (night, the default colours): the hero, the speed of light and Orion. These
-  are the particle engine's three anchors (the hourglass, the ray, the constellation), so they stay
-  dark — the engine draws light on a dark sky.
-- **The bench** (`div.bench.lit` in `crates/site/src/pages/home.rs`): every experiment, how we
-  work, the Lab notes, the team and the brief form, on Starlight ruled like graph paper. `.lit`
-  (tokens.css) re-points the semantic colours for the lit room; the brand palette never changes,
-  so islands that draw with `--starlight` or `--graphite` keep working.
-- The page ends at a night window over the Pamir (`horizon()`), then the dark title-block footer.
-- The fixed parts follow the room under them: `web/nav/index.ts` measures the bench on load and
-  resize and toggles `.lit` on the header (at its bottom edge) and the Orion navigation (at the
-  middle of the screen) — no layout reads while scrolling. Without JavaScript the header stays dark.
+`web/city/` draws Dushanbe's streets (OpenStreetMap, the same extract as the routing instrument)
+and searches them in the visitor's browser, in plain TypeScript on typed arrays:
 
-## Instruments are devices
+- **Searches run on their own** — Dijkstra and A* in turn, between intersections on screen — and
+  each is drawn the way it worked: every intersection it settled, in the order it settled them
+  (Dijkstra spreads in rings, A* reaches like a cone), then the route it found.
+- **Pointing at the map routes from the pointer** (A*) whenever the nearest intersection changes; a
+  click moves the destination; a tap (touch) searches from there and shows the search.
+- **Every number is measured**: searches, median time per algorithm, intersections settled, and
+  what drawing a frame costs. A search over the whole city takes about a millisecond.
+- Three canvases: streets (drawn once per size), searches (incremental, fading), routes (a few lines
+  a frame). It sleeps off screen, in a hidden tab and when paused (WCAG 2.2.2: the hero's button,
+  the terminal's `sky`); with reduced motion it draws the streets and routes from the pointer only;
+  with Data Saver it doesn't fetch the map. It emits `tier` (C live, D still) and `sky` as the
+  particle hero did, so the proof console, terminal, RUM and offline mode carry on unchanged.
 
-`instrument()` (pages/mod.rs) draws each live demo as a device (components.css): a faceplate
-(`--plate`, light on the bench, graphite at night) with a model plate (the instrument's id), the
-title, and a **status lamp** — the island's own status badge (`badge--info`, `--live`, `--ok`,
-`--warn`), dark while the frame is still static. The screen (`.instrument__body`) points the
-semantic colours back to night, so every island interface looks the same in either room. When an
-island's code arrives, `web/main.ts` adds `.is-on` and the screen sweeps once (reduced motion: no
-sweep).
+**The streets file** (`city.bin`, crates/site/src/city.rs, built from `assets/data/dushanbe.bin`):
+8,393 intersections and 10,533 streets in 46.7 kB raw, **28 kB brotli** — against 424 kB for the
+routing instrument's graph, which also carries the Contraction Hierarchy. Shapes are simplified to
+10 m and positions rounded to 4 m (under half a pixel with the city on screen); the streets are
+written as a breadth-first walk, so a street that leads somewhere new names no intersection at all
+and stores its far end as a short hop; numbers of one kind sit together (columns). A* stays exact:
+straight-line distance never exceeds a street's length, rounded or not. Tested in
+`web/city/graph.test.ts` (decoder, one-way streets, A* = Dijkstra, the real file).
 
-## Records
+## The instruments
 
-A pillar section opens like a lab record (`pillar_head()`): a rule, the star it is filed under
-with its catalogue position (orion.rs) as the record's id, the pillar; the claim large on the left,
-the lead beside it. The record's instruments come straight after its head — the experiment first —
-and what explains them follows: the methods as a specification sheet (`spec()`), Security's two
-protocols (offence: a rust diamond; defence: a blue square), Highload's layers as an apparatus list
-and Betelgeuse as a footnote under its instruments. The code specimen is a printed listing with
-numbered lines (`numbered()`, CSS counters), not a device: it is static. How we work keeps the
-belt (Measure → Build → Prove) and lists the Proof Pack as documents. Where the browser has scroll
-timelines, a record's rule is drawn from the left and its claim rises as it scrolls in (CSS only).
-The lab keeps near-square corners (2–4 px, layout.css); only lamps and stars are round.
+Eight stations (`STATIONS` in crates/site/src/pages/home.rs), each saying what it tests and where it
+runs (your browser, our server, both, a simulation), then the instrument. The first station of each
+discipline keeps its old anchor (`#physics`, `#efficiency`, `#security`, `#highload`, `#design`), so
+links from the studio page still land on an experiment. A rail lists all eight beside them (a strip
+on narrow screens); its lamps mirror each instrument's own status lamp (web/main.ts), and
+web/nav/index.ts marks the station being read. The instruments' code is unchanged; the armour
+instrument's text is a lazy bundle fetched with its code.
 
-Nothing on the bench asks to be taken on trust: the sections that only asserted (the qualities
-nobody demos, a proof wall waiting for its first client results) were removed in this redesign.
+## Weight (release build, 2026-11-09)
 
-## The star chart
-
-Orion (S3) is a chart, not a card grid: each pillar's label stands beside the figure at its star's
-height and points at it with a leader line — half drawn in the SVG (`svg::orion_chart`), half in
-CSS — and the figure is sized to fit beside its heading. Narrow screens list the labels under it.
-
-## The proof console
-
-On screens wide enough to have margins (≥ 90rem) the console's pill stands in the right margin as a
-narrow column of readings, so it never covers an instrument's numbers; narrower screens keep the
-compact pill.
-
-## The hero's readout
-
-The hourglass sits in a viewfinder. Once the engine settles on a tier, it emits `render` (bus.ts)
-with what it measured of its own frames — median and 90th percentile, GPU time on WebGPU and
-WebGL 2 — and `web/main.ts` prints it under the figure: "Drawn live · WebGPU · 120 000 particles ·
-0.4 ms a frame". Tier D (reduced motion, Data Saver, no JavaScript) shows the still mark and no
-readout.
-
-## Weight
-
-The redesign kept the page inside its budgets by moving what only islands need out of the inline
-CSS (`islands/shared.css`: key–value rows, the overlay sheet, the construction grid, lit lamps,
-the power-on sweep, the careers form) and by making the armour instrument's text a lazy bundle
-(`content/{lang}/islands/lazy/armour.ftl`), fetched together with its code (`lazyText` in
-web/main.ts). Release build, 2026-11-05: whole page 26.4 kB (en) / 30.3 kB (ru) / 29.7 kB (tg)
-brotli, first screen 12.9–13.3 kB, against 32 kB and 14 kB caps (before the redesign:
-27.1 / 31.4 / 30.8 kB and 11.8–12.1 kB).
+Whole page 18.2 kB (en) / 21.0 kB (ru) / 20.5 kB (tg) brotli, first screen 10.2–10.7 kB, inline CSS
+31.9 kB minified — down from 26.4 / 30.3 / 29.7 kB, 12.9–13.3 kB and 47.7 kB. The first full view
+(page, fonts, boot, the city map and its code, HUD, RUM, offline) is 86.5 / 105.2 / 100.1 kB; its
+cap went from 100 to 110 kB for the map, which is fetched after the first paint.

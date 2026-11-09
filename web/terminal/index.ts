@@ -246,7 +246,11 @@ async function sky(_: string, out: Out): Promise<void> {
 
 function contact(_: string, out: Out): void {
   const section = $('#contact');
-  if (!section) return out(T('contact-none'));
+  // The lab has no form of its own: the brief form lives on the studio page.
+  if (!section) {
+    out(T('contact-none'));
+    return location.assign(at(`/${L}/studio/#start`));
+  }
   restore = false;
   dialog!.close();
   section.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });

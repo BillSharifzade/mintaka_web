@@ -48,11 +48,6 @@
     transition: background-color var(--t-ui) var(--ease-enter), border-color var(--t-ui) var(--ease-enter);
   }
 
-  /* Over the bench the header takes the lit room's colours (web/nav/index.ts sets .lit). */
-  .site-header.lit {
-    background: rgb(244 245 247 / 0.96);
-  }
-
   .site-header__inner {
     display: flex;
     align-items: center;
@@ -228,88 +223,6 @@
 
     .menu {
       margin-inline-start: auto;
-    }
-  }
-
-  /* ── Orion navigation: fixed in the right margin when there is room ── */
-  .orion-nav {
-    position: fixed;
-    inset-block-start: 50%;
-    inset-inline-end: max(var(--s-4), env(safe-area-inset-right));
-    z-index: var(--z-nav);
-    width: 4.75rem;
-    transform: translateY(-50%);
-  }
-
-  .orion-nav svg {
-    width: 100%;
-    height: auto;
-    overflow: visible;
-  }
-
-  .orion-nav__lines line {
-    stroke: var(--border);
-    stroke-width: 1;
-  }
-
-  .orion-nav .star {
-    fill: var(--text-3);
-    transition: fill var(--t-ui) var(--ease-enter);
-  }
-
-  .orion-nav .star--rust {
-    fill: var(--ember);
-  }
-
-  .orion-nav .star--blue {
-    fill: var(--deep-blue);
-  }
-
-  .orion-nav__hit {
-    fill: transparent;
-  }
-
-  .orion-nav__star:hover .star,
-  .orion-nav__star[aria-current="location"] .star {
-    fill: var(--text);
-  }
-
-  .orion-nav__star:hover .star--rust,
-  .orion-nav__star[aria-current="location"] .star--rust {
-    fill: var(--betelgeuse);
-  }
-
-  .orion-nav__star:hover .star--blue,
-  .orion-nav__star[aria-current="location"] .star--blue {
-    fill: var(--mintaka);
-  }
-
-  .orion-nav__star:focus {
-    outline: none;
-  }
-
-  .orion-nav__star:focus-visible .orion-nav__hit {
-    stroke: var(--focus);
-    stroke-width: 2;
-  }
-
-  .orion-nav__label {
-    position: absolute;
-    inset-inline-end: calc(100% + var(--s-3));
-    padding: var(--s-1) var(--s-2);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--r-control);
-    background: var(--surface);
-    color: var(--text);
-    font-size: var(--fs-xs);
-    white-space: nowrap;
-    pointer-events: none;
-    transform: translateY(-50%);
-  }
-
-  @media (max-width: 88rem) {
-    .orion-nav {
-      display: none;
     }
   }
 
@@ -578,6 +491,12 @@
 
   .site-footer__tools [aria-pressed="false"] {
     text-decoration: line-through;
+  }
+
+  .site-footer__ctf {
+    max-width: 40ch;
+    font-size: var(--fs-sm);
+    color: var(--text-2);
   }
 
   .site-footer__copy {

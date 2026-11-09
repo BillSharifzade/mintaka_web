@@ -5,7 +5,8 @@
 export type Tier = 'A' | 'B' | 'C' | 'D';
 
 export interface Events {
-  /** The hero engine settled on a render tier (A WebGPU · B WebGL2 · C Canvas 2D · D poster). */
+  /** The hero's map settled on how it draws (C Canvas 2D, live · D still: reduced motion, Data
+   *  Saver, no map). A and B were the GPU tiers of the earlier particle hero. */
   tier: Tier;
   /** Ask the proof console to open (hero "See the proof", footer link, terminal `proof`). */
   'proof:open': undefined;
@@ -13,13 +14,10 @@ export interface Events {
   'terminal:open': undefined;
   /** The contact form was sent; the hero/footer may celebrate. */
   'contact:sent': undefined;
-  /** Terminal `sky`: pause or resume the hero star field. */
+  /** Terminal `sky`, the hero's pause button: pause or resume the searches on the city map. */
   'sky:toggle': undefined;
-  /** The hero star field was paused (false) or resumed (true) — state, read with replay. */
+  /** The city map's searches were paused (false) or resumed (true) — state, read with replay. */
   sky: boolean;
-  /** What the hero engine measured of itself once settled: its tier, particles, and the median
-   *  and 90th-percentile cost of a frame of its own work (GPU time on A and B), in ms. */
-  render: { tier: 'A' | 'B' | 'C'; count: number; p50: number; p90: number };
 }
 
 const last = new Map<keyof Events, unknown>();

@@ -110,43 +110,13 @@
     --z-dialog: 30;
   }
 
-  /* Rooms. The page has two: the observatory (night: the semantic colours above) and the bench,
-     the lit room where the instruments stand (`.lit`). A room re-points the semantic colours; an
-     instrument's screen points them back to night (components.css), so the inside of an instrument
-     looks the same in either room. The brand palette never changes: islands draw with it. */
+  /* Instrument lamps and text fields. */
   :root {
-    --plate: #14171b; /* an instrument's faceplate, in the dark */
     --plate-edge: var(--graphite);
-    --plate-id: var(--graphite); /* the model plate */
-    --plate-id-text: var(--mist);
     --logo-ink: var(--starlight);
     --ok: var(--success);
     --field: var(--void); /* text fields */
     --placeholder: color-mix(in srgb, var(--steel) 75%, var(--mist));
-  }
-
-  .lit {
-    --bg: var(--starlight);
-    --surface: #fbfbfc;
-    --border: #d9dde3;
-    --border-strong: #aab1bc;
-    --text: var(--void); /* 18.05:1 on Starlight */
-    --text-2: var(--slate); /* 9.7:1 */
-    --text-3: #5b6270; /* 5.6:1 — small text allowed here */
-    --link: var(--deep-blue); /* 6.1:1 */
-    --link-hover: #1740b0;
-    --focus: var(--deep-blue);
-    --plate: #e3e6eb; /* anodised aluminium; Slate text 8.3:1 on it */
-    --plate-edge: #c3c8d1;
-    --plate-id: var(--void);
-    --plate-id-text: var(--starlight);
-    --paper: rgb(30 79 214 / 0.05); /* graph paper: 4 mm rules, 2 cm majors */
-    --paper-major: rgb(30 79 214 / 0.085);
-    --logo-ink: var(--void);
-    --ok: #17834a; /* Success, darkened for the light room: 4.9:1 */
-    --field: #fff;
-    --placeholder: #5b6270;
-    color-scheme: light;
   }
 
   @media (max-width: 40rem) {
@@ -161,13 +131,6 @@
       --text-3: var(--mist);
       --border: var(--steel);
       --border-strong: var(--mist);
-    }
-
-    .lit {
-      --text-2: var(--void);
-      --text-3: var(--slate);
-      --border: var(--steel);
-      --border-strong: var(--slate);
     }
   }
 }

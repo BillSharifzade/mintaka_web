@@ -1,32 +1,146 @@
-/* S2–S13 and the small pages. */
+/* The lab (`/{lang}/`): the instruments and the lab notes (the opening experiment is hero.css),
+   and the small pages. */
 
 @layer sections {
-  /* ── The bench: the lit room below the sky, ruled like graph paper ──── */
+  /* ── The instruments: a rail that names them, the stations ─────────────── */
   .bench {
+    padding-block: clamp(var(--s-8), 8vw, var(--s-10));
+    border-block-start: 1px solid var(--border);
+  }
+
+  .bench__grid {
+    display: grid;
+    grid-template-columns: 15rem minmax(0, 1fr);
+    align-items: start;
+    gap: clamp(var(--s-6), 4vw, var(--s-8));
+  }
+
+  .rail {
+    position: sticky;
+    inset-block-start: calc(var(--header-h) + var(--s-5));
+    display: grid;
+    gap: var(--s-4);
+  }
+
+  .rail__title,
+  .station__meta {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 400;
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--text-2);
+  }
+
+  .rail__list {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border-block-start: 1px solid var(--border);
+  }
+
+  .rail__link {
     position: relative;
-    background-color: var(--bg);
-    background-image:
-      linear-gradient(var(--paper-major) 1px, transparent 1px),
-      linear-gradient(90deg, var(--paper-major) 1px, transparent 1px),
-      linear-gradient(var(--paper) 1px, transparent 1px),
-      linear-gradient(90deg, var(--paper) 1px, transparent 1px);
-    background-size:
-      5rem 5rem,
-      5rem 5rem,
-      1rem 1rem,
-      1rem 1rem;
-    background-position: center top;
+    display: grid;
+    grid-template-columns: 2rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--s-2);
+    min-height: var(--tap);
+    padding-inline: var(--s-2);
+    border-block-end: 1px solid var(--border);
+    color: var(--text-2);
+    font-size: var(--fs-sm);
+    text-decoration: none;
+    transition: color var(--t-micro) var(--ease-enter), background-color var(--t-micro) var(--ease-enter);
+  }
+
+  .rail__link:hover {
     color: var(--text);
+    background: var(--surface);
   }
 
-  /* ── S2 Edge of physics ─────────────────────────────────────────────── */
-  .physics__ray {
-    height: 1px;
-    margin-block: 0 var(--s-6);
-    background: linear-gradient(90deg, rgb(61 123 255 / 0), var(--mintaka) 18%, var(--sky) 50%, var(--mintaka) 82%, rgb(61 123 255 / 0));
-    opacity: 0.8;
+  .rail__link[aria-current] {
+    color: var(--text);
+    background: var(--surface);
   }
 
+  .rail__link[aria-current]::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    width: 2px;
+    background: var(--mintaka);
+  }
+
+  .rail__link .lamp {
+    margin: 0;
+  }
+
+  .rail__code {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-2);
+  }
+
+  .rail__link[aria-current] .rail__code {
+    color: var(--sky);
+  }
+
+  .rail__lead {
+    font-size: var(--fs-sm);
+    color: var(--text-2);
+  }
+
+  .bench__stations {
+    display: grid;
+    gap: clamp(var(--s-8), 7vw, var(--s-9));
+    min-width: 0;
+  }
+
+  /* A station: where the instrument sits, what it is called, what it tests — then the instrument. */
+  .station {
+    display: grid;
+    gap: var(--s-5);
+    scroll-margin-top: calc(var(--header-h) + var(--s-4));
+  }
+
+  .station__head {
+    display: grid;
+    gap: var(--s-2);
+    max-width: 50rem;
+  }
+
+  .station__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-1) var(--s-4);
+  }
+
+  .station__code {
+    color: var(--sky);
+  }
+
+  .station__runs::before {
+    content: "·" / "";
+    margin-inline-end: var(--s-4);
+  }
+
+  .station__title,
+  .notes__title {
+    font-size: clamp(1.75rem, 1.2rem + 1.6vw, 2.5rem);
+    font-weight: 500;
+    line-height: 1.1;
+    letter-spacing: -0.025em;
+  }
+
+  .station__tests {
+    max-width: 46rem;
+    color: var(--text-2);
+  }
+
+  /* The physics station without a script: the floor on a round trip to each city. */
   .physics__static-lead {
     margin-block-end: var(--s-4);
     color: var(--text-2);
@@ -36,948 +150,100 @@
     max-width: 40rem;
   }
 
-  /* ── S3 Constellation: a star chart ─────────────────────────────────────
-     The figure stands in the middle, sized to fit one screen with the heading; each pillar's label
-     stands beside it at its star's height (the places are orion.rs's, as percentages of the
-     figure) and a leader line runs from the label to the star — this half in CSS, the other half
-     drawn in the SVG (svg.rs::orion_chart). */
-  .sec--pillars {
-    padding-block: clamp(var(--s-7), 6vw, var(--s-8));
-  }
-
-  .sec--pillars .sec__head {
-    margin-block-end: var(--s-6);
-  }
-
-  .constellation {
-    --fig: clamp(12rem, calc((100svh - 21rem) * 0.56), 19rem);
-    --lead: 2.5rem;
-    position: relative;
-    width: var(--fig);
-    margin-inline: auto;
-  }
-
-  .constellation__figure {
-    margin: 0;
-  }
-
-  .orion {
-    width: 100%;
-    height: auto;
-    overflow: visible;
-  }
-
-  .orion-line {
-    stroke: var(--slate);
-    stroke-width: 1.2;
-  }
-
-  .orion-line--belt {
-    stroke-dasharray: 3 4;
-  }
-
-  .orion-leader {
-    stroke: var(--steel);
-    stroke-width: 1;
-    vector-effect: non-scaling-stroke;
-  }
-
-  .orion .star {
-    transform-box: fill-box;
-    transform-origin: center;
-    transition:
-      transform var(--t-ui) var(--ease-enter),
-      opacity var(--t-scene) var(--ease-enter);
-  }
-
-  /* When particles have formed the constellation, they replace the drawn stars. */
-  :root.engine-on .constellation__figure .star {
-    opacity: 0;
-  }
-
-  .pcard {
-    position: absolute;
-    inset-block-start: var(--y);
-    display: grid;
-    gap: var(--s-1);
-    width: 17rem;
-    color: var(--text);
-    text-decoration: none;
-    transform: translateY(-0.625rem);
-  }
-
-  .pcard--l {
-    inset-inline-end: calc(100% + var(--lead));
-    justify-items: end;
-    text-align: end;
-  }
-
-  .pcard--r {
-    inset-inline-start: calc(100% + var(--lead));
-  }
-
-  .pcard[data-star="meissa"] {
-    --y: 4.9%;
-  }
-
-  .pcard[data-star="betelgeuse"] {
-    --y: 16.6%;
-  }
-
-  .pcard[data-star="rigel"] {
-    --y: 88.4%;
-  }
-
-  .pcard[data-star="saiph"] {
-    --y: 95.1%;
-  }
-
-  /* The label's half of the leader: from the figure's edge to the label's star dot. */
-  .pcard::before {
-    content: "";
-    position: absolute;
-    inset-block-start: 0.625rem;
-    width: var(--lead);
-    height: 1px;
-    background: var(--steel);
-  }
-
-  .pcard--l::before {
-    inset-inline-start: 100%;
-  }
-
-  .pcard--r::before {
-    inset-inline-end: 100%;
-  }
-
-  .pcard .callout {
-    line-height: 1.25rem;
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-  }
-
-  .pcard--l .callout {
-    flex-direction: row-reverse;
-  }
-
-  .pcard .callout__name {
-    font-weight: 400;
-  }
-
-  .pcard__name {
-    font-size: var(--fs-xl);
-    font-weight: 500;
-    letter-spacing: var(--track-heading);
-    line-height: var(--lh-heading);
-  }
-
-  .pcard__line {
-    color: var(--text-2);
-  }
-
-  /* The way down: an arrow that drops toward the bench on hover. */
-  .pcard__name::after {
-    content: "↓" / "";
-    display: inline-block;
-    margin-inline-start: 0.3em;
-    color: var(--text-3);
-    transition:
-      color var(--t-micro) var(--ease-enter),
-      transform var(--t-micro) var(--ease-enter);
-  }
-
-  .pcard:is(:hover, :focus-visible) .pcard__name::after {
-    color: var(--sky);
-    transform: translateY(0.12em);
-  }
-
-  /* Hovering a label lights its star — no JavaScript needed. */
-  .constellation:has(.pcard[data-star="betelgeuse"]:is(:hover, :focus-visible)) .star[data-star="betelgeuse"],
-  .constellation:has(.pcard[data-star="meissa"]:is(:hover, :focus-visible)) .star[data-star="meissa"],
-  .constellation:has(.pcard[data-star="saiph"]:is(:hover, :focus-visible)) .star[data-star="saiph"],
-  .constellation:has(.pcard[data-star="rigel"]:is(:hover, :focus-visible)) .star[data-star="rigel"] {
-    opacity: 1;
-    transform: scale(1.6);
-  }
-
-  /* Without room beside the figure, the labels list under it, and the leaders go. */
-  @media (max-width: 60rem) {
-    .constellation {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: var(--s-5) var(--s-6);
-      width: auto;
+  /* Narrower screens: the rail becomes a strip of the instruments at the top of the section. */
+  @media (max-width: 64rem) {
+    .bench__grid {
+      grid-template-columns: minmax(0, 1fr);
     }
 
-    .constellation__figure {
-      grid-column: 1 / -1;
-      grid-row: 1;
-      justify-self: center;
-      width: min(100%, 15rem);
-    }
-
-    .pcard,
-    .pcard--l {
+    .rail {
       position: static;
-      justify-items: start;
-      width: auto;
-      text-align: start;
-      transform: none;
     }
 
-    .pcard--l .callout {
-      flex-direction: row;
+    .rail__list {
+      display: flex;
+      gap: var(--s-2);
+      margin-inline: calc(-1 * var(--gutter));
+      padding: 0 var(--gutter) var(--s-2);
+      overflow-x: auto;
+      border: 0;
+      scroll-snap-type: x proximity;
+      scrollbar-width: thin;
     }
 
-    .pcard::before,
-    .orion-leader {
+    .rail__list li {
+      flex: none;
+      scroll-snap-align: start;
+    }
+
+    .rail__link {
+      grid-template-columns: auto auto auto;
+      padding-inline: var(--s-3);
+      border: 1px solid var(--border);
+      border-radius: var(--r-control);
+      white-space: nowrap;
+    }
+
+    .rail__link[aria-current]::before {
       display: none;
     }
   }
 
-  @media (max-width: 36rem) {
-    .constellation {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  }
-
-  /* ── Records on the bench ──────────────────────────────────────────── */
-  .bench .sec {
-    padding-block: clamp(var(--s-7), 6vw, var(--s-9));
-  }
-
-  /* On the lit bench the stars are ink; Betelgeuse and Mintaka keep their colours. */
-  .bench .star {
-    fill: var(--void);
-  }
-
-  .bench .star--rust {
-    fill: var(--betelgeuse);
-  }
-
-  .bench .star--blue {
-    fill: var(--mintaka);
-  }
-
-  .bench .star-mark__ring {
-    stroke: var(--border-strong);
-  }
-
-  /* Small mono labels: the band of a record, a sheet's label, a report's kind. */
-  .exp__band,
-  .spec__label,
-  .bench .sec__head .eyebrow {
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    font-weight: 400;
-    letter-spacing: var(--track-label);
-    line-height: 1.4;
-    text-transform: uppercase;
-  }
-
-  /* The head of a record: a rule, the star it is filed under, then the claim and its lead. */
-  .exp__head {
-    display: grid;
-    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
-    grid-template-areas:
-      "band band"
-      "title lead";
-    align-items: end;
-    gap: var(--s-5) var(--s-8);
-    margin-block-end: clamp(var(--s-6), 4vw, var(--s-7));
-  }
-
-  /* The record's rule: drawn, not bordered, so it can be drawn in as the record arrives. */
-  .exp__band,
-  .bench .sec__head,
-  .pack__head {
-    position: relative;
-  }
-
-  .exp__band::before,
-  .bench .sec__head::before,
-  .pack__head::before {
-    content: "";
-    position: absolute;
-    inset: 0 0 auto;
-    height: 2px;
-    background: var(--text);
-    transform-origin: 0 50%;
-  }
-
-  /* As a record scrolls in, its rule is drawn from the left and its claim rises into place —
-     where the browser has scroll timelines; elsewhere, and with reduced motion, it is simply there. */
-  @supports (animation-timeline: view()) {
-    @media (prefers-reduced-motion: no-preference) {
-      .exp__band::before,
-      .bench .sec__head::before,
-      .pack__head::before {
-        animation: rule-draw linear both;
-        animation-timeline: view();
-        animation-range: entry 0% entry 80%;
-      }
-
-      .exp__title,
-      .bench .sec__title {
-        animation: claim-rise linear both;
-        animation-timeline: view();
-        animation-range: entry 0% entry 60%;
-      }
-    }
-  }
-
-  @keyframes rule-draw {
-    from {
-      transform: scaleX(0);
-    }
-  }
-
-  @keyframes claim-rise {
-    from {
-      opacity: 0;
-      transform: translateY(0.35em);
-    }
-  }
-
-  .exp__band {
-    grid-area: band;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--s-2) var(--s-4);
-    padding-block-start: var(--s-3);
-  }
-
-  .exp__band .star-mark {
-    flex: none;
-    width: 1.75rem;
-    height: 1.75rem;
-  }
-
-  .exp__star {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0 var(--s-3);
-    color: var(--text-3);
-  }
-
-  .exp__name {
-    color: var(--text);
-  }
-
-  .exp__pillar {
-    margin-inline-start: auto;
-    color: var(--link);
-  }
-
-  .exp__title,
-  .bench .sec__title {
-    font-weight: 500;
-    line-height: 1;
-    letter-spacing: -0.035em;
-    text-wrap: balance;
-  }
-
-  .exp__title {
-    grid-area: title;
-    font-size: clamp(2.5rem, 1.1rem + 3.9vw, 4.75rem);
-    min-width: 0;
-    overflow-wrap: break-word;
-  }
-
-  .exp__lead {
-    grid-area: lead;
-    max-width: 46ch;
-    color: var(--text-2);
-  }
-
-  @media (max-width: 60rem) {
-    .exp__head {
-      grid-template-columns: minmax(0, 1fr);
-      grid-template-areas: "band" "title" "lead";
-      align-items: start;
-    }
-  }
-
-  /* Plain section heads on the bench get the same rule and label. */
-  .bench .sec__head {
-    max-width: none;
-    padding-block-start: var(--s-3);
-  }
-
-  .bench .sec__head .eyebrow {
-    color: var(--link);
-  }
-
-  .bench .sec__title {
-    max-width: 22ch;
-    font-size: clamp(2.25rem, 1.2rem + 3vw, 4rem);
-  }
-
-  .bench .sec__head .lead {
-    max-width: 56ch;
-    color: var(--text-2);
-  }
-
-  /* A specification sheet: term and description on ruled rows, three to a line. */
-  /* What follows a record's instruments sits a step below them. */
-  .spec,
-  .duel,
-  .layers,
-  .practice,
-  .armour,
-  .code {
-    margin-block-start: clamp(var(--s-6), 4vw, var(--s-7));
-  }
-
-  .spec__label {
-    margin-block-end: var(--s-3);
-    color: var(--text-3);
-  }
-
-  .spec__rows {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0 var(--s-6);
-    margin: 0;
-  }
-
-  .spec__row {
-    display: grid;
-    align-content: start;
-    gap: var(--s-2);
-    padding-block: var(--s-4) var(--s-5);
-    border-block-start: 1px solid var(--border-strong);
-  }
-
-  .spec__row dt {
-    font-weight: 500;
-  }
-
-  .spec__row dd {
-    margin: 0;
-    font-size: var(--fs-sm);
-    color: var(--text-2);
-  }
-
-  @media (max-width: 64rem) {
-    .spec__rows {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-  }
-
-  @media (max-width: 36rem) {
-    .spec__rows {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  }
-
-  /* A specimen of our code, printed: a paper listing with numbered lines (the numbers are CSS
-     counters, so copying takes only the code). It is static, so it is not dressed as a device. */
-  .code {
-    border: 1px solid var(--border-strong);
-    border-radius: var(--r-card);
-    background: var(--surface);
-  }
-
-  .code__bar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: var(--s-2) var(--s-4);
-    padding: var(--s-3) var(--s-4);
-    border-block-end: 1px solid var(--border);
-  }
-
-  .code__file {
-    font-size: var(--fs-xs);
-    color: var(--text-2);
-  }
-
-  .code__title {
-    font-size: var(--fs-sm);
-    font-weight: 500;
-  }
-
-  .code__pre {
-    margin: 0;
-    padding: var(--s-4) var(--s-4) var(--s-4) 0;
-    overflow-x: auto;
-    font-size: 0.875rem;
-    line-height: 1.75;
-    color: var(--text);
-    tab-size: 4;
-    counter-reset: line;
-  }
-
-  .code__pre code {
-    display: grid;
-    font-size: inherit;
-  }
-
-  .code__line {
-    white-space: pre;
-  }
-
-  .code__line::before {
-    counter-increment: line;
-    content: counter(line);
-    display: inline-block;
-    width: 3rem;
-    margin-inline-end: var(--s-4);
-    padding-inline-end: var(--s-3);
-    border-inline-end: 1px solid var(--border);
-    color: var(--text-3);
-    text-align: end;
-    user-select: none;
-  }
-
-  .code__caption {
-    padding: var(--s-3) var(--s-4);
-    border-block-start: 1px solid var(--border);
-    font-size: var(--fs-sm);
-    color: var(--text-2);
-  }
-
-  .tok-k,
-  .tok-o {
-    color: var(--link);
-  }
-
-  .tok-t,
-  .tok-m {
-    color: var(--text);
-  }
-
-  .tok-c {
-    color: var(--text-3);
-  }
-
-  /* ── Security: the two protocols, then the instruments ───────────────── */
-  .duel {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--s-5);
-  }
-
-  .duel__col {
-    padding: var(--s-5) var(--s-5) var(--s-3);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--surface);
-  }
-
-  .duel__title {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: var(--s-1) var(--s-4);
-    padding-block-end: var(--s-3);
-    border-block-end: 2px solid var(--text);
-    font-size: var(--fs-xl);
-    font-weight: 500;
-    letter-spacing: -0.02em;
-  }
-
-  .duel__note {
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
-    font-weight: 400;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--text-3);
-  }
-
-  .duel__list {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .duel__list li {
-    position: relative;
-    padding: var(--s-3) 0 var(--s-3) var(--s-6);
-    border-block-end: 1px solid var(--border);
-  }
-
-  .duel__list li:last-child {
-    border-block-end: 0;
-  }
-
-  /* Offence: a rust diamond (an attack); defence: a blue square (a control). */
-  .duel__list li::before {
-    content: "";
-    position: absolute;
-    inset-block-start: calc(var(--s-3) + 0.45em);
-    inset-inline-start: 0.25rem;
-    width: 0.5rem;
-    height: 0.5rem;
-  }
-
-  .duel__col--off li::before {
-    background: var(--betelgeuse);
-    transform: rotate(45deg);
-  }
-
-  .duel__col--def li::before {
-    border: 1.5px solid var(--deep-blue);
-  }
-
-  @media (max-width: 48rem) {
-    .duel {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  }
-
-  .armour {
-    display: grid;
-    grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
-    align-items: start;
-    gap: var(--s-7);
-  }
-
-  .armour__title {
-    font-size: var(--fs-2xl);
-    font-weight: 500;
-    letter-spacing: -0.025em;
-  }
-
-  .armour__lead {
-    margin-block-start: var(--s-2);
-    color: var(--text-2);
-  }
-
-  .armour__list {
-    margin: var(--s-4) 0 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .claim {
-    display: grid;
-    grid-template-columns: 0.75rem minmax(0, 1fr);
-    align-items: baseline;
-    gap: var(--s-2) var(--s-3);
-    padding-block: var(--s-3);
-    border-block-end: 1px solid var(--border);
-  }
-
-  .claim__flag {
-    grid-column: 2;
-    justify-self: start;
-    white-space: normal;
-  }
-
-  .claim::before {
-    content: "";
-    align-self: start;
-    margin-block-start: 0.4em;
-    width: 0.75rem;
-    height: 0.375rem;
-    border-inline-start: 2px solid var(--ok);
-    border-block-end: 2px solid var(--ok);
-    transform: rotate(-45deg) translateY(-2px);
-  }
-
-  .claim[data-verified="false"]::before {
-    height: 0.75rem;
-    border: 1.5px dashed var(--text-3);
-    border-radius: 50%;
-    transform: none;
-  }
-
-  .claim[data-verified="false"] .claim__text {
-    color: var(--text-2);
-  }
-
-  @media (max-width: 60rem) {
-    .armour {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  }
-
-  /* ── Highload: the layers as an apparatus list, the instruments, a field note ── */
-  .layers {
-    border-block-start: 1px solid var(--border-strong);
-  }
-
-  .layers__row {
-    display: grid;
-    grid-template-columns: minmax(7rem, 11rem) minmax(0, 1fr);
-    align-items: baseline;
-    gap: var(--s-2) var(--s-6);
-    padding-block: var(--s-4);
-    border-block-end: 1px solid var(--border);
-  }
-
-  .layers__name {
-    font-size: var(--fs-md);
-    font-weight: 500;
-  }
-
-  .layers__items {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--s-1) var(--s-5);
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  /* Each item with a small square, so a wrapped line still starts with an item. */
-  .layers__items .tag {
-    display: inline-flex;
-    align-items: baseline;
-    gap: var(--s-2);
-    padding: 0;
-    border: 0;
-    background: none;
-    font-family: var(--font-mono);
-    font-size: var(--fs-sm);
-    color: var(--text-2);
-  }
-
-  .layers__items .tag::before {
-    content: "";
-    flex: none;
-    width: 0.3rem;
-    height: 0.3rem;
-    background: var(--text-3);
-    transform: translateY(-0.15em);
-  }
-
-  @media (max-width: 40rem) {
-    .layers__row {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  }
-
-  .instruments-2 {
-    display: grid;
-    gap: var(--s-6);
-  }
-
-  /* A field note under the instruments: a footnote, with its star and its source. */
-  .story {
-    display: grid;
-    grid-template-columns: 2rem minmax(0, 1fr);
-    gap: var(--s-4);
-    max-width: 52rem;
-    margin-block-start: clamp(var(--s-6), 4vw, var(--s-7));
-    padding-block-start: var(--s-4);
-    border-block-start: 1px solid var(--border-strong);
-  }
-
-  .story .star-mark {
-    width: 2rem;
-    height: 2rem;
-  }
-
-  .story__title {
-    font-size: var(--fs-md);
-    font-weight: 500;
-  }
-
-  .story__text {
-    max-width: 62ch;
-    margin-block-start: var(--s-1);
-    font-size: var(--fs-sm);
-    color: var(--text-2);
-  }
-
-  .story__source {
-    margin-block-start: var(--s-2);
-    color: var(--text-3);
-  }
-
-  /* ── Design ─────────────────────────────────────────────────────────── */
-
-
-  .practice__title {
-    margin-block-end: var(--s-2);
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    font-weight: 400;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--text-3);
-  }
-
-  .practice__list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
-    column-gap: var(--s-6);
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .bench .sec__aside {
-    margin-block-start: var(--s-6);
-    color: var(--text-2);
-  }
-
-  /* ── How we work: the belt is the procedure, the Proof Pack its output ── */
-  .belt {
-    position: relative;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--s-6);
-    margin: 0 0 clamp(var(--s-8), 7vw, var(--s-9));
-    padding: 0;
-    list-style: none;
-  }
-
-  /* The belt itself: Mintaka's dashed blue line, from the construction board. */
-  .belt::before {
-    content: "";
-    position: absolute;
-    inset-block-start: 1.5rem;
-    inset-inline: 1.5rem calc(33.333% - 1.5rem);
-    border-block-start: 1.5px dashed var(--mintaka);
-  }
-
-  .belt__step {
-    position: relative;
-    display: grid;
-    align-content: start;
-    gap: var(--s-2);
-  }
-
-  .belt__step .star-mark {
-    width: 3rem;
-    height: 3rem;
-    margin-block-end: var(--s-3);
-    border-radius: 50%;
-    background: var(--bg);
-  }
-
-  .belt__meaning {
-    color: var(--text-3);
-    font-size: var(--fs-sm);
-  }
-
-  .belt__name {
-    font-size: var(--fs-3xl);
-    font-weight: 500;
-    letter-spacing: -0.03em;
-  }
-
-  .belt__text {
-    max-width: 36ch;
-    color: var(--text-2);
-  }
-
-  @media (max-width: 52rem) {
-    .belt {
-      grid-template-columns: minmax(0, 1fr);
-    }
-
-    .belt::before {
-      inset-block: 1.5rem 0;
-      inset-inline: 1.5rem auto;
-      border-block-start: 0;
-      border-inline-start: 1.5px dashed var(--mintaka);
-    }
-  }
-
-  .pack__head {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: end;
-    justify-content: space-between;
-    gap: var(--s-3) var(--s-5);
-    margin-block-end: var(--s-5);
-    padding-block-start: var(--s-3);
-  }
-
-  .pack__title {
-    font-size: var(--fs-2xl);
-    font-weight: 500;
-    letter-spacing: -0.025em;
-  }
-
-  .pack__lead {
-    color: var(--text-2);
-  }
-
-  /* The Proof Pack: what is handed over, as a ruled list of documents. */
-  .reports {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    border-block-start: 1px solid var(--border-strong);
-  }
-
-  .report {
-    display: grid;
-    grid-template-columns: minmax(12rem, 18rem) minmax(0, 1fr);
-    align-items: baseline;
-    gap: var(--s-2) var(--s-6);
-    padding-block: var(--s-4);
-    border-block-end: 1px solid var(--border);
-  }
-
-  .report__title {
-    font-size: var(--fs-md);
-    font-weight: 500;
-  }
-
-  .report__body {
-    color: var(--text-2);
-  }
-
-  @media (max-width: 40rem) {
-    .report {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  }
-
-  /* ── S11 The Lab ────────────────────────────────────────────────────── */
-  .lab {
-    margin: 0;
+  /* ── Lab notes ─────────────────────────────────────────────────────────── */
+  .notes {
+    padding-block: clamp(var(--s-8), 8vw, var(--s-10));
     border-block-start: 1px solid var(--border);
   }
 
-  .lab__post {
+  .notes__head {
     display: grid;
-    grid-template-columns: 11rem minmax(0, 1fr) auto;
+    gap: var(--s-3);
+    max-width: 46rem;
+    margin-block-end: var(--s-6);
+  }
+
+  .notes__lead,
+  .notes__untranslated {
+    color: var(--text-2);
+  }
+
+  .notes__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border-block-start: 1px solid var(--border);
+  }
+
+  .note {
+    display: grid;
+    grid-template-columns: 7.5rem 11rem minmax(0, 1fr);
     align-items: baseline;
-    gap: var(--s-4);
+    gap: var(--s-2) var(--s-5);
     padding-block: var(--s-4);
     border-block-end: 1px solid var(--border);
   }
 
-  .lab__pillar {
-    font-size: var(--fs-xs);
+  .note__date,
+  .note__pillar {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
     letter-spacing: var(--track-label);
     text-transform: uppercase;
     color: var(--text-2);
   }
 
-  .lab__title {
+  .note__title {
     font-size: var(--fs-lg);
-  }
-
-  a.lab__title {
     color: var(--text);
     text-decoration-color: var(--border-strong);
   }
 
-  a.lab__title:hover {
+  .note__title:hover {
     color: var(--link-hover);
     text-decoration-color: currentColor;
   }
 
-  .lab__state {
-    font-size: var(--fs-sm);
-    color: var(--text-2);
-  }
-
-  .lab__more {
+  .notes__more {
     display: flex;
     flex-wrap: wrap;
     gap: 0 var(--s-2);
@@ -986,321 +252,19 @@
     color: var(--text-2);
   }
 
-  .lab__more a {
+  .notes__more a {
     display: inline-flex;
     align-items: center;
     min-height: var(--tap);
   }
 
   @media (max-width: 40rem) {
-    .lab__post {
-      grid-template-columns: 1fr;
-      gap: var(--s-1);
+    .note {
+      grid-template-columns: auto minmax(0, 1fr);
     }
 
-    .lab__state {
-      justify-self: start;
-    }
-  }
-
-  /* ── S12 Team ───────────────────────────────────────────────────────── */
-  /* The people who run the bench: two staff cards, photo beside the words. */
-  .team-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 24rem), 1fr));
-    gap: var(--s-5);
-    margin-block: 0 var(--s-8);
-    padding: 0;
-    list-style: none;
-  }
-
-  .member {
-    display: grid;
-    grid-template-columns: 6.5rem minmax(0, 1fr);
-    align-items: start;
-    gap: var(--s-5);
-    padding: var(--s-5);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--surface);
-  }
-
-  .member__photo img {
-    display: block;
-    width: 100%;
-    height: auto;
-    border-radius: 3px;
-    background: var(--void);
-  }
-
-  @media (max-width: 30rem) {
-    .member {
-      grid-template-columns: 4.5rem minmax(0, 1fr);
-      gap: var(--s-4);
-      padding: var(--s-4);
-    }
-
-    .member .member__name {
-      font-size: var(--fs-md);
-    }
-  }
-
-  .member__text {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--s-1);
-    min-width: 0;
-  }
-
-  .member__name {
-    font-size: var(--fs-lg);
-  }
-
-  .member__role {
-    font-size: var(--fs-xs);
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--text-2);
-  }
-
-  .member__line {
-    margin-block-start: var(--s-2);
-    color: var(--text-2);
-  }
-
-  .member__links {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--s-1) var(--s-4);
-    margin: var(--s-2) 0 0;
-    padding: 0;
-    list-style: none;
-    font-size: var(--fs-sm);
-  }
-
-  .member__links a {
-    overflow-wrap: anywhere;
-    display: inline-block;
-    padding-block: var(--s-2);
-  }
-
-  .name-story {
-    display: grid;
-    gap: var(--s-3);
-    max-width: 46rem;
-    color: var(--text-2);
-  }
-
-  .name-story__title {
-    font-size: var(--fs-lg);
-    color: var(--text);
-  }
-
-  /* On pages not written in Cyrillic, this one quoted Tajik word uses the system font, rather than
-     downloading 27 kB of Onest for seven letters. Russian and Tajik pages use Onest throughout. */
-  :root:not(:lang(ru), :lang(tg)) .name-story [lang="tg"] {
-    font-family: system-ui, sans-serif;
-  }
-
-  .name-story__end {
-    font-weight: 500;
-    color: var(--text);
-  }
-
-  .careers {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--s-4) var(--s-5);
-    max-width: 46rem;
-    margin-block-start: var(--s-7);
-    padding-block-start: var(--s-5);
-    border-block-start: 1px solid var(--border);
-  }
-
-  /* The end of the bench: a window onto the night over the Pamir. */
-  .horizon {
-    position: relative;
-    height: clamp(14rem, 26vw, 20rem);
-    overflow: hidden;
-    background: var(--void);
-  }
-
-  .horizon .pamir {
-    position: absolute;
-    inset: auto 0 0;
-    width: 100%;
-    height: 72%;
-  }
-
-  .pamir__ridge {
-    fill: var(--ink);
-    stroke: var(--slate);
-    stroke-width: 1;
-    vector-effect: non-scaling-stroke;
-  }
-
-  .horizon__sky {
-    position: absolute;
-    inset-block-start: var(--s-4);
-    inset-inline-start: 50%;
-    width: clamp(6rem, 11vw, 9rem);
-    transform: translateX(-50%);
-  }
-
-  .horizon__caption {
-    position: absolute;
-    inset-block-end: var(--s-4);
-    inset-inline-end: var(--gutter);
-    max-width: 30rem;
-    font-size: var(--fs-xs);
-    color: var(--text-2);
-    text-align: end;
-  }
-
-  /* Orion rises over the Pamir as you scroll (where the browser supports scroll timelines). */
-  @supports (animation-timeline: view()) {
-    @media (prefers-reduced-motion: no-preference) {
-      .horizon__sky {
-        animation: orion-rise linear both;
-        animation-timeline: view();
-        animation-range: entry 10% cover 55%;
-      }
-
-      @keyframes orion-rise {
-        from {
-          opacity: 0.2;
-          transform: translate(-50%, 45%);
-        }
-        to {
-          opacity: 1;
-          transform: translate(-50%, 0);
-        }
-      }
-    }
-  }
-
-  /* ── S13 Contact ────────────────────────────────────────────────────── */
-  .contact-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-    align-items: start;
-    gap: var(--s-8);
-  }
-
-  .contact-grid .sec__head {
-    margin-block-end: 0;
-  }
-
-  .direct {
-    margin-block-start: var(--s-5);
-  }
-
-  .direct__title {
-    font-family: var(--font-mono);
-    font-size: var(--fs-xs);
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--text-2);
-  }
-
-  .direct__list {
-    margin: var(--s-2) 0 0;
-  }
-
-  .direct__list a {
-    display: inline-flex;
-    align-items: center;
-    min-height: var(--tap);
-    font-size: var(--fs-lg);
-  }
-
-  .contact__privacy {
-    max-width: 42ch;
-    font-size: var(--fs-sm);
-    color: var(--text-2);
-  }
-
-  .contact {
-    position: relative;
-    display: grid;
-    gap: var(--s-5);
-    padding: var(--s-6);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--r-card);
-    background: var(--surface);
-  }
-
-  .contact__group {
-    display: grid;
-    gap: var(--s-3);
-    min-width: 0;
-    margin: 0;
-    padding: 0;
-    border: 0;
-  }
-
-  .contact__group legend {
-    padding: 0;
-    margin-block-end: var(--s-3);
-  }
-
-  .chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--s-2);
-  }
-
-  .contact__row {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--s-4);
-  }
-
-  .field__optional {
-    font-weight: 400;
-    color: var(--text-2);
-  }
-
-  .contact__rule {
-    margin-block-end: calc(-1 * var(--s-2));
-    font-size: var(--fs-sm);
-    color: var(--text-2);
-  }
-
-  .contact__trap {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-  }
-
-  /* Out of the layout while empty, but still in the accessibility tree, so the first
-     announcement is never missed. */
-  .contact__status:empty {
-    position: absolute;
-  }
-
-  .contact__send {
-    justify-self: start;
-    min-width: 10rem;
-  }
-
-  @media (max-width: 60rem) {
-    .contact-grid {
-      grid-template-columns: 1fr;
-      gap: var(--s-6);
-    }
-  }
-
-  @media (max-width: 36rem) {
-    .contact {
-      padding: var(--s-5) var(--s-4);
-    }
-
-    .contact__row {
-      grid-template-columns: 1fr;
+    .note__title {
+      grid-column: 1 / -1;
     }
   }
 
@@ -1381,7 +345,7 @@
     color: var(--text-2);
   }
 
-  /* Print: a one-page capability statement on white (spec §7.8). */
+  /* Print: the lab's index on white. */
   @media print {
     :root {
       --bg: #fff;
@@ -1398,35 +362,18 @@
       color: var(--void);
     }
 
-    #hero-canvas,
-    .orion-nav,
+    .lab-hero__map,
+    .lab-hero__panel,
     .site-header,
     .instrument,
-    .sec--physics,
-    .sec--lab,
-    .horizon,
-    .contact,
+    .rail,
     .menu,
-    .site-footer__tools,
-    .code {
+    .site-footer__tools {
       display: none !important;
     }
 
-    .sec {
-      padding-block: 1.25rem;
-      break-inside: avoid;
-    }
-
-    .hero {
+    .lab-hero {
       min-height: 0;
-    }
-
-    .hero__figure {
-      width: 6rem;
-    }
-
-    :root.engine-on .hero__poster {
-      opacity: 1;
     }
 
     a {

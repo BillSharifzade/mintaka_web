@@ -9,6 +9,7 @@ license.workspace = true
 
 [dependencies]
 proof.workspace = true
+routing = { path = "../routing" }
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true

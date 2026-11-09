@@ -6,7 +6,7 @@ import { emit, on } from './shared/bus.ts';
 import { offline, onIdle, setShortcutsEnabled, shortcutsEnabled, whenNear } from './shared/env.ts';
 import { assetUrl } from './shared/assets.ts';
 import { track } from './shared/rum.ts';
-import { loadStrings, numberLocale } from './shared/i18n.ts';
+import { loadStrings } from './shared/i18n.ts';
 
 interface Island {
   mount(root: HTMLElement): void;
@@ -87,7 +87,7 @@ for (const root of $$('[data-island]')) {
   whenNear(root, mount);
 }
 
-// The hero's pause button appears once the particle engine draws, says what pressing it does
+// The hero's pause button appears once the city map runs, says what pressing it does
 // next, and goes away again if the engine falls back to the still poster (tier D).
 const motion = $('[data-action="motion"]');
 if (motion) {
@@ -114,26 +114,18 @@ for (const menu of $$<HTMLDetailsElement>('details.menu')) {
   for (const type of ['focusin', 'pointerdown']) document.addEventListener(type, (e) => menu.contains(e.target as Node) || close());
 }
 
-// The hero's readout: what the engine measured of its own frames, once it settles on a tier.
-const readout = $('.hero__readout');
-if (readout) {
-  const tiers = { A: 'WebGPU', B: 'WebGL 2', C: 'Canvas 2D' };
-  const nf = (n: number, digits = 0) => n.toLocaleString(numberLocale(), { maximumFractionDigits: digits, minimumFractionDigits: digits });
-  on('render', (r) => {
-    const set = (k: string, v: string) => {
-      const el = $(`[data-r="${k}"]`, readout);
-      if (el) el.textContent = v;
-    };
-    set('tier', tiers[r.tier]);
-    set('count', nf(r.count));
-    set('ms', nf(r.p50, r.p50 < 1 ? 2 : 1));
-    readout.hidden = false;
-  }, { replay: true });
-  on('tier', (tier) => tier === 'D' && (readout.hidden = true));
-}
+// The opening experiment: Dushanbe's streets, searched live (web/city/).
+const hero = $('.lab-hero');
+if (hero) onIdle(() => void import('./city/index.ts').then((m) => m.start(hero)), 200);
 
-const canvas = $<HTMLCanvasElement>('#hero-canvas');
-if (canvas) onIdle(() => void import('./hero/index.ts').then((m) => m.start(canvas)), 300);
+// The rail's lamps mirror each instrument's own status lamp, so the list shows what is running.
+for (const link of $$<HTMLAnchorElement>('.rail__link')) {
+  const status = $(`.instrument[data-island="${link.dataset['for'] ?? ''}"] .instrument__status`);
+  const lamp = $('.lamp', link);
+  if (!status || !lamp) continue;
+  const copy = () => (lamp.dataset['state'] = /badge--(info|live|ok|warn|bad)/.exec(status.className)?.[1] ?? '');
+  new MutationObserver(copy).observe(status, { attributes: true, attributeFilter: ['class'] });
+}
 
 onIdle(() => {
   void import('./nav/index.ts').then((m) => m.start());
@@ -166,7 +158,7 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('click', (e) => {
   // Counted for /_rum (web/shared/rum.ts): every "Start a project" link, the language switcher.
   const link = (e.target as Element | null)?.closest<HTMLAnchorElement>('a[href]');
-  if (link?.hash === '#contact') track('cta_start_project');
+  if (link?.hash === '#contact' || link?.hash === '#start') track('cta_start_project');
   else if (link?.closest('.lang') && link.getAttribute('aria-current') !== 'page') track('lang_switch');
   const el = (e.target as Element | null)?.closest<HTMLElement>('[data-action]');
   switch (el?.dataset['action']) {

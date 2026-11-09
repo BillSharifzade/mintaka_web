@@ -1,130 +1,153 @@
-/* S1 hero. The H1 is the Largest Contentful Paint element, never the canvas: it renders from the
-   inline CSS and the preloaded font before any script runs. */
+/* The lab's opening experiment: Dushanbe's streets, searched live behind the words. The H1 is the
+   Largest Contentful Paint element, never the map: it renders from the inline CSS and the preloaded
+   font before any script runs, and the map fades in under it when its 40 kB of streets arrive. */
 
 @layer sections {
-  .hero {
+  .lab-hero {
+    position: relative;
+    isolation: isolate;
     display: grid;
-    align-items: center;
     min-height: calc(100svh - var(--header-h));
-    padding-block: var(--s-8) var(--s-9);
+    overflow: hidden;
+    background: var(--void);
   }
 
-  .hero__grid {
-    display: grid;
-    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
-    align-items: center;
-    gap: var(--s-6);
+  /* The map. Until it draws (and without a script), a surveyor's grid stands in for it. */
+  .lab-hero__map {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background-image:
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size: 5rem 5rem;
+    background-position: center;
+    cursor: crosshair;
   }
 
-  .hero__text {
-    position: relative;
-    display: grid;
-    gap: var(--s-5);
-    max-width: 42rem;
+  .lab-hero__map canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    transition: opacity var(--t-scene) var(--ease-enter);
   }
 
-  .hero__title {
-    font-size: var(--fs-h1);
-    font-weight: 500;
-    line-height: var(--lh-display);
-    letter-spacing: var(--track-display);
+  .lab-hero__map.is-on canvas {
+    opacity: 1;
   }
 
-  /* "Rust-first software engineering · Dushanbe": a separator never starts a line. */
-  .hero__part {
-    white-space: nowrap;
-  }
-
-  @media (max-width: 30rem) {
-    .hero__eyebrow {
-      display: grid;
-      gap: var(--s-1);
-    }
-
-    .hero__sep {
-      display: none;
-    }
-
-    /* One part per line, and a part may wrap: at 320 px it is wider than the column (1.4.10). */
-    .hero__part {
-      white-space: normal;
-    }
-  }
-
-  .hero__sub {
-    max-width: 30ch;
-    font-size: var(--fs-lg);
-    line-height: 1.45;
-    color: var(--text-2);
-  }
-
-  .hero__actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--s-3);
-    margin-block-start: var(--s-2);
-  }
-
-  .hero__note {
-    font-size: var(--fs-sm);
-    color: var(--text-2);
-  }
-
-  .hero__note kbd {
-    font-size: var(--fs-xs);
-  }
-
-  .hero__motion {
-    justify-self: start;
-  }
-
-  /* No keyboard, or shortcuts switched off: the hint would be noise. */
-  @media (hover: none) {
-    .hero__note {
-      display: none;
-    }
-  }
-
-  :root[data-shortcuts-off] .hero__note {
-    display: none;
-  }
-
-  /* The mark under observation: a viewfinder's corner brackets around the figure, and the
-     engine's own measurements printed under it, like a scope's readout. */
-  .hero__scope {
-    position: relative;
-    display: grid;
-    justify-items: center;
-    gap: var(--s-6);
-    padding: var(--s-6) var(--s-5) var(--s-4);
-  }
-
-  .hero__scope::before {
-    --c: rgb(201 206 216 / 0.4);
-    --l: 1.25rem;
+  /* A scrim on the words' side, so their contrast never depends on the map. */
+  .lab-hero__map::after {
     content: "";
     position: absolute;
     inset: 0;
     background:
-      linear-gradient(var(--c) 0 0) top left / var(--l) 1px,
-      linear-gradient(var(--c) 0 0) top left / 1px var(--l),
-      linear-gradient(var(--c) 0 0) top right / var(--l) 1px,
-      linear-gradient(var(--c) 0 0) top right / 1px var(--l),
-      linear-gradient(var(--c) 0 0) bottom left / var(--l) 1px,
-      linear-gradient(var(--c) 0 0) bottom left / 1px var(--l),
-      linear-gradient(var(--c) 0 0) bottom right / var(--l) 1px,
-      linear-gradient(var(--c) 0 0) bottom right / 1px var(--l);
-    background-repeat: no-repeat;
+      linear-gradient(90deg, rgb(10 11 13 / 0.9), rgb(10 11 13 / 0.6) 30%, rgb(10 11 13 / 0) 52%),
+      linear-gradient(0deg, rgb(10 11 13 / 0.9), rgb(10 11 13 / 0) 26%);
     pointer-events: none;
   }
 
-  .hero__readout {
+  .lab-hero__in {
+    display: grid;
+    grid-template-rows: 1fr auto;
+    gap: var(--s-7);
+    padding-block: clamp(var(--s-7), 9vh, var(--s-9)) var(--s-5);
+  }
+
+  .lab-hero__text {
+    display: grid;
+    align-content: center;
+    justify-items: start;
+    gap: var(--s-5);
+    max-width: 38rem;
+  }
+
+  .lab-hero__label {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--text-2);
+  }
+
+  .lab-hero__title {
+    font-size: clamp(2.5rem, 1.4rem + 3.6vw, 4.5rem);
+    font-weight: 500;
+    line-height: 1.02;
+    letter-spacing: -0.035em;
+    text-wrap: balance;
+  }
+
+  .lab-hero__sub {
+    max-width: 36rem;
+    font-size: var(--fs-lg);
+    line-height: 1.5;
+    color: var(--text-2);
+  }
+
+  .lab-hero__hint {
+    padding-inline-start: var(--s-3);
+    border-inline-start: 2px solid var(--mintaka);
+    font-size: var(--fs-sm);
+    color: var(--sky);
+  }
+
+  .lab-hero__hint--touch {
+    display: none;
+  }
+
+  @media (hover: none) {
+    .lab-hero__hint--mouse,
+    .lab-hero__note {
+      display: none;
+    }
+
+    .lab-hero__hint--touch {
+      display: block;
+    }
+  }
+
+  :root[data-shortcuts-off] .lab-hero__note {
+    display: none;
+  }
+
+  .lab-hero__actions {
     display: flex;
     flex-wrap: wrap;
-    justify-content: center;
-    gap: var(--s-1) var(--s-3);
-    padding: var(--s-1) var(--s-2);
-    background: var(--void);
+    gap: var(--s-3);
+  }
+
+  .lab-hero__note {
+    font-size: var(--fs-sm);
+    color: var(--text-2);
+  }
+
+  .lab-hero__note kbd {
+    font-size: var(--fs-xs);
+  }
+
+  /* The instrument panel along the bottom: what the searches have measured so far, the latest
+     searches, and the route from the pointer. */
+  .lab-hero__panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 27rem);
+    align-items: end;
+    gap: var(--s-4) var(--s-7);
+    padding-block-start: var(--s-4);
+    border-block-start: 1px solid var(--border-strong);
+  }
+
+  .lab-hero__stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-4) var(--s-6);
+    margin: 0;
+  }
+
+  .stat dt {
     font-family: var(--font-mono);
     font-size: 0.6875rem;
     letter-spacing: var(--track-label);
@@ -132,92 +155,146 @@
     color: var(--text-2);
   }
 
-  .hero__readout [data-r] {
-    color: var(--text);
+  .stat dd {
+    margin: var(--s-1) 0 0;
+    font-size: var(--fs-xl);
+    font-weight: 500;
     font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
   }
 
-  .hero__live {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--s-2);
+  .stat__unit {
+    font-size: var(--fs-sm);
+    font-weight: 400;
+    color: var(--text-2);
+  }
+
+  .lab-hero__probe {
+    grid-column: 1;
+    min-height: 1.2em;
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
     color: var(--sky);
   }
 
-  .hero__live::before {
-    content: "";
-    width: 0.4375rem;
-    height: 0.4375rem;
-    border-radius: 50%;
-    background: var(--mintaka);
-    box-shadow: 0 0 0.5rem rgb(61 123 255 / 0.8);
+  .lab-hero__probe:empty {
+    display: none;
   }
 
-  /* The figure is where the engine draws the hourglass; its poster is the real mark (tier D,
-     no JavaScript, reduced motion). */
-  .hero__figure {
-    position: relative;
-    justify-self: center;
-    width: min(100%, 19rem);
-    aspect-ratio: 157 / 237;
+  .lab-hero__log {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    display: grid;
+    gap: var(--s-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    font-variant-numeric: tabular-nums;
+    color: var(--text-2);
+    text-align: end;
   }
 
-  .hero__poster,
-  .hero__poster .mark {
-    width: 100%;
-    height: 100%;
+  .lab-hero__log li {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
 
-  .hero__poster {
-    transition: opacity var(--t-scene) var(--ease-exit);
+  .lab-hero__log li:first-child {
+    color: var(--text);
   }
 
-  :root.engine-on .hero__poster {
-    opacity: 0;
-  }
-
-  @media (max-width: 52rem) {
-    .hero {
-      align-items: end;
+  @media (max-width: 60rem) {
+    .lab-hero__panel {
+      grid-template-columns: minmax(0, 1fr);
     }
 
-    .hero__grid {
-      grid-template-columns: 1fr;
+    .lab-hero__log {
+      grid-column: 1;
+      grid-row: auto;
+      text-align: start;
     }
 
-    /* The scope dissolves: the figure goes behind the words, the readout follows them. */
-    .hero__scope {
-      display: contents;
-    }
-
-    .hero__scope::before {
+    .lab-hero__log li:nth-child(n + 3) {
       display: none;
     }
 
-    .hero__readout {
-      justify-content: start;
+    .lab-hero__map::after {
+      background: linear-gradient(0deg, rgb(10 11 13 / 0.95) 20%, rgb(10 11 13 / 0.55) 60%, rgb(10 11 13 / 0.2));
+    }
+  }
+
+  /* Phones: the map gets a window of its own across the top, the words follow under it. */
+  @media (max-width: 48rem) {
+    .lab-hero__map {
+      inset: 0 0 auto;
+      height: 44svh;
     }
 
-    /* The engine sits behind the upper half; the text gets a Void scrim so its contrast never
-       depends on the animation. */
-    .hero__figure {
-      position: absolute;
-      inset-block-start: calc(var(--header-h) + var(--s-4));
-      inset-inline-end: 4%;
-      width: min(58vw, 15rem);
-      opacity: 0.5;
+    .lab-hero__map::after {
+      background: linear-gradient(0deg, var(--void), rgb(10 11 13 / 0) 30%);
     }
 
-    .hero__text {
-      padding-block-start: 38svh;
+    .lab-hero__in {
+      padding-block-start: calc(44svh - var(--s-6));
     }
+  }
 
-    .hero__text::before {
-      content: "";
-      position: absolute;
-      inset: 30svh calc(-1 * var(--gutter)) 0;
-      z-index: -1;
-      background: linear-gradient(to bottom, rgb(10 11 13 / 0), var(--void) 22%);
+  @media (max-width: 40rem) {
+    .lab-hero__stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  /* Status lamps: off until something runs (data-state from web/main.ts, or --live). */
+  .lamp {
+    flex: none;
+    display: inline-block;
+    vertical-align: 0.05em;
+    margin-inline-end: var(--s-2);
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--graphite);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08);
+    transition:
+      background-color var(--t-ui) var(--ease-enter),
+      box-shadow var(--t-ui) var(--ease-enter);
+  }
+
+  .lamp--live,
+  .lamp[data-state="info"] {
+    background: var(--mintaka);
+    box-shadow: 0 0 0.5rem rgb(61 123 255 / 0.7);
+  }
+
+  .lamp[data-state="live"] {
+    background: var(--betelgeuse);
+    box-shadow: 0 0 0.5rem rgb(226 85 45 / 0.7);
+  }
+
+  .lamp[data-state="ok"] {
+    background: var(--success);
+    box-shadow: 0 0 0.5rem rgb(47 191 113 / 0.6);
+  }
+
+  .lamp[data-state="warn"],
+  .lamp[data-state="bad"] {
+    background: var(--warning);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .lamp--live {
+      animation: lamp-breathe 2.4s ease-in-out infinite;
+    }
+  }
+
+  @keyframes lamp-breathe {
+    50% {
+      box-shadow: 0 0 0.15rem rgb(61 123 255 / 0.4);
     }
   }
 }

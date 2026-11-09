@@ -111,6 +111,9 @@ pub fn document(ctx: &Ctx, page: Page) -> Markup {
         _ => "en_US",
     };
     let nav_href = |id: &str| if page.is_home { format!("#{id}") } else { format!("{}#{id}", ctx.home()) };
+    // Starting a project happens on the studio page, where the brief form is.
+    let studio = ctx.url(&format!("/{}/studio/", ctx.lang));
+    let start = format!("{studio}#start");
     let long = page.long_form.as_ref();
     let scripts = long.is_none();
     let alternates = long.map_or(&[][..], |l| l.alternates.as_slice());
@@ -173,16 +176,13 @@ pub fn document(ctx: &Ctx, page: Page) -> Markup {
                         a class="site-header__logo" href=(ctx.home()) aria-label="Mintaka" { (ctx.logo) }
                         nav class="site-nav" aria-label=(s.t("nav-label")) {
                             ul role="list" {
-                                li { a href=(nav_href("efficiency")) { (s.t("nav-efficiency")) } }
-                                li { a href=(nav_href("security")) { (s.t("nav-security")) } }
-                                li { a href=(nav_href("highload")) { (s.t("nav-highload")) } }
-                                li { a href=(nav_href("design")) { (s.t("nav-design")) } }
-                                li { a href=(nav_href("process")) { (s.t("nav-process")) } }
-                                li { a href=(nav_href("team")) { (s.t("nav-team")) } }
+                                li { a href=(nav_href("instruments")) { (s.t("nav-instruments")) } }
+                                li { a href=(nav_href("notes")) { (s.t("nav-notes")) } }
+                                li { a href=(studio) { (s.t("nav-studio")) } }
                             }
                         }
                         (lang_switch(ctx, alternates, true))
-                        a class="btn btn--primary btn--sm site-header__cta" href=(nav_href("contact")) { (s.t("nav-cta")) }
+                        a class="btn btn--primary btn--sm site-header__cta" href=(start) { (s.t("nav-cta")) }
                         details class="menu" {
                             summary class="btn btn--ghost btn--sm menu__toggle" { (s.t("nav-menu")) }
                             // Small screens: the sections and, below them, the language switch,
@@ -192,13 +192,10 @@ pub fn document(ctx: &Ctx, page: Page) -> Markup {
                             div class="menu__panel" {
                                 nav aria-label=(s.t("nav-menu")) {
                                     ul role="list" {
-                                        li { a href=(nav_href("efficiency")) { (s.t("nav-efficiency")) } }
-                                        li { a href=(nav_href("security")) { (s.t("nav-security")) } }
-                                        li { a href=(nav_href("highload")) { (s.t("nav-highload")) } }
-                                        li { a href=(nav_href("design")) { (s.t("nav-design")) } }
-                                        li { a href=(nav_href("process")) { (s.t("nav-process")) } }
-                                        li { a href=(nav_href("team")) { (s.t("nav-team")) } }
-                                        li { a href=(nav_href("contact")) { (s.t("nav-cta")) } }
+                                        li { a href=(nav_href("instruments")) { (s.t("nav-instruments")) } }
+                                        li { a href=(nav_href("notes")) { (s.t("nav-notes")) } }
+                                        li { a href=(studio) { (s.t("nav-studio")) } }
+                                        li { a href=(start) { (s.t("nav-cta")) } }
                                     }
                                 }
                                 (lang_switch(ctx, alternates, false))
@@ -206,8 +203,6 @@ pub fn document(ctx: &Ctx, page: Page) -> Markup {
                         }
                     }
                 }
-                @if page.is_home { (svg::orion_nav(s)) }
-                @if page.is_home { canvas id="hero-canvas" aria-hidden="true" {} }
                 main id="main" tabindex="-1" { (page.body) }
                 (footer(ctx, page.path, scripts))
                 @if scripts {
@@ -291,33 +286,15 @@ fn footer(ctx: &Ctx, path: &str, scripts: bool) -> Markup {
                                 }
                             }
                         }
+                        @if scripts {
+                            // The console challenge (web/console/): solving it opens its form here.
+                            p class="site-footer__ctf" { (s.t("sec-ctf")) " " kbd { "~" } }
+                            div id="careers" class="careers" {}
+                        }
                         p class="site-footer__copy" { (s.ta("ft-copyright", &[("year", ctx.year.into())])) }
                     }
                 }
             }
-        }
-    }
-}
-
-/// An experiment's head on the bench, laid out like the top of a lab record: a rule, then the star
-/// it is filed under with its catalogue position and the pillar's name; under it the claim, large,
-/// and beside it the lead and the star's one-line story.
-pub fn pillar_head(ctx: &Ctx, star: &str, id: &str, eyebrow_key: &str, title_key: &str, lead_key: &str) -> Markup {
-    let s = ctx.s;
-    let st = crate::orion::star(star);
-    html! {
-        header class="exp__head" {
-            div class="exp__band" {
-                (svg::star_mark(star))
-                p class="exp__star" {
-                    span class="exp__name" { (s.t(&format!("star-{star}"))) }
-                    " "
-                    span class="exp__xy" { (st.ra_label()) " · " (st.dec_label()) }
-                }
-                p class="exp__pillar" { (s.t(eyebrow_key)) }
-            }
-            h2 class="exp__title" id=(format!("{id}-title")) { (s.t(title_key)) }
-            p class="lead exp__lead" { (s.t(lead_key)) }
         }
     }
 }

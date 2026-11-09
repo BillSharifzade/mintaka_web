@@ -3,9 +3,9 @@
 //! xtask bundles `web/sw/sw.ts` into `sw.js` next to esbuild's other output (not in its
 //! metafile). Here the one `self.__MINTAKA_SHELL__` in it becomes this build's file list: the
 //! pages with their languages and content hashes (one per A/B test variant, any of which the
-//! server may send), the shell (main.js, islands.css and the hero
-//! core, each with its static imports), the fonts each language preloads, each render tier's
-//! renderer, and every asset of the build. Any change to a shipped file therefore changes the
+//! server may send), the shell (main.js, islands.css and the opening experiment — web/city/ with
+//! its streets — each with its static imports), the fonts each language preloads, and every asset
+//! of the build. (`renderers`, the particle hero's per-tier chunks, is empty since 2026-11-09.) Any change to a shipped file therefore changes the
 //! worker's bytes, which is what makes browsers install the new one.
 //!
 //! Served at a fixed URL with the `document` policy (`no-cache` + ETag): the policy is about
@@ -131,13 +131,13 @@ pub fn shell(dist: &Dist, inputs: &Inputs) -> Result<Shell> {
     }
     let mut core = link(chunks.closure("web/main.ts")?);
     core.push(inputs.islands_css.to_owned());
-    core.extend(link(chunks.closure("web/hero/index.ts")?));
+    core.extend(link(chunks.closure("web/city/index.ts")?));
+    if let Some(r) = dist.routes.iter().find(|r| r.path.starts_with("/assets/data/city.") && r.path.ends_with(".bin")) {
+        core.push(dist.link(&r.path));
+    }
     let mut seen = BTreeSet::new();
     core.retain(|u| seen.insert(u.clone()));
-    let mut renderers = BTreeMap::new();
-    for (tier, entry) in [("A", "web/hero/webgpu.ts"), ("B", "web/hero/webgl.ts"), ("C", "web/hero/canvas.ts")] {
-        renderers.insert(tier.to_owned(), link(chunks.closure(entry)?));
-    }
+    let renderers = BTreeMap::new();
     let assets = dist.routes.iter().filter(|r| r.path.starts_with("/assets/") && !r.path.ends_with(".map")).map(|r| dist.link(&r.path)).collect();
     Ok(Shell { build: inputs.build.to_owned(), pages, core, fonts: inputs.fonts.clone(), renderers, assets })
 }
@@ -178,17 +178,17 @@ mod tests {
     fn closures_follow_static_imports_only() {
         let chunks = Chunks::parse(
             br#"{"outputs":{
-              "target/web/main.A.js":{"entryPoint":"web/main.ts","imports":[{"path":"target/web/chunk.D.js","kind":"import-statement"},{"path":"target/web/hero.H.js","kind":"dynamic-import"}]},
-              "target/web/hero.H.js":{"entryPoint":"web/hero/index.ts","imports":[{"path":"target/web/chunk.D.js","kind":"import-statement"},{"path":"target/web/chunk.G.js","kind":"import-statement"}]},
+              "target/web/main.A.js":{"entryPoint":"web/main.ts","imports":[{"path":"target/web/chunk.D.js","kind":"import-statement"},{"path":"target/web/city.H.js","kind":"dynamic-import"}]},
+              "target/web/city.H.js":{"entryPoint":"web/city/index.ts","imports":[{"path":"target/web/chunk.D.js","kind":"import-statement"},{"path":"target/web/chunk.G.js","kind":"import-statement"}]},
               "target/web/chunk.D.js":{"imports":[]},
               "target/web/chunk.G.js":{"imports":[{"path":"target/web/chunk.D.js","kind":"import-statement"}]}
             }}"#,
         )
         .unwrap();
         assert_eq!(chunks.closure("web/main.ts").unwrap(), ["/assets/main.A.js", "/assets/chunk.D.js"]);
-        let hero = chunks.closure("web/hero/index.ts").unwrap();
-        assert_eq!(hero.len(), 3);
-        assert_eq!(hero[0], "/assets/hero.H.js");
+        let city = chunks.closure("web/city/index.ts").unwrap();
+        assert_eq!(city.len(), 3);
+        assert_eq!(city[0], "/assets/city.H.js");
         assert!(chunks.closure("web/nope.ts").is_err());
     }
 }

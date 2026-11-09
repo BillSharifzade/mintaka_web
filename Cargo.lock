@@ -3433,6 +3433,7 @@ dependencies = [
  "pulldown-cmark",
  "pulldown-latex",
  "resvg",
+ "routing",
  "roxmltree",
  "serde",
  "serde_json",
