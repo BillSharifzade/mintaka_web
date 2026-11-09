@@ -262,7 +262,10 @@ export async function start(first: HTMLCanvasElement): Promise<void> {
     const sorted = costs.splice(0).sort((a, b) => a - b);
     const p90 = sorted[Math.floor(sorted.length * 0.9)] ?? 0;
     if (MINTAKA_DEV) console.info(`[mintaka] hero: tier ${renderer?.tier}·${levels[level]!.count}, p90 frame time ${p90.toFixed(2)} ms (budget ${budgetMs} ms)`);
-    if (p90 <= budgetMs) return false;
+    if (p90 <= budgetMs) {
+      if (renderer) emit('render', { tier: renderer.tier, count: levels[level]!.count, p50: sorted[Math.floor(sorted.length / 2)] ?? 0, p90 });
+      return false;
+    }
     void downgrade(`90th-percentile frame time ${p90.toFixed(1)} ms > ${budgetMs} ms`);
     return true;
   }

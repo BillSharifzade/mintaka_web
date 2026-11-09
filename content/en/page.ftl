@@ -48,6 +48,9 @@ hero-note = This page measures itself. Press **P** for the proof console.
 # The button that pauses the hero's particle animation, and starts it again.
 hero-motion-pause = Pause the animation
 hero-motion-play = Play the animation
+hero-live = Drawn live
+hero-particles = particles
+hero-frame = ms a frame
 
 ## Instruments
 
@@ -123,6 +126,7 @@ eff-research = Research to production
 eff-research-text = Papers turned into tested, benchmarked code.
 eff-stack = An individual stack
 eff-stack-text = Chosen per project after measuring — never by habit.
+eff-methods = Methods
 eff-race-id = S4 · Algorithms
 eff-race-title = Route across Dushanbe
 eff-race-fallback = With JavaScript and WebAssembly on, three route-finding algorithms race across Dushanbe's real road network, right here in your browser.

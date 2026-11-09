@@ -69,7 +69,7 @@ The check that runs over every page's text:
 
 A plural message from the security section, in Fluent. The generator turns it into `armour-summary[one]` and a default, `armour-summary`; a category whose text is the default's (here `[other]`) isn't exported, since the browser falls back to the default anyway:
 
-```ftl include="content/en/islands/armour.ftl" from="armour-summary = " to="in place on this page"
+```ftl include="content/en/islands/lazy/armour.ftl" from="armour-summary = " to="in place on this page"
 ```
 
 And the end of every build, per language:

@@ -67,6 +67,12 @@ pub fn brand_symbol(root: &Path, file: &str, id: &str) -> Result<(Markup, String
     for attr in [r#" id="mark""#, r#" id="betelgeuse""#, r#" id="mintaka""#] {
         inner = inner.replace(attr, "");
     }
+    // The kit's three colours become classes (as in `brand_classed`), so each copy takes the
+    // colours of the room it is shown in: `.lg-s` follows `--logo-ink` (layout.css).
+    let inner = inner
+        .replace(r##"fill="#F4F5F7""##, r#"class="lg-s""#)
+        .replace(r##"fill="#E2552D""##, r#"class="lg-b""#)
+        .replace(r##"fill="#3D7BFF""##, r#"class="lg-m""#);
     let symbol = PreEscaped(format!(r#"<symbol id="{id}" viewBox="{view_box}">{inner}</symbol>"#));
     Ok((symbol, view_box))
 }
@@ -88,6 +94,17 @@ fn tint_class(t: Tint) -> &'static str {
 
 /// The full Orion figure for S3 (and the anchor the hero engine lands its particles on).
 pub fn orion_figure(width: f64) -> Markup {
+    orion_svg(width, &[])
+}
+
+/// The figure as a star chart: `leaders` names stars and the side their label stands on (true =
+/// right); each gets a leader line from the star to that edge of the figure, where the label's own
+/// line takes over (home.css), so a label always points at its real star.
+pub fn orion_chart(width: f64, leaders: &[(&str, bool)]) -> Markup {
+    orion_svg(width, leaders)
+}
+
+fn orion_svg(width: f64, leaders: &[(&str, bool)]) -> Markup {
     let (stars, height) = orion::layout(width, 28.0);
     let pos = |id: &str| stars.iter().find(|(s, ..)| s.id == id).map(|(_, x, y, _)| (*x, *y)).unwrap_or((0.0, 0.0));
     let mut lines = String::new();
@@ -99,9 +116,18 @@ pub fn orion_figure(width: f64) -> Markup {
             if dashed { " orion-line--belt" } else { "" }
         );
     }
+    let mut leads = String::new();
+    for (id, right) in leaders {
+        if let Some((_, x, y, r)) = stars.iter().find(|(st, ..)| st.id == *id) {
+            let (x1, x2) = if *right { (x + r + 6.0, width) } else { (0.0, x - r - 6.0) };
+            if x2 - x1 > 4.0 {
+                let _ = write!(leads, r#"<line class="orion-leader" x1="{x1:.1}" y1="{y:.1}" x2="{x2:.1}" y2="{y:.1}"/>"#);
+            }
+        }
+    }
     html! {
         svg class="orion" viewBox=(format!("0 0 {width:.0} {height:.0}")) aria-hidden="true" focusable="false" {
-            g class="orion-lines" { (PreEscaped(lines)) }
+            g class="orion-lines" { (PreEscaped(lines)) (PreEscaped(leads)) }
             @for (s, x, y, r) in &stars {
                 circle class=(tint_class(s.tint)) data-star=(s.id) cx=(format!("{x:.1}")) cy=(format!("{y:.1}")) r=(format!("{r:.1}")) {}
             }
@@ -201,7 +227,8 @@ pub fn pamir(width: f64, height: f64) -> (Markup, f64) {
     ys[summit] = lowest - 0.03;
     let mut d = format!("M0 {height:.0}");
     for (i, y) in ys.iter().enumerate() {
-        let _ = write!(d, " L{:.1} {:.1}", i as f64 / n as f64 * width, y * height);
+        // Whole units: the ridge is jagged by design, and a unit is under 2 px on any screen.
+        let _ = write!(d, " L{:.0} {:.0}", i as f64 / n as f64 * width, y * height);
     }
     let _ = write!(d, " L{width:.0} {height:.0} Z");
     let markup = html! {

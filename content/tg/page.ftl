@@ -51,6 +51,9 @@ hero-note = Ин саҳифа худро чен мекунад. Барои ку�
 # The button that pauses the hero's particle animation, and starts it again.
 hero-motion-pause = Таваққуфи аниматсия
 hero-motion-play = Идомаи аниматсия
+hero-live = Зинда кашида мешавад
+hero-particles = зарра
+hero-frame = мс барои кадр
 
 ## Instruments
 
@@ -126,6 +129,7 @@ eff-research = Аз тадқиқот то истеҳсолот
 eff-research-text = Мақолаҳои илмӣ, ки ба коди санҷидашуда ва бо бенчмарк ченшуда табдил ёфтаанд.
 eff-stack = Стеки инфиродӣ
 eff-stack-text = Барои ҳар лоиҳа пас аз ченкунӣ интихоб мешавад — ҳеҷ гоҳ аз рӯи одат.
+eff-methods = Усулҳо
 eff-race-id = S4 · Алгоритмҳо
 eff-race-title = Масир аз миёни Душанбе
 eff-race-fallback = Агар JavaScript ва WebAssembly фаъол бошанд, дар ин ҷо, бевосита дар браузери шумо, се алгоритми ҷустуҷӯи масир дар шабакаи воқеии роҳҳои Душанбе мусобиқа мекунанд.

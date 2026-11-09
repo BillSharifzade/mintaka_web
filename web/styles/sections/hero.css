@@ -89,12 +89,76 @@
     display: none;
   }
 
+  /* The mark under observation: a viewfinder's corner brackets around the figure, and the
+     engine's own measurements printed under it, like a scope's readout. */
+  .hero__scope {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    gap: var(--s-6);
+    padding: var(--s-6) var(--s-5) var(--s-4);
+  }
+
+  .hero__scope::before {
+    --c: rgb(201 206 216 / 0.4);
+    --l: 1.25rem;
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(var(--c) 0 0) top left / var(--l) 1px,
+      linear-gradient(var(--c) 0 0) top left / 1px var(--l),
+      linear-gradient(var(--c) 0 0) top right / var(--l) 1px,
+      linear-gradient(var(--c) 0 0) top right / 1px var(--l),
+      linear-gradient(var(--c) 0 0) bottom left / var(--l) 1px,
+      linear-gradient(var(--c) 0 0) bottom left / 1px var(--l),
+      linear-gradient(var(--c) 0 0) bottom right / var(--l) 1px,
+      linear-gradient(var(--c) 0 0) bottom right / 1px var(--l);
+    background-repeat: no-repeat;
+    pointer-events: none;
+  }
+
+  .hero__readout {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--s-1) var(--s-3);
+    padding: var(--s-1) var(--s-2);
+    background: var(--void);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--text-2);
+  }
+
+  .hero__readout [data-r] {
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .hero__live {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-2);
+    color: var(--sky);
+  }
+
+  .hero__live::before {
+    content: "";
+    width: 0.4375rem;
+    height: 0.4375rem;
+    border-radius: 50%;
+    background: var(--mintaka);
+    box-shadow: 0 0 0.5rem rgb(61 123 255 / 0.8);
+  }
+
   /* The figure is where the engine draws the hourglass; its poster is the real mark (tier D,
      no JavaScript, reduced motion). */
   .hero__figure {
     position: relative;
     justify-self: center;
-    width: min(100%, 21rem);
+    width: min(100%, 19rem);
     aspect-ratio: 157 / 237;
   }
 
@@ -119,6 +183,19 @@
 
     .hero__grid {
       grid-template-columns: 1fr;
+    }
+
+    /* The scope dissolves: the figure goes behind the words, the readout follows them. */
+    .hero__scope {
+      display: contents;
+    }
+
+    .hero__scope::before {
+      display: none;
+    }
+
+    .hero__readout {
+      justify-content: start;
     }
 
     /* The engine sits behind the upper half; the text gets a Void scrim so its contrast never

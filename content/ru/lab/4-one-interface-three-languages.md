@@ -69,7 +69,7 @@ $$
 
 Сообщение с множественным числом из раздела о безопасности, на Fluent. Генератор превращает его в `armour-summary[one]` и вариант по умолчанию, `armour-summary`; категорию, чей текст совпадает с вариантом по умолчанию (здесь `[other]`), он не выгружает — браузер и так возьмёт вариант по умолчанию:
 
-```ftl include="content/en/islands/armour.ftl" from="armour-summary = " to="in place on this page"
+```ftl include="content/en/islands/lazy/armour.ftl" from="armour-summary = " to="in place on this page"
 ```
 
 И конец каждой сборки, для каждого языка:

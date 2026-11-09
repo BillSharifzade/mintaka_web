@@ -181,14 +181,16 @@ pub fn document(ctx: &Ctx, page: Page) -> Markup {
                                 li { a href=(nav_href("team")) { (s.t("nav-team")) } }
                             }
                         }
-                        (lang_switch(ctx, alternates))
+                        (lang_switch(ctx, alternates, true))
                         a class="btn btn--primary btn--sm site-header__cta" href=(nav_href("contact")) { (s.t("nav-cta")) }
                         details class="menu" {
                             summary class="btn btn--ghost btn--sm menu__toggle" { (s.t("nav-menu")) }
                             // Small screens: the sections and, below them, the language switch,
                             // which has no room in the header there.
+                            // Named after the menu, and its language switch a group, not a second
+                            // landmark: the header's own navigation and switch keep their names.
                             div class="menu__panel" {
-                                nav aria-label=(s.t("nav-label")) {
+                                nav aria-label=(s.t("nav-menu")) {
                                     ul role="list" {
                                         li { a href=(nav_href("efficiency")) { (s.t("nav-efficiency")) } }
                                         li { a href=(nav_href("security")) { (s.t("nav-security")) } }
@@ -199,7 +201,7 @@ pub fn document(ctx: &Ctx, page: Page) -> Markup {
                                         li { a href=(nav_href("contact")) { (s.t("nav-cta")) } }
                                     }
                                 }
-                                (lang_switch(ctx, alternates))
+                                (lang_switch(ctx, alternates, false))
                             }
                         }
                     }
@@ -217,19 +219,25 @@ pub fn document(ctx: &Ctx, page: Page) -> Markup {
     }
 }
 
-/// Links to this page in each language (`alternates`), else to that language's home page.
-fn lang_switch(ctx: &Ctx, alternates: &[(String, String)]) -> Markup {
+/// Links to this page in each language (`alternates`), else to that language's home page. The
+/// header's copy is a navigation landmark; the menu's copy (`landmark: false`) a named group.
+fn lang_switch(ctx: &Ctx, alternates: &[(String, String)], landmark: bool) -> Markup {
     if ctx.cfg.langs.len() < 2 {
         return html! {};
     }
     let href = |l: &str| ctx.url(&alternates.iter().find(|(a, _)| a == l).map_or_else(|| format!("/{l}/"), |(_, p)| p.clone()));
-    html! {
-        nav class="lang" aria-label=(ctx.s.t("lang-switch")) {
-            @for l in &ctx.cfg.langs {
-                a href=(href(l)) hreflang=(l) lang=(l) aria-current=[(l == ctx.lang).then_some("page")] {
-                    (ctx.s.t(&format!("lang-name-{l}")))
-                }
+    let links = html! {
+        @for l in &ctx.cfg.langs {
+            a href=(href(l)) hreflang=(l) lang=(l) aria-current=[(l == ctx.lang).then_some("page")] {
+                (ctx.s.t(&format!("lang-name-{l}")))
             }
+        }
+    };
+    html! {
+        @if landmark {
+            nav class="lang" aria-label=(ctx.s.t("lang-switch")) { (links) }
+        } @else {
+            div class="lang" role="group" aria-label=(ctx.s.t("lang-switch")) { (links) }
         }
     }
 }
@@ -291,23 +299,25 @@ fn footer(ctx: &Ctx, path: &str, scripts: bool) -> Markup {
     }
 }
 
-/// A section heading block: star callout on the left, statement on the right.
+/// An experiment's head on the bench, laid out like the top of a lab record: a rule, then the star
+/// it is filed under with its catalogue position and the pillar's name; under it the claim, large,
+/// and beside it the lead and the star's one-line story.
 pub fn pillar_head(ctx: &Ctx, star: &str, id: &str, eyebrow_key: &str, title_key: &str, lead_key: &str) -> Markup {
     let s = ctx.s;
     let st = crate::orion::star(star);
     html! {
-        header class="sec__head sec__head--pillar" {
-            div class="star-callout" {
+        header class="exp__head" {
+            div class="exp__band" {
                 (svg::star_mark(star))
-                p class="star-callout__name" { (s.t(&format!("star-{star}"))) }
-                p class="star-callout__xy mono" { (st.ra_label()) br; (st.dec_label()) }
-                p class="star-callout__fact" { (s.t(&format!("star-{star}-fact"))) }
+                p class="exp__star" {
+                    span class="exp__name" { (s.t(&format!("star-{star}"))) }
+                    " "
+                    span class="exp__xy" { (st.ra_label()) " · " (st.dec_label()) }
+                }
+                p class="exp__pillar" { (s.t(eyebrow_key)) }
             }
-            div class="sec__statement" {
-                p class="eyebrow" { (s.t(eyebrow_key)) }
-                h2 class="sec__title" id=(format!("{id}-title")) { (s.t(title_key)) }
-                p class="lead" { (s.t(lead_key)) }
-            }
+            h2 class="exp__title" id=(format!("{id}-title")) { (s.t(title_key)) }
+            p class="lead exp__lead" { (s.t(lead_key)) }
         }
     }
 }

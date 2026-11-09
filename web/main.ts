@@ -6,6 +6,7 @@ import { emit, on } from './shared/bus.ts';
 import { offline, onIdle, setShortcutsEnabled, shortcutsEnabled, whenNear } from './shared/env.ts';
 import { assetUrl } from './shared/assets.ts';
 import { track } from './shared/rum.ts';
+import { loadStrings, numberLocale } from './shared/i18n.ts';
 
 interface Island {
   mount(root: HTMLElement): void;
@@ -34,6 +35,12 @@ function withStyles<T>(load: () => Promise<T>): Promise<T> {
   return Promise.all([load(), islandStyles()]).then(([m]) => m);
 }
 
+// Islands whose text is a lazy bundle (content/{lang}/islands/lazy/): fetched with the island's
+// code, so the page itself doesn't carry words most visitors never scroll to.
+const lazyText = new Set(['armour']);
+const text = (name: string): Promise<unknown> =>
+  lazyText.has(name) ? loadStrings(name).then((ok) => ok || Promise.reject(new Error(`strings for ${name}`))) : Promise.resolve();
+
 // `data-island="name"` containers, mounted when they come within one screen of the viewport.
 const islands: Record<string, () => Promise<Island>> = {
   physics: () => import('./instruments/physics.ts'),
@@ -58,9 +65,11 @@ for (const root of $$('[data-island]')) {
   const mount = (): void => {
     if (started) return;
     started = true;
-    withStyles(load)
-      .then((m) => {
+    Promise.all([withStyles(load), text(name)])
+      .then(([m]) => {
         m.mount(root);
+        // The device powers on: its screen sweeps once (CSS), its lamp is the island's own status.
+        root.classList.add('is-on');
         if (root.classList.contains('instrument')) {
           const drop = () => root.removeAttribute('tabindex');
           if (document.activeElement === root) root.addEventListener('blur', drop, { once: true });
@@ -103,6 +112,24 @@ for (const menu of $$<HTMLDetailsElement>('details.menu')) {
   menu.addEventListener('keydown', (e) => e.key === 'Escape' && (e.preventDefault(), close(true)));
   menu.addEventListener('click', (e) => (e.target as Element).closest('a[href]') && close());
   for (const type of ['focusin', 'pointerdown']) document.addEventListener(type, (e) => menu.contains(e.target as Node) || close());
+}
+
+// The hero's readout: what the engine measured of its own frames, once it settles on a tier.
+const readout = $('.hero__readout');
+if (readout) {
+  const tiers = { A: 'WebGPU', B: 'WebGL 2', C: 'Canvas 2D' };
+  const nf = (n: number, digits = 0) => n.toLocaleString(numberLocale(), { maximumFractionDigits: digits, minimumFractionDigits: digits });
+  on('render', (r) => {
+    const set = (k: string, v: string) => {
+      const el = $(`[data-r="${k}"]`, readout);
+      if (el) el.textContent = v;
+    };
+    set('tier', tiers[r.tier]);
+    set('count', nf(r.count));
+    set('ms', nf(r.p50, r.p50 < 1 ? 2 : 1));
+    readout.hidden = false;
+  }, { replay: true });
+  on('tier', (tier) => tier === 'D' && (readout.hidden = true));
 }
 
 const canvas = $<HTMLCanvasElement>('#hero-canvas');

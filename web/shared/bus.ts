@@ -17,6 +17,9 @@ export interface Events {
   'sky:toggle': undefined;
   /** The hero star field was paused (false) or resumed (true) — state, read with replay. */
   sky: boolean;
+  /** What the hero engine measured of itself once settled: its tier, particles, and the median
+   *  and 90th-percentile cost of a frame of its own work (GPU time on A and B), in ms. */
+  render: { tier: 'A' | 'B' | 'C'; count: number; p50: number; p90: number };
 }
 
 const last = new Map<keyof Events, unknown>();

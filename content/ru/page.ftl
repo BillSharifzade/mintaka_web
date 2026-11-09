@@ -50,6 +50,9 @@ hero-note = Эта страница измеряет себя сама. Нажм
 # The button that pauses the hero's particle animation, and starts it again.
 hero-motion-pause = Приостановить анимацию
 hero-motion-play = Продолжить анимацию
+hero-live = Рисуется вживую
+hero-particles = частиц
+hero-frame = мс на кадр
 
 ## Instruments
 
@@ -125,6 +128,7 @@ eff-research = От исследования к продакшену
 eff-research-text = Научные статьи, превращённые в протестированный код с бенчмарками.
 eff-stack = Свой стек
 eff-stack-text = Выбираем под каждый проект после замеров, а не по привычке.
+eff-methods = Методы
 eff-race-id = S4 · Алгоритмы
 eff-race-title = Маршрут через Душанбе
 eff-race-fallback = Если включены JavaScript и WebAssembly, здесь, прямо в вашем браузере, три алгоритма поиска пути соревнуются на настоящей дорожной сети Душанбе.

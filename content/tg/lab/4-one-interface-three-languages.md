@@ -69,7 +69,7 @@ $$
 
 Паёми шакли ҷамъ аз бахши амният, бо Fluent. Генератор онро ба `armour-summary[one]` ва варианти пешфарз, `armour-summary`, табдил медиҳад; категорияе, ки матнаш бо варианти пешфарз якхела аст (дар ин ҷо `[other]`), содир намешавад — браузер ба ҳар ҳол варианти пешфарзро мегирад:
 
-```ftl include="content/en/islands/armour.ftl" from="armour-summary = " to="in place on this page"
+```ftl include="content/en/islands/lazy/armour.ftl" from="armour-summary = " to="in place on this page"
 ```
 
 Ва анҷоми ҳар сохт, барои ҳар забон:

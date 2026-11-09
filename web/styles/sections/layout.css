@@ -1,6 +1,15 @@
 /* Page frame: header, Orion navigation, the hero canvas, section rhythm, footer. */
 
 @layer sections {
+  /* The lab's shapes: instruments and paper have near-square corners (2–4 px); only lamps and
+     stars are round. These win over tokens.css, whose rounder radii the studio page keeps. */
+  :root {
+    --r-control: 3px;
+    --r-card: 4px;
+    --r-tile: 4px;
+    --r-pill: 3px;
+  }
+
   .sprite {
     position: absolute;
     width: 0;
@@ -35,6 +44,13 @@
     z-index: var(--z-header);
     background: rgb(10 11 13 / 0.88);
     border-block-end: 1px solid var(--border);
+    color: var(--text);
+    transition: background-color var(--t-ui) var(--ease-enter), border-color var(--t-ui) var(--ease-enter);
+  }
+
+  /* Over the bench the header takes the lit room's colours (web/nav/index.ts sets .lit). */
+  .site-header.lit {
+    background: rgb(244 245 247 / 0.96);
   }
 
   .site-header__inner {
@@ -54,6 +70,19 @@
   .logo {
     width: auto;
     height: 1.75rem;
+  }
+
+  /* The logo's colours, by room (crates/site/src/pages/svg.rs::brand_symbol). */
+  .lg-s {
+    fill: var(--logo-ink);
+  }
+
+  .lg-b {
+    fill: var(--betelgeuse);
+  }
+
+  .lg-m {
+    fill: var(--mintaka);
   }
 
   .site-nav {
@@ -219,12 +248,12 @@
   }
 
   .orion-nav__lines line {
-    stroke: var(--graphite);
+    stroke: var(--border);
     stroke-width: 1;
   }
 
   .orion-nav .star {
-    fill: var(--steel);
+    fill: var(--text-3);
     transition: fill var(--t-ui) var(--ease-enter);
   }
 
@@ -242,7 +271,7 @@
 
   .orion-nav__star:hover .star,
   .orion-nav__star[aria-current="location"] .star {
-    fill: var(--starlight);
+    fill: var(--text);
   }
 
   .orion-nav__star:hover .star--rust,
@@ -321,69 +350,6 @@
     overflow-wrap: break-word;
   }
 
-  /* Pillar sections open like a drawing callout: the star on the left, the statement right. */
-  .sec__head--pillar {
-    grid-template-columns: minmax(13rem, 1fr) 3fr;
-    gap: var(--s-6) var(--s-8);
-    align-items: start;
-    max-width: none;
-  }
-
-  .sec__statement {
-    display: grid;
-    gap: var(--s-4);
-    max-width: 52rem;
-  }
-
-  .sec__statement .lead {
-    max-width: 58ch;
-  }
-
-  .star-callout {
-    display: grid;
-    grid-template-columns: 3rem 1fr;
-    align-items: center;
-    column-gap: var(--s-3);
-    padding-block-start: var(--s-4);
-    border-block-start: 1px solid var(--border-strong);
-  }
-
-  .star-callout .star-mark {
-    grid-row: span 2;
-    width: 3rem;
-    height: 3rem;
-  }
-
-  .star-callout__name {
-    align-self: end;
-    font-weight: 500;
-  }
-
-  .star-callout__xy {
-    align-self: start;
-    font-size: var(--fs-xs);
-    line-height: 1.5;
-    color: var(--text-2);
-  }
-
-  .star-callout__fact {
-    grid-column: 1 / -1;
-    max-width: 30ch;
-    margin-block-start: var(--s-3);
-    font-size: var(--fs-sm);
-    color: var(--text-2);
-  }
-
-  @media (max-width: 52rem) {
-    .sec__head--pillar {
-      grid-template-columns: 1fr;
-    }
-
-    .star-callout__fact {
-      max-width: none;
-    }
-  }
-
   .sec__aside {
     margin-block-start: var(--s-6);
     font-size: var(--fs-sm);
@@ -415,35 +381,6 @@
   }
 
   /* Card grids */
-  .cards {
-    display: grid;
-    gap: var(--s-4);
-    margin: 0;
-    padding: 0;
-  }
-
-  .cards--3 {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .cards--4 {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  @media (max-width: 64rem) {
-    .cards--3,
-    .cards--4 {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-  }
-
-  @media (max-width: 36rem) {
-    .cards--3,
-    .cards--4 {
-      grid-template-columns: 1fr;
-    }
-  }
-
   /* Data tables */
   .table {
     width: 100%;
@@ -453,7 +390,7 @@
 
   .table th,
   .table td {
-    padding: var(--s-3) var(--s-3);
+    padding: var(--s-3) clamp(var(--s-2), 2vw, var(--s-3));
     border-block-end: 1px solid var(--border);
     text-align: start;
     font-weight: 400;

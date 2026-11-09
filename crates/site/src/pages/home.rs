@@ -6,32 +6,35 @@ use crate::geo;
 use crate::highlight;
 use maud::{Markup, PreEscaped, html};
 
-const EMAIL_SNIPPET: &str = r#"/// An `Email` cannot exist unless it was validated.
-pub struct Email(String);
+const EMAIL_SNIPPET: &str = r#"/// An `Email` is only ever the result of parsing one.
+pub struct Email { local: Local, domain: Domain }
 
-impl TryFrom<String> for Email {
-    type Error = InvalidEmail;
-    fn try_from(raw: String) -> Result<Self, Self::Error> {
-        validate(&raw)?;   // checked once, at the edge
-        Ok(Email(raw))     // trusted everywhere after
-    }
+impl FromStr for Email {
+    type Err = InvalidEmail;
+    fn from_str(raw: &str) -> Result<Self, Self::Err> {
+        let (local, domain) = raw.rsplit_once('@').ok_or(InvalidEmail)?;
+        Ok(Email { local: local.parse()?, domain: domain.parse()? })
+    }   // parsed once, at the edge: everything after takes an Email
 }"#;
 
 pub fn body(ctx: &Ctx) -> Markup {
     html! {
+        // The observatory: the particle engine's three anchors (the hourglass, the ray, Orion).
         (hero(ctx))
         (physics(ctx))
         (pillars(ctx))
-        (efficiency(ctx))
-        (security(ctx))
-        (highload(ctx))
-        (design(ctx))
-        (process(ctx))
-        (qualities(ctx))
-        (proof_wall(ctx))
-        (lab(ctx))
-        (team(ctx))
-        (contact(ctx))
+        // The bench: the lit room where the instruments stand.
+        div class="bench lit" {
+            (efficiency(ctx))
+            (security(ctx))
+            (highload(ctx))
+            (design(ctx))
+            (process(ctx))
+            (lab(ctx))
+            (team(ctx))
+            (contact(ctx))
+        }
+        (horizon(ctx))
     }
 }
 
@@ -62,8 +65,18 @@ fn hero(ctx: &Ctx) -> Markup {
                         span hidden { (s.t("hero-motion-play")) }
                     }
                 }
-                div class="hero__figure" data-anchor="hourglass" {
-                    div class="hero__poster" { (ctx.mark) }
+                // The mark under observation: the engine draws it in the figure, inside a viewfinder,
+                // and reports what its own frames cost underneath (web/main.ts fills the numbers).
+                div class="hero__scope" {
+                    div class="hero__figure" data-anchor="hourglass" {
+                        div class="hero__poster" { (ctx.mark) }
+                    }
+                    p class="hero__readout" hidden {
+                        span class="hero__live" { (s.t("hero-live")) }
+                        span data-r="tier" {}
+                        span { span data-r="count" {} " " (s.t("hero-particles")) }
+                        span { span data-r="ms" {} " " (s.t("hero-frame")) }
+                    }
                 }
             }
         }
@@ -74,6 +87,18 @@ fn hero(ctx: &Ctx) -> Markup {
 fn rich_kbd(text: &str) -> Markup {
     let html = crate::i18n::rich_markup(text).into_string().replace("<strong>", "<kbd>").replace("</strong>", "</kbd>");
     PreEscaped(html)
+}
+
+/// Highlighted code as numbered lines: each line a span, the numbers drawn by CSS counters (so a
+/// copy takes only the code). The snippets have no token spanning two lines.
+fn numbered(html: &str) -> Markup {
+    let mut out = String::with_capacity(html.len() + 64);
+    for line in html.split('\n') {
+        out.push_str(r#"<span class="code__line">"#);
+        out.push_str(line);
+        out.push_str("</span>");
+    }
+    PreEscaped(out)
 }
 
 fn physics(ctx: &Ctx) -> Markup {
@@ -122,13 +147,14 @@ fn physics(ctx: &Ctx) -> Markup {
 
 fn pillars(ctx: &Ctx) -> Markup {
     let s = ctx.s;
-    // Cards sit where their stars sit on the sky: Betelgeuse upper left, Meissa top,
-    // Saiph lower left, Rigel lower right. Reading order follows the layout.
+    // A star chart: each pillar's label stands beside the figure at its star's height and points at
+    // it with a leader line — Betelgeuse and Saiph to the left, Meissa and Rigel to the right.
+    // Reading order runs down the sky.
     let cards = [
-        ("highload", "betelgeuse", "pillar-highload", "tl"),
-        ("design", "meissa", "pillar-design", "tr"),
-        ("security", "saiph", "pillar-security", "bl"),
-        ("efficiency", "rigel", "pillar-efficiency", "br"),
+        ("design", "meissa", "pillar-design", "r"),
+        ("highload", "betelgeuse", "pillar-highload", "l"),
+        ("efficiency", "rigel", "pillar-efficiency", "r"),
+        ("security", "saiph", "pillar-security", "l"),
     ];
     html! {
         section id="pillars" class="sec sec--pillars" aria-labelledby="pillars-title" {
@@ -151,7 +177,7 @@ fn pillars(ctx: &Ctx) -> Markup {
                         }
                     }
                     figure class="constellation__figure" data-anchor="orion" aria-hidden="true" {
-                        (svg::orion_figure(320.0))
+                        (svg::orion_chart(320.0, &[("meissa", true), ("betelgeuse", false), ("rigel", true), ("saiph", false)]))
                     }
                 }
             }
@@ -166,23 +192,16 @@ fn efficiency(ctx: &Ctx) -> Markup {
         section id="efficiency" class="sec sec--pillar" data-star="rigel" aria-labelledby="efficiency-title" {
             div class="wrap" {
                 (pillar_head(ctx, "rigel", "efficiency", "eff-eyebrow", "eff-title", "eff-lead"))
-                ul class="cards cards--3" role="list" {
-                    @for c in cards {
-                        li class="card" {
-                            h3 class="card__title" { (s.t(&format!("eff-{c}"))) }
-                            p class="card__body" { (s.t(&format!("eff-{c}-text"))) }
-                        }
-                    }
-                }
                 (instrument("routing", &s.t("eff-race-id"), &s.t("eff-race-title"), &s.t("instrument-static"),
                     html! { p class="instrument__fallback" { (s.t("eff-race-fallback")) } },
                     Some(html! { (s.ta("eff-race-foot", &[("date", ctx.osm_date.into())])) })))
+                (spec(&s.t("eff-methods"), cards.iter().map(|c| (s.t(&format!("eff-{c}")), s.t(&format!("eff-{c}-text"))))))
                 figure class="code" {
                     div class="code__bar" {
                         span class="code__file mono" { (s.t("eff-code-file")) }
                         span class="code__title" { (s.t("eff-code-title")) }
                     }
-                    pre class="code__pre" { code { (PreEscaped(highlight::rust(EMAIL_SNIPPET))) } }
+                    pre class="code__pre" { code { (numbered(&highlight::rust(EMAIL_SNIPPET))) } }
                     figcaption class="code__caption" { (s.rich("eff-code-caption")) }
                 }
             }
@@ -207,6 +226,27 @@ fn claims_list(ctx: &Ctx, group: &str, class: &str) -> Markup {
     }
 }
 
+/// A specification sheet: a small label, then term–description pairs on ruled rows, like the
+/// methods section of a lab record.
+fn spec(label: &str, rows: impl Iterator<Item = (String, String)>) -> Markup {
+    html! {
+        div class="spec" {
+            p class="spec__label" { (label) }
+            (spec_rows(rows))
+        }
+    }
+}
+
+fn spec_rows(rows: impl Iterator<Item = (String, String)>) -> Markup {
+    html! {
+        dl class="spec__rows" {
+            @for (term, text) in rows {
+                div class="spec__row" { dt { (term) } dd { (text) } }
+            }
+        }
+    }
+}
+
 fn security(ctx: &Ctx) -> Markup {
     let s = ctx.s;
     let fallback = html! { p class="instrument__fallback" { (s.t("sec-instrument-fallback")) } };
@@ -214,6 +254,9 @@ fn security(ctx: &Ctx) -> Markup {
         section id="security" class="sec sec--pillar" data-star="saiph" aria-labelledby="security-title" {
             div class="wrap" {
                 (pillar_head(ctx, "saiph", "security", "sec-eyebrow", "sec-title", "sec-lead"))
+                (instrument("fuzzer", &s.t("sec-fuzz-id"), &s.t("sec-fuzz-title"), &s.t("instrument-static"),
+                    html! { p class="instrument__fallback" { (s.t("sec-fuzz-fallback")) } },
+                    Some(html! { (s.t("sec-fuzz-foot")) })))
                 div class="duel" {
                     section class="duel__col duel__col--off" aria-labelledby="sec-off-title" {
                         h3 class="duel__title" id="sec-off-title" { (s.t("sec-offence")) span class="duel__note" { (s.t("sec-offence-note")) } }
@@ -224,9 +267,6 @@ fn security(ctx: &Ctx) -> Markup {
                         ul class="duel__list" role="list" { @for i in 1..=6 { li { (s.rich(&format!("sec-def-{i}"))) } } }
                     }
                 }
-                (instrument("fuzzer", &s.t("sec-fuzz-id"), &s.t("sec-fuzz-title"), &s.t("instrument-static"),
-                    html! { p class="instrument__fallback" { (s.t("sec-fuzz-fallback")) } },
-                    Some(html! { (s.t("sec-fuzz-foot")) })))
                 div class="armour" {
                     div class="armour__text" {
                         h3 class="armour__title" { (s.t("sec-armour-title")) }
@@ -250,6 +290,12 @@ fn highload(ctx: &Ctx) -> Markup {
         section id="highload" class="sec sec--pillar" data-star="betelgeuse" aria-labelledby="highload-title" {
             div class="wrap" {
                 (pillar_head(ctx, "betelgeuse", "highload", "hl-eyebrow", "hl-title", "hl-lead"))
+                div class="instruments-2" {
+                    (instrument("trace", &s.t("hl-trace-id"), &s.t("hl-trace-title"), &s.t("instrument-static"), trace_fallback, None))
+                    (instrument("live", &s.t("hl-live-id"), &s.t("hl-live-title"), &s.t("instrument-static"), live_fallback, None))
+                    (instrument("loadsim", &s.t("hl-lab-id"), &s.t("hl-lab-title"), &s.t("instrument-static"),
+                        html! { p class="instrument__fallback" { (s.t("hl-lab-fallback")) } }, None))
+                }
                 div class="layers" role="group" aria-label=(s.t("hl-layers")) {
                     @for l in layers {
                         div class="layers__row" {
@@ -260,13 +306,7 @@ fn highload(ctx: &Ctx) -> Markup {
                         }
                     }
                 }
-                div class="instruments-2" {
-                    (instrument("trace", &s.t("hl-trace-id"), &s.t("hl-trace-title"), &s.t("instrument-static"), trace_fallback, None))
-                    (instrument("live", &s.t("hl-live-id"), &s.t("hl-live-title"), &s.t("instrument-static"), live_fallback, None))
-                    (instrument("loadsim", &s.t("hl-lab-id"), &s.t("hl-lab-title"), &s.t("instrument-static"),
-                        html! { p class="instrument__fallback" { (s.t("hl-lab-fallback")) } }, None))
-                }
-                aside class="story" aria-labelledby="story-title" {
+                div class="story" role="note" aria-labelledby="story-title" {
                     (svg::star_mark("betelgeuse"))
                     div {
                         h3 class="story__title" id="story-title" { (s.t("hl-story-title")) }
@@ -286,6 +326,7 @@ fn design(ctx: &Ctx) -> Markup {
         section id="design" class="sec sec--pillar" data-star="meissa" aria-labelledby="design-title" {
             div class="wrap" {
                 (pillar_head(ctx, "meissa", "design", "ds-eyebrow", "ds-title", "ds-lead"))
+                (instrument("laws", &s.t("ds-laws-id"), &s.t("ds-laws-title"), &s.t("instrument-static"), fallback, None))
                 // Until a practice is verified, release builds leave the whole block out.
                 @if ctx.cfg.claims("practice", ctx.release).next().is_some() {
                     div class="practice" {
@@ -293,7 +334,6 @@ fn design(ctx: &Ctx) -> Markup {
                         (claims_list(ctx, "practice", "practice__list"))
                     }
                 }
-                (instrument("laws", &s.t("ds-laws-id"), &s.t("ds-laws-title"), &s.t("instrument-static"), fallback, None))
                 p class="sec__aside" { (s.t("ds-proof")) }
             }
         }
@@ -326,57 +366,14 @@ fn process(ctx: &Ctx) -> Markup {
                         h3 class="pack__title" { (s.t("pr-pack-title")) }
                         p class="pack__lead" { (s.t("pr-pack-lead")) }
                     }
-                    ul class="cards cards--4" role="list" {
+                    ul class="reports" role="list" {
                         @for p in pack {
-                            li class="card pack__card" {
-                                h4 class="card__title" { (s.t(&format!("pr-pack-{p}"))) }
-                                p class="card__body" { (s.t(&format!("pr-pack-{p}-text"))) }
+                            li class="report" {
+                                h4 class="report__title" { (s.t(&format!("pr-pack-{p}"))) }
+                                p class="report__body" { (s.t(&format!("pr-pack-{p}-text"))) }
                             }
                         }
                     }
-                }
-            }
-        }
-    }
-}
-
-fn qualities(ctx: &Ctx) -> Markup {
-    let s = ctx.s;
-    html! {
-        section id="qualities" class="sec sec--qualities" aria-labelledby="qualities-title" {
-            div class="wrap" {
-                header class="sec__head sec__head--wide" {
-                    p class="eyebrow" { (s.t("q-eyebrow")) }
-                    h2 class="sec__title" id="qualities-title" { (s.t("q-title")) }
-                }
-                ul class="cards cards--4" role="list" {
-                    @for q in ["ai", "ext", "durable", "support"] {
-                        li class="card" {
-                            h3 class="card__title" { (s.t(&format!("q-{q}"))) }
-                            p class="card__body" { (s.t(&format!("q-{q}-text"))) }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-fn proof_wall(ctx: &Ctx) -> Markup {
-    let s = ctx.s;
-    html! {
-        section id="proof-wall" class="sec sec--wall" aria-labelledby="wall-title" {
-            div class="wrap wall" {
-                header class="sec__head" {
-                    p class="eyebrow" { (s.t("pw-eyebrow")) }
-                    h2 class="sec__title" id="wall-title" { (s.t("pw-title")) }
-                    p class="lead" { (s.t("pw-lead")) }
-                }
-                article class="case" {
-                    p class="case__tag mono" { (s.t("pw-self-tag")) }
-                    h3 class="case__title" { (s.t("pw-self-title")) }
-                    p class="case__text" { (s.t("pw-self-text")) }
-                    button class="btn btn--ghost" type="button" data-action="proof" { (s.t("pw-self-cta")) }
                 }
             }
         }
@@ -421,7 +418,6 @@ fn lab(ctx: &Ctx) -> Markup {
 
 fn team(ctx: &Ctx) -> Markup {
     let s = ctx.s;
-    let (ridge, _summit) = svg::pamir(1200.0, 220.0);
     html! {
         section id="team" class="sec sec--team" data-star="bellatrix" aria-labelledby="team-title" {
             div class="wrap" {
@@ -445,11 +441,18 @@ fn team(ctx: &Ctx) -> Markup {
                     a class="btn btn--ghost" href=(ctx.cfg.contact.careers().0) { (s.t("team-join")) }
                 }
             }
-            div class="horizon" {
-                div class="horizon__sky" aria-hidden="true" { (svg::orion_figure(220.0)) }
-                (ridge)
-                p class="horizon__caption" { (s.t("team-peak")) }
-            }
+        }
+    }
+}
+
+/// The end of the bench: a window onto the night over the Pamir, with Orion in it.
+fn horizon(ctx: &Ctx) -> Markup {
+    let (ridge, _summit) = svg::pamir(1200.0, 220.0);
+    html! {
+        div class="horizon" {
+            div class="horizon__sky" aria-hidden="true" { (svg::orion_figure(220.0)) }
+            (ridge)
+            p class="horizon__caption" { (ctx.s.t("team-peak")) }
         }
     }
 }

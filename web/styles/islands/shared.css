@@ -1,0 +1,157 @@
+/* Shared pieces only islands use (loaded with the first island, never inlined in the page):
+   key–value rows, the overlay sheet, the construction grid, and the instrument lamps once lit. */
+
+@layer islands {
+  /* Key–value rows for instruments: <dl class="kv"><div><dt>…</dt><dd>…</dd></div></dl> */
+  .kv {
+    display: grid;
+  }
+
+  .kv > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--s-4);
+    padding-block: var(--s-2);
+    border-block-end: 1px solid var(--border);
+  }
+
+  .kv > div:last-child {
+    border-block-end: 0;
+  }
+
+  .kv dt {
+    color: var(--text-2);
+    font-size: var(--fs-sm);
+  }
+
+  .kv dd {
+    text-align: end;
+  }
+
+  /* Instrument frame — every live demo sits in one.
+     <div class="instrument" role="region" aria-labelledby="x-title">
+       <div class="instrument__bar"><span class="instrument__id">S2 · Physics</span>
+         <h3 class="instrument__title" id="x-title">…</h3>
+         <span class="instrument__status badge">static</span></div>
+       <div class="instrument__body">…fallback, replaced by the island…</div>
+       <p class="instrument__foot">How we measure this: …</p>
+     </div> */
+  .instrument__status.badge--info {
+    --lamp: var(--mintaka);
+    --lamp-glow: rgb(61 123 255 / 0.55);
+  }
+
+  .instrument__status.badge--live {
+    --lamp: var(--betelgeuse);
+    --lamp-glow: rgb(226 85 45 / 0.6);
+  }
+
+  .instrument__status.badge--live::before {
+    animation: lamp 1.6s steps(1, end) infinite;
+  }
+
+  .instrument__status.badge--ok {
+    --lamp: var(--success);
+    --lamp-glow: rgb(47 191 113 / 0.5);
+  }
+
+  .instrument__status.badge--warn,
+  .instrument__status.badge--bad {
+    --lamp: var(--warning);
+    --lamp-glow: rgb(242 179 61 / 0.5);
+  }
+
+  @keyframes lamp {
+    50% {
+      --lamp-glow: transparent;
+      background: color-mix(in srgb, var(--lamp) 55%, black);
+    }
+  }
+
+  /* Power-on: when the island's code arrives (web/main.ts adds .is-on), one sweep runs down the
+     screen, like a display warming up. Its own background, so it never covers the interface. */
+  @media (prefers-reduced-motion: no-preference) {
+    .instrument.is-on > .instrument__body {
+      background-image: linear-gradient(to bottom, transparent, rgb(143 179 255 / 0.16) 50%, transparent);
+      background-repeat: no-repeat;
+      background-size: 100% 7rem;
+      background-position: 0 -7rem;
+      animation: power-on 900ms var(--ease-enter) 1 both;
+    }
+  }
+
+  @keyframes power-on {
+    from {
+      background-position: 0 -7rem;
+    }
+    to {
+      background-position: 0 calc(100% + 7rem);
+    }
+  }
+
+  .instrument__status::before {
+    transition:
+      background-color var(--t-ui) var(--ease-enter),
+      box-shadow var(--t-ui) var(--ease-enter);
+  }
+
+  /* The construction grid from brand board 10, for instrument canvases */
+  .grid-bg {
+    background-color: var(--void);
+    background-image:
+      linear-gradient(var(--grid-line-major) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line-major) 1px, transparent 1px),
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size:
+      160px 160px,
+      160px 160px,
+      40px 40px,
+      40px 40px;
+    background-position: -1px -1px;
+  }
+
+  /* Overlays: <dialog class="sheet"> */
+  dialog.sheet {
+    width: min(100% - 2 * var(--gutter), 44rem);
+    max-height: min(80dvh, 44rem);
+    padding: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-card);
+    background: var(--surface);
+    color: var(--text);
+  }
+
+  dialog.sheet::backdrop {
+    background: rgb(10 11 13 / 0.72);
+    backdrop-filter: blur(2px);
+  }
+
+  /* The console challenge's application form (web/console/ctf.ts), built into #careers. */
+  .careers-form {
+    display: grid;
+    flex-basis: 100%;
+    gap: var(--s-4);
+    max-width: 34rem;
+    margin-block-start: var(--s-3);
+  }
+
+  .careers-form__title {
+    font-size: var(--fs-lg);
+  }
+
+  .careers-form__lead,
+  .careers-form__status {
+    color: var(--text-2);
+  }
+
+  .careers-form__status:empty {
+    display: none;
+  }
+
+  .careers-form .btn {
+    justify-self: start;
+  }
+
+}

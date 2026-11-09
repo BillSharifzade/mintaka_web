@@ -61,7 +61,9 @@ The page's own rules are in `docs/CONTRACTS.md` §10.1 (rule 5); this file is th
   `lang="tg"`; every page has its own title.
 - **Structure:** one `h1` per page, no skipped heading levels (document order), named landmarks
   (banner, two navigations, main, contentinfo, proof console as complementary, sections and
-  instruments as regions), no duplicate ids, no broken references.
+  instruments as regions; the small-screen menu's navigation is named after the menu and its
+  language switch is a group, so no two landmarks share a name), no duplicate ids, no broken
+  references.
 - **Names:** no unnamed control on any page; canvases and drawings are `aria-hidden` with the
   meaning in text, tables or live regions next to them.
 - **Text contrast:** no failures on any tested page after the fixes (the fuzzer's star names are
